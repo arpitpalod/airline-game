@@ -1,0 +1,15 @@
+india_region,foreign_region,mult
+KL,GULF,2.5
+TN,GULF,1.3
+S,GULF,1.2
+GJ,GULF,1.2
+TN,SEA,2.0
+E,SEA,1.5
+NE,SEA,1.5
+E,SAARC,2.5
+N,SAARC,1.5
+PB,EUR,2.5
+PB,NAM,2.5
+GJ,NAM,1.5
+GJ,AFR,2.0
+N,CIS,2.0

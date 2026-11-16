@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: draft for review, 17 Nov 2026. Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.2, 17 Nov 2026 (demand model rebuilt on published airport traffic). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -21,7 +21,7 @@ A persistent multiplayer airline business game for office colleagues, built to t
 | Players | One person, one airline. About 50 airlines per world. More players means more parallel worlds |
 | Duration | Seasons of 26 real weeks, then reset with a hall of fame |
 | Clock | 13x, set per world |
-| Map | Real airports, about 150 (India plus key international). Demand is synthetic |
+| Map | 162 real airports: 93 in India, 69 abroad. Demand is modelled from published airport traffic |
 | Rivals | Fictional computer-run airlines fill the world; no real airline brands |
 | Livery | Cosmetic only. Brand score moves demand, paint does not |
 | Platform | Installable web app (opens from a link, sits on the home screen). Supabase back end |
@@ -42,20 +42,23 @@ A persistent multiplayer airline business game for office colleagues, built to t
 
 `game_day = floor((now - world_start - paused_time) x speed / 86,400 s)`. A scheduled job runs every 5 minutes and processes every game day that has fallen due, so a missed run only delays results and never loses them.
 
-**Airports.** Each airport stores: code, city, coordinates, catchment population, income index, business index, tourism index, runway class (turboprop, narrowbody, widebody), slot tier and charges tier. Coordinates come from public airport data; the indices are (G).
+**Airports.** Each airport stores: code, city, country, region, coordinates, business index, tourism index, runway class (turboprop, narrowbody, widebody) and a daily slot cap where congested. Indian airports also store passengers handled a year and the international share; foreign airports store a weight in India's international travel. Coordinates are from public airport data (V). Passenger numbers are the published FY 2025-26 figures for the 49 busiest airports (V) and estimates for the rest (G). Indices, international shares and foreign weights are (G).
+
+**MVP limits.** Bases can only be opened in India, and every market touches India. Two airports open during the season as events: Navi Mumbai (game day 364) and Noida (game day 546).
 
 ## 4. Demand model
 
 Each city pair is one market with three passenger segments.
 
-**Potential travellers per day, each way**
+**Market size.** The model reproduces real traffic, then converts it to potential demand.
 
-`N = K x (mass_i x mass_j)^0.8 x air_share(d) x segment_share x season(month) x growth^years`
+- **Domestic.** A balanced gravity model: every pair is weighted by `air_share(d)`, then scaled so each airport's pairs add up to its real domestic passengers. `air_share(d) = 1 - 1 / (1 + (d / 300 km)^3)`: road and rail win short trips, so 23% fly at 200 km, 50% at 300 km and 95% at 800 km.
+- **International.** Each Indian airport's international passengers are split across foreign airports in proportion to `weight x affinity` (for example Kerala to the Gulf 2.5x, Punjab to Europe and North America 2.5x).
+- **Potential.** `potential = real traffic / 0.65`, because about 65% of potential travellers fly at reference fares and service (G). A world setting scales demand to the number of airlines.
+- **Segments.** `business share = 0.08 + 0.27 x average business index`; of the rest, `leisure share = 0.30 + 0.45 x higher tourism index`; the remainder is budget and family visits.
+- **Seasonality and growth** are applied by the engine as monthly and yearly multipliers per segment.
 
-- `mass = catchment population x income index`
-- `air_share(d) = 1 - 1 / (1 + (d / 400 km)^3)`. Road and rail win short trips: 11% fly at 200 km, 50% at 400 km, 89% at 800 km.
-- Segment shares come from the two airports' business and tourism indices.
-- Seasonality is a monthly multiplier per segment (leisure peaks in holidays, business dips).
+Check against reality: the model gives 168.7M domestic and 80.3M international passengers a year, in line with the published all-India total of 420M passengers handled. Delhi to Mumbai comes out at 12,600 each way a day.
 
 **Who flies with whom.** Every airline's product on the route (cabin, fare, frequency, comfort, brand) gets a utility per segment:
 
@@ -120,8 +123,8 @@ These land within one row of published layouts (ATR publishes 72 at 29 in and 78
 | Business cabin | Comfort 1.6 to 2.1 (recliner) or 2.6 (lie-flat). Only pays where the business segment is large |
 | Cabin crew | `ceil(seats / 50)` (V, US and European rule). World setting for the Indian variant, which steps at 100, 150 and 200 seats |
 | Weight | `fuel x (0.80 + 0.20 x passengers / reference_seats)` |
-| Range | `range x (1 - 0.4 x (seats - reference) / reference)` |
-| Turnaround | Minimum turn grows 0.1 minute per seat above reference; slower turns mean fewer flights a day |
+| Range | `range x (1 - 0.4 x (seats - reference) / reference)`, at most 10% above the published range |
+| Turnaround | Minimum turn moves 0.1 minute per seat above or below reference (at most 5 minutes shorter); slower turns mean fewer flights a day |
 | Refit | Rs 1 crore plus Rs 50,000 per seat changed, and 7 game days on the ground (G) |
 | Leased used aircraft | Arrive with the previous operator's layout; changing it needs a refit |
 | Sub-fleets (after MVP) | A grounded aircraft can only be covered by a spare with a matching layout, or seats get bumped |
@@ -149,7 +152,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 ## 7. Network, scheduling and slots
 
 - **Bases.** Aircraft live at a base. Every route starts at one of the airline's bases. Opening a base costs money.
-- **Rotations.** `block_hours = km / cruise + 0.7` (0.4 for the ATR). `rotation = 2 x block + 2 x turnaround`. An aircraft's rotations must fit its daily window: 17 hours for narrowbodies and turboprops, 22 for widebodies (G).
+- **Rotations.** `block_hours = km / cruise + 0.7` (0.4 for the ATR). `rotation = 2 x block + 2 x turnaround`. An aircraft's rotations must fit its window, counted over a week: 17 hours a day for narrowbodies and turboprops, 20 for the A321XLR, 22 for widebodies (G). Frequencies are set as round trips a week.
 - **Check:** Delhi to Mumbai at 1,150 km gives a 2.09 hour block and a 5.2 hour rotation on a 186-seat A320neo, so three round trips a day and 12.5 block hours.
 - **Slots.** Congested airports have a daily movement cap. `price per slot = base / (1 - utilisation)^2`. A full airport forces bigger aircraft, off-peak flying or a secondary airport.
 
@@ -246,7 +249,9 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 | Stage | Output | Done when |
 |---|---|---|
 | 1 | This spec | Reviewed |
-| 2 | Database, seed data, engine | Bot airlines play a full season in simulation; margins and load factors land in the calibration bands; no single strategy dominates |
+| 2a | Database, rule functions, aircraft, airports, markets | Seat counts, distances and traffic totals match this spec in the live database |
+| 2b | Player actions and the daily engine | One game day runs end to end for a test airline |
+| 2c | Bot airlines and tuning | Bots play a full season; margins and load factors land in the calibration bands; no single strategy dominates |
 | 3 | App screens | Every MVP action works from a phone |
 | 4 | Hosting, sign-in, admin | A colleague can join from a link and play |
 | 5 | Playtest with 6 to 8 people, then tune | Two game years played without a rules fix |
@@ -259,9 +264,13 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 2. The Indian cabin crew rule comes from an older quoted text of the Aircraft Rules; confirm the current wording.
 3. Use real aircraft type names or generic ones.
 4. The repo is public. Decide whether the game's code should stay public.
+5. Trunk routes between two metros come out 20 to 70% above real traffic, and metro to small-city routes below it. Tune in Stage 2c.
+6. Passenger numbers for the 44 smaller Indian airports and all international shares are estimates. Replace with published figures where available.
 
 **Sources for (V) figures**
 
+- Indian airport passengers, FY 2025-26 (Airports Authority of India data): https://en.wikipedia.org/wiki/List_of_busiest_airports_in_India
+- Airport coordinates: OurAirports open data, https://github.com/davidmegginson/ourairports-data
 - Airbus A321XLR: https://aircraft.airbus.com/en/aircraft/a320-family/a321XLR
 - A320 family ranges: https://knaviation.net/a320-vs-a321/
 - ATR 72-600: https://www.atr-aircraft.com/our-aircraft/atr-72-600/ and ATR fact sheet https://cdn.pista73.com/media/2012/07/ATR_72-600.pdf
