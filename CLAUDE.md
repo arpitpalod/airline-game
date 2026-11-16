@@ -10,5 +10,14 @@ Multiplayer airline business game for office colleagues. Read `docs/SPEC.md` bef
 
 ## Build status
 
-- Stage 1 (spec): written 17 Nov 2026, awaiting review.
-- Stage 2 (database, seed data, engine): not started.
+- Stage 1 (spec): done.
+- Stage 2a (database, rule functions, reference data): done and live in Supabase project `airline-game` (ref `ptdqbzwxvhkrwoneqptr`, Mumbai). Migrations 0001 to 0003 are applied; live numbers match `tools/calibrate.py` and the local test.
+- Stage 2b (player actions, daily engine): not started. Design is in spec section 14.1. Build the player actions first, then the daily engine, each as its own migration with a local test before applying.
+- Stage 2c (bots, tuning): not started. Known tuning items are in spec section 17.
+
+## Working notes
+
+- Apply migrations in `supabase/migrations/` in order through the Supabase tools; there is no direct database connection from a session.
+- The Supabase tools ask the owner to confirm SQL that looks destructive. Write migrations that only add and update, and warn the owner before any step that needs a confirmation.
+- Local test: `tools/pgtest/` runs all migrations in an in-memory Postgres and prints the checks. `tools/calibrate.py` is the reference market model; its numbers must match the database.
+- Airport coordinates come from OurAirports (`airports.csv`, downloaded per session, not committed).

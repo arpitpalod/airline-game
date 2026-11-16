@@ -1,0 +1,70 @@
+iata,city,region,mass,biz,tour,slot_cap,rwy
+DXB,Dubai,GULF,12.0,0.60,0.50,260,3
+AUH,Abu Dhabi,GULF,3.5,0.50,0.30,,3
+SHJ,Sharjah,GULF,3.0,0.30,0.20,,3
+DOH,Doha,GULF,3.0,0.50,0.25,,3
+MCT,Muscat,GULF,2.8,0.40,0.20,,3
+KWI,Kuwait City,GULF,2.2,0.40,0.10,,3
+BAH,Bahrain,GULF,1.5,0.45,0.15,,3
+RUH,Riyadh,GULF,2.5,0.50,0.10,,3
+JED,Jeddah,GULF,2.5,0.35,0.40,,3
+DMM,Dammam,GULF,1.8,0.45,0.05,,3
+KTM,Kathmandu,SAARC,2.0,0.30,0.60,,3
+DAC,Dhaka,SAARC,2.2,0.45,0.15,,3
+CMB,Colombo,SAARC,2.2,0.40,0.60,,3
+MLE,Male,SAARC,1.2,0.10,1.00,,3
+PBH,Paro,SAARC,0.2,0.10,0.90,10,2
+SIN,Singapore,SEA,4.5,0.75,0.60,150,3
+BKK,Bangkok,SEA,4.5,0.40,0.90,,3
+HKT,Phuket,SEA,1.2,0.05,1.00,,3
+KUL,Kuala Lumpur,SEA,3.0,0.45,0.60,,3
+DPS,Bali,SEA,1.0,0.05,1.00,,3
+CGK,Jakarta,SEA,0.8,0.50,0.20,,3
+SGN,Ho Chi Minh City,SEA,1.0,0.40,0.60,,3
+HAN,Hanoi,SEA,0.8,0.40,0.60,,3
+DAD,Da Nang,SEA,0.5,0.05,0.90,,3
+MNL,Manila,SEA,0.5,0.40,0.30,,3
+RGN,Yangon,SEA,0.3,0.35,0.20,,3
+HKG,Hong Kong,EASIA,1.8,0.75,0.45,120,3
+NRT,Tokyo,EASIA,1.2,0.70,0.50,,3
+ICN,Seoul,EASIA,0.8,0.65,0.40,,3
+PVG,Shanghai,EASIA,0.8,0.75,0.25,,3
+CAN,Guangzhou,EASIA,0.6,0.70,0.15,,3
+PEK,Beijing,EASIA,0.5,0.70,0.25,,3
+TPE,Taipei,EASIA,0.3,0.60,0.30,,3
+LHR,London,EUR,5.5,0.75,0.50,40,3
+MAN,Manchester,EUR,0.9,0.40,0.20,,3
+BHX,Birmingham,EUR,0.9,0.35,0.15,,3
+CDG,Paris,EUR,1.8,0.60,0.70,,3
+FRA,Frankfurt,EUR,1.8,0.75,0.25,,3
+MUC,Munich,EUR,0.6,0.65,0.30,,3
+AMS,Amsterdam,EUR,1.3,0.60,0.45,60,3
+ZRH,Zurich,EUR,0.7,0.65,0.55,,3
+FCO,Rome,EUR,0.6,0.35,0.80,,3
+MXP,Milan,EUR,0.6,0.55,0.50,,3
+VIE,Vienna,EUR,0.4,0.45,0.55,,3
+CPH,Copenhagen,EUR,0.4,0.50,0.40,,3
+IST,Istanbul,EUR,1.5,0.45,0.70,,3
+TAS,Tashkent,CIS,0.5,0.30,0.50,,3
+ALA,Almaty,CIS,0.6,0.30,0.60,,3
+GYD,Baku,CIS,0.6,0.25,0.75,,3
+TBS,Tbilisi,CIS,0.4,0.15,0.80,,3
+SVO,Moscow,CIS,0.6,0.45,0.35,,3
+JFK,New York,NAM,2.5,0.70,0.45,60,3
+EWR,Newark,NAM,1.5,0.65,0.30,,3
+ORD,Chicago,NAM,1.5,0.60,0.25,,3
+SFO,San Francisco,NAM,2.0,0.80,0.35,,3
+IAD,Washington,NAM,1.0,0.65,0.30,,3
+YYZ,Toronto,NAM,2.5,0.45,0.25,,3
+YVR,Vancouver,NAM,1.2,0.40,0.35,,3
+NBO,Nairobi,AFR,0.6,0.45,0.45,,3
+ADD,Addis Ababa,AFR,0.4,0.40,0.20,,3
+JNB,Johannesburg,AFR,0.5,0.50,0.40,,3
+DAR,Dar es Salaam,AFR,0.3,0.40,0.35,,3
+CAI,Cairo,AFR,0.4,0.35,0.65,,3
+MRU,Mauritius,AFR,0.6,0.15,0.95,,3
+SEZ,Seychelles,AFR,0.2,0.05,1.00,,3
+SYD,Sydney,OCE,1.2,0.50,0.50,,3
+MEL,Melbourne,OCE,1.4,0.50,0.40,,3
+PER,Perth,OCE,0.4,0.40,0.35,,3
+AKL,Auckland,OCE,0.4,0.35,0.50,,3
