@@ -11,8 +11,9 @@ Multiplayer airline business game for office colleagues. Read `docs/SPEC.md` bef
 ## Build status
 
 - Stage 1 (spec): done.
-- Stage 2a (database, rule functions, reference data): schema is live in Supabase project `airline-game` (ref `ptdqbzwxvhkrwoneqptr`). Migrations 0002 and 0003 are written and pass the local test, but are not applied yet.
-- Stage 2b (player actions, daily engine) and 2c (bots, tuning): not started.
+- Stage 2a (database, rule functions, reference data): done and live in Supabase project `airline-game` (ref `ptdqbzwxvhkrwoneqptr`, Mumbai). Migrations 0001 to 0003 are applied; live numbers match `tools/calibrate.py` and the local test.
+- Stage 2b (player actions, daily engine): not started. Design is in spec section 14.1. Build the player actions first, then the daily engine, each as its own migration with a local test before applying.
+- Stage 2c (bots, tuning): not started. Known tuning items are in spec section 17.
 
 ## Working notes
 

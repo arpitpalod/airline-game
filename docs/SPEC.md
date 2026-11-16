@@ -238,6 +238,25 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 **Main tables:** worlds, seasons, world_state, airports, markets, aircraft_types, airlines, bases, aircraft, layouts, orders, lessor_pool, routes, rotations, slot_holdings, route_daily, airline_daily, ledger, quarterly_reports, events, brand_history.
 
+### 14.1 Engine design (Stage 2b)
+
+**Player actions.** Each is one server function that checks ownership, world state and cash before changing anything: join a world with its invite code and found an airline (first base free), open a base, lease from the pool, order new, wet lease, return an aircraft, change a layout (refit), open or close a route, set fares, set rotations, set marketing spend, borrow and repay.
+
+**World start.** Fills the lessor pool in proportion to the number of airline places and starts the clock.
+
+**One game day**, in one transaction per world, guarded by a lock so it can never run twice:
+
+1. Move the fuel price and exchange rate; start and end events.
+2. Deliveries, lease expiries, refits finishing, groundings starting and ending.
+3. Capacity: seats per airline, route and cabin from the rotations of serviceable aircraft.
+4. Demand: market potential x season x growth x world scale, split by segment across every product plus the option of not flying, then the spill pass.
+5. Money: ticket and ancillary revenue; fuel, crew, maintenance, airport and slot costs per flight; rent, overheads, marketing and interest per day.
+6. Write route results (kept for 28 game days) and airline results (kept all season); update cash, brand and punctuality.
+7. Every 91 days: quarterly reports, ranks and news.
+8. Insolvency check.
+
+**Scheduler.** A database job every 5 minutes processes every game day that has fallen due, at most 30 per run per world.
+
 **Speed targets:** first load under 2 seconds on 4G; screen changes under 200 ms; a game day processed in under 2 seconds for 50 airlines.
 
 ## 15. Screens
