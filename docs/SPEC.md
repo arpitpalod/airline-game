@@ -321,7 +321,7 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 7. With no rivals, one airline on a trunk route still fills its aircraft at twice the reference fare. The computer-run airlines (Stage 2c) must contest the trunk routes from day 1.
 8. A new airline cannot fly for 13 game days (one real day) even with a wet lease, and for three real days with an operating lease. Decide whether founding should come with a starter aircraft.
 9. The lessor pool is sized on airline places and leased first come, first served: early joiners pay the base rent, late joiners the shortage premium.
-10. Market shares add up, so more airlines means more total travel: 33% of potential flies with one daily flight, 88% on a crowded trunk route. Consider grouping the airlines against the option of not flying.
+10. Market shares add up, so more airlines means more total travel. Worked by hand for budget travellers at the reference fare: about 33% of potential flies when one airline offers one flight a day, about 88% when ten airlines offer ten each. Consider grouping the airlines against the option of not flying.
 11. The slot price reaches 400x its base at a full airport. Tune the base and `slot_scale` once the computer-run airlines fill the airports.
 12. Business travellers who find the business cabin full do not move down to economy, and a grounded aircraft has no spare cover.
 13. Buying an A320neo for cash costs Rs 495 crore, about the whole starting equity, so orders end as sale and leaseback in practice.
