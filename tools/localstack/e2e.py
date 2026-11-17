@@ -2,7 +2,7 @@
 # world as admin, opens a route, flies days, and uses every player action from the screens. Saves screenshots at
 # phone (390x844) and laptop (1440x900) sizes and fails on any page error or failed action.
 # Usage: python3 e2e.py <app url, e.g. http://localhost:4173/airline-game/> <screenshot dir>
-import json, subprocess, sys, time
+import json, os, subprocess, sys, time
 from playwright.sync_api import sync_playwright, expect
 
 BASE, OUT = sys.argv[1], sys.argv[2]
@@ -160,24 +160,25 @@ with sync_playwright() as p:
     toast_ok(page, 'Refit booked')
     shot(page, 'p12-aircraft')
 
-    print('take VT-AAA off its route, end its wet lease, close the route')
-    go(page, '/network'); page.locator('.list .item.link').first.click()
-    page.get_by_text('How full, last 28 days').wait_for()
-    for _ in range(30):
-        b_less = page.get_by_role('button', name='Less round trips a week').first
-        if b_less.is_disabled(): break
-        b_less.click()
-    page.locator('.list .item', has_text='VT-AAA').get_by_role('button', name='Save').click()
-    toast_ok(page, 'taken off this route')
-    go(page, '/fleet')
-    page.locator('.card.link', has_text='VT-AAA').click()
-    page.get_by_role('button', name='End the wet lease').click()
-    page.locator('.sheet').get_by_role('button', name='End the wet lease').click()
-    toast_ok(page, 'wet lease has ended')
-    go(page, '/network'); page.locator('.list .item.link').first.click()
-    page.get_by_role('button', name='Close this route').click()
-    page.locator('.sheet').get_by_role('button', name='Close route').click()
-    toast_ok(page, 'Route closed')
+    if not os.environ.get('SKIP_TEARDOWN'):   # keeps a flying airline for screenshots
+        print('take VT-AAA off its route, end its wet lease, close the route')
+        go(page, '/network'); page.locator('.list .item.link').first.click()
+        page.get_by_text('How full, last 28 days').wait_for()
+        for _ in range(30):
+            b_less = page.get_by_role('button', name='Less round trips a week').first
+            if b_less.is_disabled(): break
+            b_less.click()
+        page.locator('.list .item', has_text='VT-AAA').get_by_role('button', name='Save').click()
+        toast_ok(page, 'taken off this route')
+        go(page, '/fleet')
+        page.locator('.card.link', has_text='VT-AAA').click()
+        page.get_by_role('button', name='End the wet lease').click()
+        page.locator('.sheet').get_by_role('button', name='End the wet lease').click()
+        toast_ok(page, 'wet lease has ended')
+        go(page, '/network'); page.locator('.list .item.link').first.click()
+        page.get_by_role('button', name='Close this route').click()
+        page.locator('.sheet').get_by_role('button', name='Close route').click()
+        toast_ok(page, 'Route closed')
 
     go(page, '/ranks'); page.wait_for_timeout(500)
     shot(page, 'p13-ranks')

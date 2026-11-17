@@ -47,13 +47,19 @@ export function Home() {
   }
   const fl = fleet.data ?? [];
   const flying = new Set(rots.map((r) => r.aircraft_id));
+  // An idle aircraft at the same base as a grounded one of its type covers that one's flights (spec 14.3).
+  const covering = new Set<string>();
+  for (const g of fl.filter((a) => a.status === 'grounded' && flying.has(a.id))) {
+    const spare = fl.find((s) => s.id !== g.id && !covering.has(s.id) && s.type_id === g.type_id && s.base_iata === g.base_iata && s.status === 'active' && !flying.has(s.id));
+    if (spare) covering.add(spare.id);
+  }
   for (const ac of fl) {
     if (ac.status === 'grounded') {
       const spare = fl.find((s) => s.id !== ac.id && s.type_id === ac.type_id && s.base_iata === ac.base_iata && s.status === 'active' && !flying.has(s.id));
       alerts.push({ key: `g${ac.id}`, tone: spare ? 'info' : 'warn', to: `/aircraft/${ac.id}`,
         title: `${ac.reg} is grounded until day ${ac.available_day}`,
         body: spare ? `${spare.reg} is idle at ${ac.base_iata} and covers its flights.` : 'Its flights are cancelled until then, which hurts punctuality and brand. An idle aircraft of the same type at the same base would cover them.' });
-    } else if (ac.status === 'active' && !flying.has(ac.id)) {
+    } else if (ac.status === 'active' && !flying.has(ac.id) && !covering.has(ac.id)) {
       alerts.push({ key: `i${ac.id}`, tone: 'warn', to: `/aircraft/${ac.id}`, title: `${ac.reg} is not flying`,
         body: `It still costs ${ac.terms?.holding === 'wet' ? 'the wet-lease minimum' : 'rent'} every day. Give it a route.` });
     } else if (ac.status === 'delivering' && ac.available_day - world.game_day <= 14 && !flying.has(ac.id)) {
