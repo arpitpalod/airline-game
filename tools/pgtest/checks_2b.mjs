@@ -7,6 +7,10 @@ export async function checks2b(t, perf) {
   const code = await one(`select invite_code from public.world_secrets`);
   const cash = (a) => one(`select cash_inr::float from public.airline_finance where airline_id = '${a}'`);
 
+  // Stage 2b rules on their own: no starter aircraft and no computer-run airlines (Stage 2c, checks_2c.mjs)
+  await q(`update public.game_params set num = 0 where key = 'starter_aircraft'`);
+  await q(`update public.worlds set bot_scale = 0`);
+
   console.log('Stage 2b: player actions');
   await as(U1);
   await fails('wrong invite code refused', `select public.found_airline('nope', 'Test Air', 'TA', 'DEL')`, /invite code/);
@@ -174,13 +178,13 @@ export async function checks2b(t, perf) {
 
   // quarter end
   await run(91 - (await day()));
-  const qr = await q(`select al.name, q.rank, q.revenue::float rev, q.op_profit::float op, q.net_worth::float nw, q.score::float score,
+  const qr = await q(`select al.name, q.rank, q.revenue::float rev, q.op_profit::float op, q.net_profit::float net, q.net_worth::float nw, q.score::float score,
     q.load_factor::float lf, q.cask::float cask from public.quarterly_reports q join public.airlines al on al.id = q.airline_id where q.quarter = 1 order by q.rank`);
   ok('quarter 1 reports and ranks every airline', qr.length === 2 && qr[0].rank === 1 && qr[1].rank === 2,
     qr.map((r) => `${r.rank}. ${r.name} op profit Rs ${(r.op / 1e7).toFixed(1)} cr`).join('; '));
   const sumOp = await one(`select sum(rev_ticket + rev_anc - (c_fuel + c_crew + c_maint + c_airport + c_rent + c_slots + c_dist + c_marketing + c_overhead + c_other + c_depr))::float from public.airline_daily where airline_id = '${A}'`);
   const qa = qr.find((r) => r.name === 'Test Air');
-  ok('quarterly profit equals the sum of the days; score = net worth + 5 x profit', Math.abs(qa.op - sumOp) < 1 && Math.abs(qa.score - (qa.nw + 5 * qa.op)) < 2);
+  ok('quarterly profit equals the sum of the days; score = net worth + 5 x profit after interest (Stage 2c)', Math.abs(qa.op - sumOp) < 1 && Math.abs(qa.score - (qa.nw + 5 * qa.net)) < 2);
   const depo = await one(`select sum(deposit_inr)::float from public.aircraft_terms where airline_id = '${A}'`);
   ok('net worth = cash - debt + deposits held', Math.abs(qa.nw - ((await cash(A)) + depo)) < 2);
   ok('results headline published; pool topped up', (await one(`select count(*)::int from public.news where kind = 'results'`)) === 1
@@ -249,7 +253,7 @@ export async function checks2b(t, perf) {
   // events, noise and random groundings (switched back on)
   ok('new airports are announced as events at world start', (await one(`select count(*)::int from public.events where kind = 'airport_opening'`)) === 2);
   await q(`update public.game_params set num = 1 where key in ('event_fuel_prob_day', 'event_fx_prob_day', 'event_engine_prob_day', 'ground_prob_day')`);
-  await q(`update public.game_params set num = v.n from (values ('demand_noise_sd', 0.10), ('fuel_vol_day', 0.012), ('fx_vol_day', 0.002), ('fx_drift_year', 0.03)) v(k, n) where key = v.k`);
+  await q(`update public.game_params set num = v.n from (values ('demand_noise_sd', 0.10), ('fuel_vol_day', 0.012), ('fx_vol_day', 0.002)) v(k, n) where key = v.k`);
   await run(1);
   const ev = (await q(`select w.fuel_inr_kg::float fuel, w.fuel_walk::float walk, w.fx_inr_usd::float fx, w.fx_walk::float fxw,
     (select (payload ->> 'mult')::float from public.events where kind = 'fuel_shock') mf, (select (payload ->> 'mult')::float from public.events where kind = 'fx_swing') mx,

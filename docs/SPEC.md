@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.3, 17 Nov 2026 (Stage 2b built: player actions and the daily engine, section 14.2). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.4, 17 Nov 2026 (Stage 2c built: computer-run airlines and tuning, section 14.3). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -64,7 +64,7 @@ Check against reality: the model gives 168.7M domestic and 80.3M international p
 
 `U = a - b x fare / reference_fare + c x ln(1 + daily_flights) + d x comfort x sqrt(block_hours) + e x (brand - 50) / 50`
 
-`share_k = exp(U_k) / (1 + sum of exp(U_j))`. The "1" is the option of not flying, so cheaper fares grow the whole market and a monopolist who overprices loses travellers to the road.
+The airlines on a route form one group against the option of not flying (nested logit, Stage 2c): with `x_k = exp(U_k / λ)` and `S` the sum of `x` over the route's airlines, `P(fly) = S^λ / (1 + S^λ)` and airline k's share of those who fly is `x_k / S`. λ = 0.5 (G). Cheaper fares and more flights grow the whole market, a monopolist who overprices loses travellers to the road, but splitting the same flights among more airlines barely adds travel.
 
 | Segment | Price b | Frequency c | Comfort d | Brand e | Cabins considered |
 |---|---|---|---|---|---|
@@ -72,9 +72,9 @@ Check against reality: the model gives 168.7M domestic and 80.3M international p
 | Leisure | 3.0 | 0.4 | 0.25 | 0.4 | Economy |
 | Budget and family visits | 4.5 | 0.25 | 0.10 | 0.2 | Economy |
 
-All coefficients (G). Reference economy fare (G): `Rs 1,800 + 3.4 x km`. Business reference: 3.5x economy.
+All coefficients (G). Reference economy fare (G): `Rs 2,100 + 3.3 x km` (Stage 2c; it was Rs 1,800 + 3.4 x km). Business reference: 3.5x economy. Business travellers choosing the business cabin add a constant of −2.2 (G): its comfort must outweigh its price.
 
-**Capacity.** If demand exceeds seats, the overflow is spilled: 60% try the next best airline with free seats, the rest do not travel (G).
+**Capacity.** If demand exceeds seats, half the business-cabin overflow takes economy on the same airline. The rest of the overflow tries airlines with free seats in the same cabin, in proportion to how attractive they are: at most 60% find a seat, fewer when the airlines left are dearer or worse (G).
 
 **Calibration targets for Stage 2** (public ballparks, to be re-checked then): a well-run narrowbody on a trunk route earns a 5 to 10% operating margin at 80 to 88% load factor; cost per seat-km around Rs 4.3 to 4.8; revenue per seat-km around Rs 4.6 to 5.2.
 
@@ -141,9 +141,9 @@ Three ways to get an aircraft, always available, priced by shortage.
 |---|---|---|---|
 | Wet lease (aircraft with crew) | Next day | 13 days | About 2.2x the all-in hourly cost. Unlimited supply |
 | Operating lease from the lessor pool | 3 to 7 days | 39 to 91 days | Base rent x shortage premium. Deposit of 3 months' rent |
-| New order from the manufacturer | 6 to 8 weeks | 1.5 to 2 years | Cheapest per month. 15% deposit, balance on delivery (cash or sale-and-leaseback) |
+| New order from the manufacturer | 6 to 8 weeks | 1.5 to 2 years | Cheapest per month. 15% deposit, balance on delivery (cash, aircraft loan, or sale-and-leaseback) |
 
-- **Lessor pool.** Finite per type and world, sized to the number of airlines, with a mix of ages. `rent = base x (1 + 1.5 x (1 - available / target)^2)`. Refills each game quarter.
+- **Lessor pool.** Finite per type and world, sized to the number of airlines, with a mix of ages. `rent = base x (1 + 1.5 x (1 - available / target)^2)`. Refills each game quarter. One airline can lease at most 6 aircraft from the pool in any 91 game days (G).
 - **Manufacturer queue.** Fixed delivery slots per game quarter per type. Every order joins the queue, so a rush of orders lengthens everyone's wait and raises the price.
 - **Age.** Older aircraft rent for less, burn more fuel (+0.5% a year), cost more to maintain (+3% a year) and ground more often (G).
 - **Groundings.** Random technical groundings per aircraft, plus occasional fleet-wide engine events that ground a share of one type for weeks.
@@ -174,7 +174,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 | Slots and bases | Section 7 | Rupees |
 | Distribution and service | Share of revenue plus per passenger | Rupees |
 | Marketing | Set by the player; feeds brand | Rupees |
-| Overheads and interest | Fixed plus per aircraft; interest on debt | Rupees |
+| Overheads and interest | Fixed plus per seat in the fleet; interest on the credit line (rupees) and aircraft loans (dollars) | Rupees |
 
 Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
@@ -186,16 +186,16 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 ## 11. Finance and scoring
 
-- Start: Rs 500 crore equity and a Rs 200 crore credit line (G).
+- Start: Rs 500 crore equity, a Rs 200 crore credit line and one wet-leased A320neo (an ATR at a turboprop-only base), ready to fly on the airline's first day at the normal wet-lease rate (G).
 - Daily flash report; quarterly profit and loss, cash flow and route profitability. Headline quarterly results are public, like a listed company. Fares, frequencies and seat counts are public. Costs are private.
 - **Insolvency.** Cash below zero with the credit line used up for 14 game days puts the airline in administration: lessors repossess, and the player restarts with reduced capital and a public mark.
-- **Season score:** `net worth + 5 x operating profit of the last four quarters`. Side boards for load factor, punctuality and unit margin.
+- **Season score:** `net worth + 5 x profit after interest of the last four quarters` (Stage 2c; it was operating profit, which left out the interest on aircraft loans). Computer-run airlines are not ranked. Side boards for load factor, punctuality and unit margin.
 
 ## 12. Events and computer-run airlines
 
 - **MVP events:** fuel shock, currency swing, engine grounding, new airport opening.
 - **Later:** rival collapse, pilot shortage, fare caps, demand shocks.
-- **Computer-run airlines:** six fictional carriers with fixed networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up.
+- **Computer-run airlines:** six fictional carriers with fixed networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up. As built: section 14.3.
 
 ## 13. Scope
 
@@ -292,6 +292,66 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 **Speed.** One game day takes 15 ms in the live database for one airline, and 450 ms in the in-memory test database with 50 airlines, 960 aircraft and 2,900 rotations (target: under 2 seconds).
 
+### 14.3 Stage 2c as built
+
+Migration `0007_bots_and_tuning.sql`. Every number is (G) and lives in `game_params`, `aircraft_types`, `bot_airlines` or `bot_network`.
+
+**Computer-run airlines.** Six fictional carriers, set up on a world's first game day. Fleets below are at `demand_scale` 1; a world's fleets are scaled by `demand_scale x bot_scale` (`bot_scale` is a world setting, default 1; 0 means none). A route worth at least half a daily service keeps a daily service when scaled down.
+
+| Airline | Style | Bases | Fleet | Fare band (x reference) |
+|---|---|---|---|---|
+| Sarus Airways | Full service: two-class A320neo and A321neo trunks, A350 to London, A321XLR to Singapore | DEL, BOM | 73 | 1.00 to 1.60 |
+| Koel Air | Low-cost: dense A321neo and A320neo on the busiest trunks | DEL, BOM, BLR, HYD | 85 | 0.90 to 1.30 |
+| Bulbul Air | Low-cost | BLR, MAA, CCU | 30 | 0.90 to 1.30 |
+| Myna Regional | ATR 72 short hops | HYD, BLR | 12 | 1.05 to 1.60 |
+| Hornbill Airways | East and North-East | CCU, GAU, BBI | 12 | 0.95 to 1.40 |
+| Flamingo Air | Kerala and Mumbai to the Gulf, leisure | COK, BOM, TRV, CCJ | 11 | 0.90 to 1.40 |
+
+- **Sizing.** Built route by route from the demand model so that on the busiest routes they run about 87% full at reference fares; each of the eight busiest domestic routes has at least one of them from day 1. Together they are about a fifth of the market.
+- **Standing.** Established incumbents: aircraft on operating leases outside the lessor pool, aged 0 to 8 years, no deposits. Their owners stand behind them: they never go into administration and they are not ranked. Their names and codes are reserved.
+- **Daily fares**, from the last 7 days' load factor: above 88% fares rise 3%; below 78% they fall 3% and follow the cheapest rival. Always within the band and never below the fare at which the route breaks even at an 80% load. On routes from their own bases they defend down to a lower floor (0.05 to 0.10 below the band) when a player undercuts them.
+- **Each quarter** they move up to 3 aircraft from routes below 75% full to routes above 90%; hand back up to 2 aircraft from routes below 70% (they go to the lessor pool, for players; every route keeps at least one); and add up to 2 aircraft, from their own orders, to routes above 85% full with fares in the top half of the band, up to twice the starting fleet.
+- They act through the same public action functions as players, called from the engine with no user id.
+
+**Rules settled in this stage.**
+
+| Topic | Rule |
+|---|---|
+| Founding (item 8) | A new airline gets one wet-leased A320neo in the standard cabin (an ATR 72 at a turboprop-only base), flying from its first day, at the normal wet-lease rate. An airline founded before the world starts flies on day 1 |
+| Lessor pool (item 9) | One airline can lease at most 6 aircraft from the pool in any 91 game days, so no early joiner can corner it |
+| Demand (item 10) | Nested logit, λ = 0.5. The constants `a` rise by (1 − λ) x ln 3 (business 0.10, leisure 2.37, budget 4.14), so three airlines with four flights a day each at reference fares still carry 65% of potential. One airline with all twelve flights now carries 63% (was 50%); twelve airlines with one each, 69% (was 82%) |
+| Business cabin | Business travellers add −2.2 to the business cabin's utility. On a domestic trunk about 9% of a full-service airline's business travellers then buy its business cabin at the reference business fare; on long haul about 32% (was 89% and 97%, which kept every business cabin full) |
+| Spill (item 12) | Half of the business-cabin overflow takes economy on the same airline. Other spilled travellers try airlines with seats left in the same cabin in proportion to how attractive they are; the share who find a seat is 60% x P(fly with the airlines that have seats) / P(fly with all of them). A rival at twice the fare now picks up about 8% of them (was 60%) |
+| Spare cover (item 12) | An aircraft with no rotations, of the same type, at the same base and in the same airline flies a grounded aircraft's rotations that day, with its own cabin |
+| Aircraft loans (item 13) | Pay plan `loan`: 15% deposit on ordering; on delivery the balance is borrowed in dollars at 8% a year and repaid in equal daily principal over 12 years. Interest is a financing cost; principal is cash, not cost. Selling repays the loan; net worth subtracts it |
+| Season score | Net worth + 5 x profit after interest of the last four quarters (was operating profit: that left out loan interest, so buying every aircraft with a loan would have scored about Rs 110 crore more per aircraft a year than leasing) |
+| Slots (item 11) | `1,500 / (1 − utilisation)^2` per movement, utilisation priced at 90% at most: Rs 1.5 lakh at a full airport (was Rs 12 lakh, 400x the base). Caps scale with `demand_scale x slot_scale` |
+| Reference fare | `Rs 2,100 + 3.3 x km` (was 1,800 + 3.4): a leased A320neo at an 85% load now earns about 7% before head office on any route length (was −2% on 300 km and +7% on 2,800 km) |
+| Overheads | Rs 6 lakh a day, Rs 1,000 per seat in the fleet a day (was Rs 1.8 lakh per aircraft, the same for a 180-seat A320neo) and Rs 1.5 lakh per base |
+| ATR maintenance | $300 a flight hour and $100 a cycle (was $450 and $150): about $350 a block hour, in line with published ATR 72 costs. An ATR at an 85% load earns about 15% on 250 km and 9% on 400 km at reference fares |
+| Currency | No steady fall of the rupee (was 3% a year). Fares are fixed in rupees, so the drift took about a point of margin a year from every airline. Daily moves and currency swings remain |
+
+**Check against reality** (local test, deterministic): a player at twice the reference fare on Delhi–Mumbai sells 7 of 1,080 seats on day 1 against the computer-run airlines (item 7; it used to fill the aircraft); the Stage 2b unit-cost check (leased A320neo, Delhi–Mumbai, 85% load, reference fare) now gives cost per seat-km Rs 4.34, revenue per seat-km Rs 4.72 and an 8.1% margin (was 4.35, 4.58 and 5.0%).
+
+**Season check** (`tools/pgtest/season.mjs`: the six computer-run airlines plus 18 simulated players, two each of nine strategies, at `demand_scale` 0.36; random prices, events and groundings on; full season of 2,366 game days in about 15 minutes). Margin is operating margin; load is passenger load factor.
+
+| Game year | Computer-run airlines | All players (revenue-weighted) | Best three players |
+|---|---|---|---|
+| 1 | −8% at 72% | −15% at 74% | +4%, +2%, 0% |
+| 2 | +2% at 78% | −1% at 79% | +14%, +12%, +12% |
+| 3 | +8% at 81% | +3% at 80% | +18%, +15%, +13% |
+| 4 | +7% at 80% | 0% at 83% | +19%, +14%, +12% |
+| 5 | +10% at 82% | +4% at 83% | +21%, +19%, +15% |
+| 6 | +8% at 81% | +4% at 84% | +22%, +18%, +17% |
+| 7 (half) | +8% at 81% | +5% at 85% | +21%, +18%, +17% |
+
+- **Calibration bands.** From year 3 the computer-run airlines hold 7 to 10% at 80 to 82% load, and trunk fares settle at 1.1 to 1.4 times the reference. Year 1 is a shake-out: every new airline adds capacity at once while the incumbents shed only two aircraft a quarter.
+- **Strategies.** Final scores, best instance first (Rs crore): long haul 12,083 and −25; full service 6,319 and 1,740; low-cost trunk 6,158 and 1,375; buying with loans 464 and 125; turboprop regional −159 and −243; secondary routes −283 and −539; Gulf −387 and −584; buying for cash −776 and −785; wet lease only −1,316 and −1,397. Three different strategies take the top three places, and no strategy wins with both its airlines: long haul has the highest upside and the highest risk (in an earlier run both long-haul airlines finished on top after five administrations between them). Wet leasing as a way of life loses heavily, as intended.
+- **Slots.** At season end Bengaluru, Pune, Mumbai and Delhi run at 80 to 89% of their scaled caps, which prices a movement at Rs 37,000 to Rs 1.2 lakh. Turboprops feel it most, which is the intended push towards bigger aircraft or other airports.
+- Earlier runs during tuning (recorded here because each changed a rule above): with the old reference fare everyone lost money; with the computer-run airlines following rivals to 0.65x and never adding aircraft, the market swung from losses in year 1 to 20 to 29% margins by year 6.
+
+**Speed.** In the in-memory test database a game day takes about 100 ms with the computer-run airlines at full scale (223 aircraft), and 690 ms in the 50-airline load test (Stage 2b: 450 ms). The demand step works in double precision: with exact decimals the load test took 1.9 seconds.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -318,13 +378,18 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 4. The repo is public. Decide whether the game's code should stay public.
 5. Trunk routes between two metros come out 20 to 70% above real traffic, and metro to small-city routes below it. Tune in Stage 2c.
 6. Passenger numbers for the 44 smaller Indian airports and all international shares are estimates. Replace with published figures where available.
-7. With no rivals, one airline on a trunk route still fills its aircraft at twice the reference fare. The computer-run airlines (Stage 2c) must contest the trunk routes from day 1.
-8. A new airline cannot fly for 13 game days (one real day) even with a wet lease, and for three real days with an operating lease. Decide whether founding should come with a starter aircraft.
-9. The lessor pool is sized on airline places and leased first come, first served: early joiners pay the base rent, late joiners the shortage premium.
-10. Market shares add up, so more airlines means more total travel. Worked by hand for budget travellers at the reference fare: about 33% of potential flies when one airline offers one flight a day, about 88% when ten airlines offer ten each. Consider grouping the airlines against the option of not flying.
-11. The slot price reaches 400x its base at a full airport. Tune the base and `slot_scale` once the computer-run airlines fill the airports.
-12. Business travellers who find the business cabin full do not move down to economy, and a grounded aircraft has no spare cover.
-13. Buying an A320neo for cash costs Rs 495 crore, about the whole starting equity, so orders end as sale and leaseback in practice.
+7. Settled in Stage 2c (14.3): six computer-run airlines contest the trunk routes from day 1.
+8. Settled in Stage 2c (14.3): founding comes with one wet-leased A320neo that flies on day 1, at the normal wet-lease rate.
+9. Settled in Stage 2c (14.3): at most 6 pool aircraft per airline in any 91 days. Early joiners still get the lower rent until their leases renew (728 days, about 8 real weeks).
+10. Settled in Stage 2c (14.3): nested logit; splitting the same flights among more airlines barely adds travel.
+11. Settled in Stage 2c (14.3): 100x the base at a full airport; caps scale with `demand_scale`. Re-check once a full world (50 players) is running.
+12. Settled in Stage 2c (14.3): business travellers move down to economy; an idle aircraft at the same base covers a grounded one.
+13. Settled in Stage 2c (14.3): aircraft loans; the season score counts profit after interest.
+14. Owner to confirm: the season score now uses profit after interest instead of operating profit (section 11). Without it, buying every aircraft with a loan would dominate the score.
+15. Long haul has the highest upside in small worlds: beyond London and Singapore no computer-run airline flies long haul. Consider more Sarus long-haul routes or a second long-haul carrier after the playtest.
+16. Small airlines (1 to 3 aircraft) carry the full Rs 6 lakh a day of head office, and turboprops pay the same slot price per movement as an A350: the simulated turboprop and secondary-route players never grew past a few aircraft, and Myna Regional ends the season far below break-even once Bengaluru and Hyderabad fill up (computer-run airlines keep one aircraft on every route of their network, so it cannot leave). Watch this in the playtest before changing it; a slot price per seat rather than per movement is one option.
+17. The simulated players in `season.mjs` are simple rules, not people. Results for year 1 (everyone losing money) depend on how fast players add capacity; re-check with the playtest (Stage 5).
+18. Set a world's `demand_scale` to about (expected players / 50) before starting it: demand, computer-run fleets and slot caps all scale with it. World 1 is still at 1.
 
 **Sources for (V) figures**
 
