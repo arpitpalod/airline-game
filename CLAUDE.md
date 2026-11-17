@@ -12,7 +12,7 @@ Multiplayer airline business game for office colleagues. Read `docs/SPEC.md` bef
 
 - Stage 1 (spec): done.
 - Stage 2a (database, rule functions, reference data): done and live in Supabase project `airline-game` (ref `ptdqbzwxvhkrwoneqptr`, Mumbai). Migrations 0001 to 0003 are applied; live numbers match `tools/calibrate.py` and the local test.
-- Stage 2b (player actions, daily engine): done and live. Migrations 0004 (player actions), 0005 (daily engine) and 0006 (scheduler) are applied; every live function matches the repo file. What was built, and every rule settled along the way, is in spec section 14.2.
+- Stage 2b (player actions, daily engine): done and live. Migrations 0004 (player actions), 0005 (daily engine) and 0006 (scheduler) are applied; every live Stage 2b function matches the repo file byte for byte (the Stage 2a `rebuild_markets` differs only by two comment lines). What was built, and every rule settled along the way, is in spec section 14.2.
 - World 1 is still in `setup` and has no airlines. Start it with `select public.admin_start_world('<world id>')` through the Supabase tools: that fills the lessor pool and starts the clock. The scheduler job `game-tick` already runs every 5 minutes and does nothing until a world is running.
 - Stage 2c (bots, tuning): not started. Known tuning items are in spec section 17 (items 7 to 13 came out of Stage 2b).
 
