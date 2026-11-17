@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.2, 17 Nov 2026 (demand model rebuilt on published airport traffic). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.3, 17 Nov 2026 (Stage 2b built: player actions and the daily engine, section 14.2). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -259,6 +259,39 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 **Speed targets:** first load under 2 seconds on 4G; screen changes under 200 ms; a game day processed in under 2 seconds for 50 airlines.
 
+### 14.2 Stage 2b as built
+
+**Functions the app calls.** Players: `found_airline`, `open_base`, `lease_aircraft`, `order_aircraft`, `wet_lease`, `return_aircraft`, `refit_aircraft`, `rebase_aircraft`, `open_route`, `close_route`, `set_fares`, `set_rotation`, `set_marketing`, `borrow`, `repay`. Admin: `admin_start_world`, `admin_pause_world`, `admin_resume_world`. Read: `aircraft_market` (pool, rents, order and wet-lease quotes). The engine lives in the closed `game` schema: `run_day` processes one day, `tick` catches every running world up with its clock.
+
+**Rules settled in this stage** where sections 4 to 11 were silent. Every number is (G) and lives in `game_params`, `aircraft_types` or `season_factors`.
+
+| Topic | Rule |
+|---|---|
+| Days | `worlds.game_day` is the last day processed. Actions are stamped `game_day + 1` and count when that day runs |
+| Cash | An action needs the cash in hand; borrow first. A daily shortfall is drawn from the credit line automatically. Interest 11% a year |
+| Lessor pool | Per airline place: ATR 1.5, A320neo 3, A321neo 1.5, A321XLR 0.5, A350 0.4. Ages 0 to 12 years, three standard cabins. Rent falls 3% per year of age (floor 50%). Arrives in 39 days when the pool is full, 91 when empty. A quarter of the target is added back each quarter |
+| Operating lease | Term 728 days, then renews at the market rent. Early return: rent for the rest of the term is owed, capped at the deposit |
+| New orders | Slots a quarter per airline place: 0.12, 0.30, 0.16, 0.06, 0.04. Shortest wait 546 days; price rises 8% per extra year of queue. On delivery, cash pays the balance and the aircraft is owned (depreciation 3.6% a year, not cash). Plan `slb`, or too little cash on the day: sale and leaseback at 85% of the base rent. Cancelling forfeits the deposit. An owned aircraft sells at 85% of book value |
+| Wet lease | 13 days. Rate = 2.2 x the all-in hourly cost of rent, crew and maintenance (A320neo: about $5,560 a block hour), at least 6 hours billed a day. Standard cabin, no deposit, lessor pays crew and maintenance |
+| Routes | One route per airline per city pair; aircraft based at either end can fly it. Fares between 0.25x and 4x the reference fare |
+| Rotations | Round trips a week per aircraft per route. Must fit the cabin's range, both runways and the weekly flying window at minimum turnaround |
+| Demand constants | `a` = -0.45 business, 1.82 leisure, 3.59 budget: 65% of potential flies when three airlines each offer four flights a day at the reference fare |
+| Season and growth | Monthly multipliers per segment; game day 1 is 1 April. Growth 7% a year. Each market swings about 10% from day to day |
+| Spill | 60% of travellers without a seat move to other airlines with free seats in the same cabin, in proportion to free seats, in one pass |
+| Costs | Pilots: fixed per aircraft a day plus per block hour. Cabin crew: Rs 10,000 per position a day plus Rs 600 a block hour. Maintenance per flight hour and per flight, +3% per year of age. Airport: landing and navigation by type, Rs 150 handling a passenger, foreign landings 2x. Distribution: 3% of ticket revenue plus Rs 120 a passenger. Overheads: Rs 6 lakh a day, plus Rs 1.8 lakh per aircraft and Rs 1.5 lakh per base |
+| Slots | No slot holdings. Every movement at a congested airport pays `3,000 / (1 - utilisation)^2`, where utilisation is the day's movements by all airlines over the cap, priced at 95% at most |
+| Punctuality | 92% on a relaxed schedule; falls 20 points as an aircraft's use rises from 85% to 100% of its flying window |
+| Brand | Moves 2% of the gap a day toward `50 + 100 x (on-time - 0.84) - 300 x cancellation rate + 15 x (comfort - 0.17) + marketing`, where marketing adds up to 20 points (Rs 100 per daily passenger buys 63% of that) |
+| Groundings | 0.4% a day per aircraft, rising 10% per year of age, for 2 to 6 days. Flights are cancelled; there is no spare cover in the MVP |
+| Events | Fuel shock: +15 to 45% for 40 to 120 days. Currency swing: rupee 4 to 10% weaker for 60 to 180 days. Engine event: 15 to 30% of one type grounded for 3 to 8 weeks. Airport openings are announced 91 days ahead |
+| Insolvency | After 14 days with cash below zero and the credit line used up: fleet repossessed, orders cancelled, routes closed, debts wiped; restart with Rs 250 crore, half the credit line, 15 brand points lost and a public counter |
+| Scheduler | Database job `game-tick` every 5 minutes, at most 30 days per world per run. A day that fails is rolled back, logged in `game.engine_log` and retried |
+| Limits | 300 aircraft per airline, including those on their way |
+
+**Check against the calibration targets** (local test, leased 180-seat A320neo, Delhi to Mumbai, three round trips a day, reference fare): cost per seat-km Rs 4.35 before head-office overhead, revenue per seat-km Rs 4.58 at an 85% load, operating margin 5.0%, on-time performance 84%.
+
+**Speed.** One game day takes 15 ms in the live database for one airline, and 450 ms in the in-memory test database with 50 airlines, 960 aircraft and 2,900 rotations (target: under 2 seconds).
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -285,6 +318,13 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 4. The repo is public. Decide whether the game's code should stay public.
 5. Trunk routes between two metros come out 20 to 70% above real traffic, and metro to small-city routes below it. Tune in Stage 2c.
 6. Passenger numbers for the 44 smaller Indian airports and all international shares are estimates. Replace with published figures where available.
+7. With no rivals, one airline on a trunk route still fills its aircraft at twice the reference fare. The computer-run airlines (Stage 2c) must contest the trunk routes from day 1.
+8. A new airline cannot fly for 13 game days (one real day) even with a wet lease, and for three real days with an operating lease. Decide whether founding should come with a starter aircraft.
+9. The lessor pool is sized on airline places and leased first come, first served: early joiners pay the base rent, late joiners the shortage premium.
+10. Market shares add up, so more airlines means more total travel. Worked by hand for budget travellers at the reference fare: about 33% of potential flies when one airline offers one flight a day, about 88% when ten airlines offer ten each. Consider grouping the airlines against the option of not flying.
+11. The slot price reaches 400x its base at a full airport. Tune the base and `slot_scale` once the computer-run airlines fill the airports.
+12. Business travellers who find the business cabin full do not move down to economy, and a grounded aircraft has no spare cover.
+13. Buying an A320neo for cash costs Rs 495 crore, about the whole starting equity, so orders end as sale and leaseback in practice.
 
 **Sources for (V) figures**
 
