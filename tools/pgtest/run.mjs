@@ -4,6 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 import { checks2a } from './checks_2a.mjs';
 import { checks2b } from './checks_2b.mjs';
+import { checks2c } from './checks_2c.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -38,5 +39,6 @@ const t = {
 
 await checks2a(t);
 await checks2b(t, process.argv.includes('--perf'));
+await checks2c(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);
