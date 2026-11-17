@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.4, 17 Nov 2026 (Stage 2c built: computer-run airlines and tuning, section 14.3). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.5, 18 Nov 2026 (Stage 3 built: the app, section 14.4). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -352,6 +352,33 @@ Migration `0007_bots_and_tuning.sql`. Every number is (G) and lives in `game_par
 
 **Speed.** In the in-memory test database a game day takes about 100 ms with the computer-run airlines at full scale (223 aircraft), and 690 ms in the 50-airline load test (Stage 2b: 450 ms). The demand step works in double precision: with exact decimals the load test took 1.9 seconds.
 
+### 14.4 Stage 3 as built (the app)
+
+**One app for phone and laptop.** React and TypeScript in `app/`, built with Vite and published to GitHub Pages by `.github/workflows/pages.yml` on every push to `main` that touches `app/`. Address: `https://<owner>.github.io/airline-game/`. Below 1,024 px wide it has five tabs at the bottom (Home, Network, Fleet, Money, Ranks); from 1,024 px a sidebar, with two-column pages and tables in place of cards. It installs to a phone's home screen and caches its own files; game data always comes live from the server. Fonts are bundled, so nothing loads from a third party.
+
+**Sign-in (section 14).** The `join` edge function (`supabase/functions/join`, deployed with JWT checks off) takes email, password and invite code, checks the code and creates a confirmed account, so joining never depends on email delivery. The app then signs in with the password and founds the airline through `found_airline`, which checks the code again. An invite link is `.../#/join?code=<code>`. There is no password reset by email; an admin resets a forgotten password.
+
+**Admins.** `profiles.is_admin` (set by the owner through the database) shows an Admin screen: the world's invite link (new function `admin_world_invite`, migration `0008_app_support.sql`, admins only) and start, pause and resume.
+
+**Screens and actions.** Every player action in 14.2 has a control:
+
+| Screen | Shows | Actions |
+|---|---|---|
+| Setup | Bases sorted by traffic, runway limits, what the airline starts with | `found_airline` |
+| Home | Cash, yesterday's profit, load factor, on-time and brand; alerts with a fix or a link (full route with one-tap 5% fare rise, half-empty route, cheaper rival, idle or grounded aircraft and its cover, arriving aircraft, long wet leases, insolvency); a three-step start guide; 28-day profit; news | `set_fares` |
+| Network | Vector map (countries from world-atlas, drawn on the device; drag, pinch, India and world views) with bases and routes coloured by load factor; routes with 7-day load, fare against reference and trips | `open_base`, `open_route` |
+| Route | 7-day load, passengers, spill, revenue and flight profit; 28-day load chart against the 80 to 88% band; rivals' public fares, trips and seat share; aircraft on the route | `set_fares`, `set_rotation`, `close_route` |
+| Fleet | Each aircraft's job, use of its flying day, holding and cost, status; filters | |
+| Aircraft | Use of day, routes, cabin, terms | `set_rotation`, `rebase_aircraft`, `return_aircraft` |
+| Configurator | To-scale seat map; seats, crew, range, turnaround and comfort from `layout_calc` | `refit_aircraft`, `order_aircraft` (cash, loan or leaseback) |
+| Get aircraft | Lessor pool grouped by cabin and age with rent, the pool limit left, order prices and delivery, wet-lease rates | `lease_aircraft`, `wet_lease` |
+| Money | Profit and loss for a day, 7 or 28 days by cost line, unit revenue and cost, quarterly results, one-off payments | `borrow`, `repay`, `set_marketing` |
+| Ranks | Leaderboard by score with side boards (margin, load, on-time), world events, news | |
+
+**Design choices.** No demand preview: the route screen shows the reference fare, rivals' fares and recent results, never a predicted passenger count, so players learn to judge fares instead of reading the model. Rotation limits shown in the app (round trips a week an aircraft can still fit) mirror the server's rule and are checked again there. Teal marks actions, amber anything needing attention, always with words.
+
+**Local test.** `tools/localstack/run_e2e.sh` builds the whole back end in a local Postgres 16 (every migration), runs `shim.mjs` in place of Supabase's sign-in, REST and the join function (same row-level security, since each request runs as the caller's role), builds the app against it and drives it with Playwright at phone (390 x 844) and laptop (1440 x 900) sizes: join from an invite link, found an airline, start the world as admin, and use every action in the table above across 50 game days. It saves screenshots and fails on any page error or failed action.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -364,8 +391,8 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 | 2a | Database, rule functions, aircraft, airports, markets | Seat counts, distances and traffic totals match this spec in the live database |
 | 2b | Player actions and the daily engine | One game day runs end to end for a test airline |
 | 2c | Bot airlines and tuning | Bots play a full season; margins and load factors land in the calibration bands; no single strategy dominates |
-| 3 | App screens | Every MVP action works from a phone |
-| 4 | Hosting, sign-in, admin | A colleague can join from a link and play |
+| 3 | App screens | Every MVP action works from a phone (built: 14.4) |
+| 4 | Hosting, sign-in, admin | A colleague can join from a link and play (built with Stage 3: 14.4; open until the first colleague joins) |
 | 5 | Playtest with 6 to 8 people, then tune | Two game years played without a rules fix |
 
 ## 17. Open items and sources
