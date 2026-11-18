@@ -1,0 +1,261 @@
+// Every read the app makes, as React Query hooks. Keys: ['ref'] reference data, ['w', world, ...] world data,
+// ['a', airline, ...] the player's own books. Actions invalidate ['a', id] and ['w', world].
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { createContext, useContext } from 'react';
+import { call, rows, supabase } from './api';
+import { pairKey } from './game';
+import type {
+  Aircraft, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
+  News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
+} from './types';
+
+export interface Ref {
+  types: AircraftType[]; type: Record<string, AircraftType>;
+  airports: Airport[]; airport: Record<string, Airport>;
+  param: Record<string, number>;
+}
+
+export async function loadRef(): Promise<Ref> {
+  const [types, airports, params] = await Promise.all([
+    rows<AircraftType>(supabase.from('aircraft_types').select('*').order('sort')),
+    rows<Airport>(supabase.from('airports').select('iata,city,country,region,is_india,lat,lon,pax_m,mass,biz_idx,tour_idx,runway_class,slot_cap,opens_day').order('iata')),
+    rows<{ key: string; num: number }>(supabase.from('game_params').select('key,num')),
+  ]);
+  return {
+    types, type: Object.fromEntries(types.map((t) => [t.id, t])),
+    airports, airport: Object.fromEntries(airports.map((a) => [a.iata, a])),
+    param: Object.fromEntries(params.map((p) => [p.key, Number(p.num)])),
+  };
+}
+
+export const useRefData = (enabled: boolean) =>
+  useQuery({ queryKey: ['ref'], queryFn: loadRef, staleTime: Infinity, gcTime: Infinity, enabled });
+
+export interface Game {
+  uid: string; email: string; airline: Airline; world: World; ref: Ref; profile: Profile | null;
+  myAirlines: Airline[]; switchAirline: (id: string) => void;
+}
+export const GameContext = createContext<Game | null>(null);
+export function useGame() {
+  const g = useContext(GameContext);
+  if (!g) throw new Error('useGame outside a game');
+  return g;
+}
+
+export const useMyAirlines = (uid: string | undefined) =>
+  useQuery({
+    queryKey: ['me', uid, 'airlines'], enabled: !!uid,
+    queryFn: () => rows<Airline>(supabase.from('airlines').select('*').eq('user_id', uid!).order('created_day')),
+  });
+
+export const useProfile = (uid: string | undefined) =>
+  useQuery({
+    queryKey: ['me', uid, 'profile'], enabled: !!uid,
+    queryFn: async () => (await rows<Profile>(supabase.from('profiles').select('*').eq('user_id', uid!)))[0] ?? null,
+  });
+
+export const useWorldRow = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['world', id], enabled: !!id, refetchInterval: 60_000,
+    queryFn: async () => (await rows<World>(supabase.from('worlds').select('*').eq('id', id!)))[0],
+  });
+
+export const useAllWorlds = (enabled: boolean) =>
+  useQuery({ queryKey: ['worlds'], enabled, queryFn: () => rows<World>(supabase.from('worlds').select('*').order('name')) });
+
+// ---------- The player's own airline ----------
+
+export function useFinance() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'finance'],
+    queryFn: async () => (await rows<Finance>(supabase.from('airline_finance').select('*').eq('airline_id', airline.id)))[0],
+  });
+}
+
+export function useAirlineRow() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'row'], initialData: airline,
+    queryFn: async () => (await rows<Airline>(supabase.from('airlines').select('*').eq('id', airline.id)))[0],
+  });
+}
+
+export interface FleetItem extends Aircraft { terms: Terms | null }
+export function useFleet() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'fleet'],
+    queryFn: async () => {
+      const [ac, terms] = await Promise.all([
+        rows<Aircraft>(supabase.from('aircraft').select('*').eq('airline_id', airline.id).order('reg')),
+        rows<Terms>(supabase.from('aircraft_terms').select('*').eq('airline_id', airline.id)),
+      ]);
+      const t = Object.fromEntries(terms.map((x) => [x.aircraft_id, x]));
+      return ac.filter((a) => a.status !== 'returned').map((a) => ({ ...a, terms: t[a.id] ?? null })) as FleetItem[];
+    },
+  });
+}
+
+export function useBases() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'bases'],
+    queryFn: () => rows<Base>(supabase.from('bases').select('*').eq('airline_id', airline.id).order('opened_day')),
+  });
+}
+
+export function useRoutes() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'routes'],
+    queryFn: async () => {
+      const routes = await rows<Route>(supabase.from('routes').select('*').eq('airline_id', airline.id).eq('status', 'open').order('opened_day'));
+      const rot = routes.length
+        ? await rows<Rotation>(supabase.from('rotations').select('*').in('route_id', routes.map((r) => r.id)))
+        : [];
+      return { routes, rotations: rot };
+    },
+  });
+}
+
+export function useAirlineDaily(days = 28) {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'daily', days, world.game_day],
+    queryFn: () => rows<AirlineDaily>(supabase.from('airline_daily').select('*').eq('airline_id', airline.id)
+      .gte('game_day', Math.max(0, world.game_day - days + 1)).order('game_day')),
+  });
+}
+
+export function useRouteDaily() {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'route_daily', world.game_day],
+    queryFn: () => rows<RouteDaily>(supabase.from('route_daily').select('*').eq('airline_id', airline.id)
+      .gte('game_day', Math.max(0, world.game_day - 27)).order('game_day')),
+  });
+}
+
+export function useTxns() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'txns'],
+    queryFn: () => rows<Txn>(supabase.from('transactions').select('*').eq('airline_id', airline.id).order('id', { ascending: false }).limit(60)),
+  });
+}
+
+// ---------- The world ----------
+
+export function useWorldAirlines() {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'airlines'],
+    queryFn: () => rows<Airline>(supabase.from('airlines').select('*').eq('world_id', world.id).order('name')),
+  });
+}
+
+export function useNews(limit = 30) {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'news', limit, world.game_day],
+    queryFn: () => rows<News>(supabase.from('news').select('*').eq('world_id', world.id).order('id', { ascending: false }).limit(limit)),
+  });
+}
+
+export function useEvents() {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'events', world.game_day],
+    queryFn: () => rows<GameEvent>(supabase.from('events').select('*').eq('world_id', world.id).order('starts_day', { ascending: false }).limit(20)),
+  });
+}
+
+export function useQuarterlies() {
+  const { world } = useGame();
+  const airlines = useWorldAirlines();
+  const ids = (airlines.data ?? []).map((a) => a.id);
+  return useQuery({
+    queryKey: ['w', world.id, 'quarterly', ids.length, world.game_day],
+    enabled: !!airlines.data,
+    queryFn: () => (ids.length ? rows<Quarterly>(supabase.from('quarterly_reports').select('*').in('airline_id', ids).order('quarter', { ascending: false })) : Promise.resolve([])),
+  });
+}
+
+/** Markets touching any of these airports (each airport has at most 161). */
+export function useMarketsFrom(iatas: string[]) {
+  const key = [...new Set(iatas)].sort();
+  return useQuery({
+    queryKey: ['markets', key.join(',')], enabled: key.length > 0, staleTime: Infinity,
+    queryFn: async () => {
+      const [a, b] = await Promise.all([
+        rows<Market>(supabase.from('markets').select('*').in('a', key)),
+        rows<Market>(supabase.from('markets').select('*').in('b', key)),
+      ]);
+      const m: Record<string, Market> = {};
+      for (const x of [...a, ...b]) m[pairKey(x.a, x.b)] = x;
+      return m;
+    },
+  });
+}
+
+export interface Rival { route: Route; airline: Airline | undefined; weekly: number; seatsWeek: number }
+/** Every airline's open routes between these airports, with weekly round trips and seats. */
+export function useRivals(iatas: string[]) {
+  const { world } = useGame();
+  const key = [...new Set(iatas)].sort();
+  const airlines = useWorldAirlines();
+  return useQuery({
+    queryKey: ['w', world.id, 'rivals', key.join(','), world.game_day], enabled: key.length > 1 && !!airlines.data,
+    queryFn: async () => {
+      const routes = await rows<Route>(supabase.from('routes').select('*').eq('world_id', world.id).eq('status', 'open')
+        .in('origin', key).in('dest', key));
+      const rot = routes.length ? await rows<Rotation>(supabase.from('rotations').select('*').in('route_id', routes.map((r) => r.id))) : [];
+      const acIds = [...new Set(rot.map((r) => r.aircraft_id))];
+      const ac = acIds.length ? await rows<Aircraft>(supabase.from('aircraft').select('id,seats_econ,seats_biz,status').in('id', acIds)) : [];
+      const seats = Object.fromEntries(ac.map((a) => [a.id, a]));
+      const byId = Object.fromEntries((airlines.data ?? []).map((a) => [a.id, a]));
+      const out: Record<string, Rival[]> = {};
+      for (const r of routes) {
+        const mine = rot.filter((x) => x.route_id === r.id);
+        const weekly = mine.reduce((s, x) => s + x.weekly_trips, 0);
+        const seatsWeek = mine.reduce((s, x) => s + x.weekly_trips * 2 * ((seats[x.aircraft_id]?.seats_econ ?? 0) + (seats[x.aircraft_id]?.seats_biz ?? 0)), 0);
+        (out[pairKey(r.origin, r.dest)] ??= []).push({ route: r, airline: byId[r.airline_id], weekly, seatsWeek });
+      }
+      return out;
+    },
+  });
+}
+
+export function useAircraftMarket() {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'aircraft_market', world.game_day],
+    queryFn: () => call<MarketQuote[]>('aircraft_market', { p_world: world.id }),
+  });
+}
+
+export function usePool() {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'pool', world.game_day],
+    queryFn: () => rows<Aircraft>(supabase.from('aircraft').select('*').eq('world_id', world.id).eq('status', 'pool').order('built_day', { ascending: false })),
+  });
+}
+
+export function useLayout(type: string, bizRows: number, bizPitch: number | null, econPitch: number) {
+  return useQuery({
+    queryKey: ['layout', type, bizRows, bizPitch, econPitch], staleTime: Infinity, placeholderData: (p) => p,
+    queryFn: async () => (await call<Layout[]>('layout_calc', { p_type: type, p_biz_rows: bizRows, p_biz_pitch: bizRows ? bizPitch : null, p_econ_pitch: econPitch }))[0],
+  });
+}
+
+export function useInvalidate() {
+  const qc = useQueryClient();
+  const { airline, world } = useGame();
+  return () => Promise.all([
+    qc.invalidateQueries({ queryKey: ['a', airline.id] }),
+    qc.invalidateQueries({ queryKey: ['w', world.id] }),
+    qc.invalidateQueries({ queryKey: ['world', world.id] }),
+  ]);
+}

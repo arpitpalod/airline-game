@@ -1,0 +1,202 @@
+// One aircraft: terms, cabin, how busy it is, its routes, and what you can do with it.
+import { useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { call } from '../lib/api';
+import { useBases, useFleet, useGame, useMarketsFrom, useRoutes } from '../lib/data';
+import { hoursByAircraft } from '../lib/derive';
+import { ageYears, cabinRange, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
+import { inr, num, pct, usd } from '../lib/format';
+import { useAction } from '../components/toast';
+import { Badge, Bar, Button, Empty, Field, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
+
+export function AircraftDetail() {
+  const { id } = useParams();
+  const { ref, world, airline } = useGame();
+  const fleet = useFleet();
+  const net = useRoutes();
+  const bases = useBases();
+  const markets = useMarketsFrom((bases.data ?? []).map((b) => b.iata));
+  const { run, busy } = useAction();
+  const nav = useNavigate();
+  const [sheet, setSheet] = useState<'route' | 'base' | 'return' | null>(null);
+  const hours = useMemo(() => (fleet.data && net.data ? hoursByAircraft(fleet.data, net.data.routes, net.data.rotations, markets.data, ref) : {}),
+    [fleet.data, net.data, markets.data, ref]);
+
+  if (fleet.isLoading) return <Loading h={300} />;
+  const ac = fleet.data?.find((a) => a.id === id);
+  if (!ac) return <Empty title="This aircraft is no longer in your fleet" action={<Button onClick={() => nav('/fleet')}>Back to fleet</Button>} />;
+  const t = ref.type[ac.type_id];
+  const terms = ac.terms;
+  const used = hours[ac.id] ?? 0;
+  const rots = (net.data?.rotations ?? []).filter((r) => r.aircraft_id === ac.id);
+  const routes = net.data?.routes ?? [];
+  const seats = ac.seats_econ + ac.seats_biz;
+  const returnLabel = terms?.holding === 'owned' ? 'Sell this aircraft' : terms?.holding === 'wet' ? 'End the wet lease' : 'Return to the lessor';
+
+  return (
+    <div className="stack-lg">
+      <PageHeader back="/fleet" title={ac.reg} sub={`${t.name} · based at ${ref.airport[ac.base_iata ?? '']?.city ?? '—'}`} />
+      <div className="row wrap">
+        <Badge tone={ac.status === 'active' ? 'good' : ac.status === 'grounded' ? 'warn' : 'info'}>{STATUS_LABEL[ac.status]}{ac.status !== 'active' ? ` until day ${ac.available_day}` : ''}</Badge>
+        <Badge tone={terms?.holding === 'wet' ? 'warn' : 'neutral'}>{holdingLabel(ac)}</Badge>
+        <Badge>{num(ageYears(ac, world.game_day), 1)} years old</Badge>
+      </div>
+
+      <div className="split">
+        <div className="stack-lg">
+          <div className="card stack">
+            <div className="card-title" style={{ marginBottom: 0 }}><h2>How busy</h2><span className="small muted">{num(used, 1)} of {num(weekHours(t))} hours a week</span></div>
+            <Bar value={used / weekHours(t)} warn={used / weekHours(t) > 0.85} />
+            <p className="small muted">{used === 0 ? 'Idle aircraft still cost rent, crew and overheads every day.' : used / weekHours(t) > 0.85 ? 'Flying this much leaves little slack, so delays build up and punctuality suffers.' : `${pct(used / weekHours(t))} of its flying day is planned.`}</p>
+          </div>
+          <div className="card flush">
+            <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Routes</h2><Button size="sm" kind="ghost" onClick={() => setSheet('route')}>Add to a route</Button></div>
+            {rots.length === 0 ? <Empty title="Not flying any route">Add it to a route that starts or ends at {ac.base_iata}.</Empty> : (
+              <div className="list">
+                {rots.map((ro) => {
+                  const r = routes.find((x) => x.id === ro.route_id);
+                  return r ? (
+                    <Link key={ro.route_id} to={`/route/${r.id}`} className="item link" style={{ color: 'inherit' }}>
+                      <div className="grow"><div className="strong">{ref.airport[r.origin]?.city} – {ref.airport[r.dest]?.city}</div><div className="tiny muted">{r.origin}–{r.dest}</div></div>
+                      <span className="num">{ro.weekly_trips} a week</span>
+                    </Link>
+                  ) : null;
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="stack-lg">
+          <div className="card stack">
+            <h2>Cabin</h2>
+            <div className="kv">
+              <span>Seats</span><span>{ac.seats_biz ? `${ac.seats_biz} business + ` : ''}{ac.seats_econ} economy</span>
+              {ac.biz_rows > 0 && <><span>Business</span><span>{ac.biz_rows} rows at {ac.biz_pitch ?? 44} in</span></>}
+              <span>Economy pitch</span><span>{ac.econ_pitch} in</span>
+              <span>Range with this cabin</span><span>{num(cabinRange(t, seats))} km</span>
+              <span>Cabin crew</span><span>{Math.ceil(seats / 50)}</span>
+            </div>
+            {terms?.holding !== 'wet' && (ac.status === 'active' || ac.status === 'grounded') && (
+              <Button kind="secondary" onClick={() => nav(`/configure/${ac.type_id}?aircraft=${ac.id}`)}>Change cabin</Button>
+            )}
+          </div>
+          <div className="card stack">
+            <h2>Terms</h2>
+            <div className="kv">
+              {terms?.holding === 'lease' && <>
+                <span>Rent</span><span>{usd(terms.lease_usd_month)} a month</span>
+                <span>Lease ends</span><span>day {terms.lease_end_day}</span>
+                <span>Deposit held</span><span>{inr(terms.deposit_inr)}</span>
+              </>}
+              {terms?.holding === 'wet' && <>
+                <span>Rate</span><span>{usd(terms.wet_usd_bh)} a block hour</span>
+                <span>Minimum</span><span>{ref.param.wet_min_hours_day} hours a day</span>
+                <span>Includes</span><span>crew and maintenance</span>
+              </>}
+              {terms?.holding === 'owned' && <>
+                <span>Bought for</span><span>{usd(terms.price_usd)}</span>
+                {terms.loan_usd ? <><span>Loan left</span><span>{usd(terms.loan_usd)}</span><span>Repaid a day</span><span>{usd(terms.loan_pay_usd_day)}</span></> : null}
+                {ac.status === 'delivering' && <><span>Paying with</span><span>{terms.finance_loan ? 'an aircraft loan' : terms.pay_plan === 'slb' ? 'sale and leaseback' : 'cash'}</span></>}
+              </>}
+            </div>
+          </div>
+          <div className="card stack">
+            <h2>Options</h2>
+            <Button kind="secondary" onClick={() => setSheet('base')}>Move to another base</Button>
+            <Button kind="danger" onClick={() => setSheet('return')}>{returnLabel}</Button>
+          </div>
+        </div>
+      </div>
+
+      {sheet === 'route' && <AddToRoute acId={ac.id} onClose={() => setSheet(null)} used={used} markets={markets.data} />}
+      {sheet === 'base' && <MoveBase acId={ac.id} current={ac.base_iata} hasRoutes={rots.length > 0} onClose={() => setSheet(null)} />}
+      {sheet === 'return' && (
+        <Sheet title={returnLabel} onClose={() => setSheet(null)}>
+          <div className="stack">
+            <p className="small">
+              {terms?.holding === 'lease' && 'The rent for the rest of the lease is owed, up to the deposit you paid. What is left of the deposit comes back. The aircraft goes back to the lessor pool, where a rival can lease it.'}
+              {terms?.holding === 'wet' && 'The wet lease ends from the next game day. Nothing more is owed.'}
+              {terms?.holding === 'owned' && `It sells at ${pct(ref.param.sale_discount)} of its book value${terms.loan_usd ? ', and the rest of its loan is repaid from the proceeds' : ''}. It goes to the lessor pool.`}
+              {' '}Its routes lose this aircraft at once.
+            </p>
+            <Button kind="danger-solid" block busy={busy === 'ret'} onClick={() => run('ret', () => call<{ cash_inr: number; pnl_inr: number }>('return_aircraft', { p_airline: airline.id, p_aircraft: ac.id }),
+              (r) => terms?.holding === 'wet' ? `${ac.reg}'s wet lease has ended.` : `${ac.reg} is gone. Cash ${inr(r.cash_inr, { sign: true })}, profit effect ${inr(r.pnl_inr, { sign: true })}.`).then((r) => { if (r) nav('/fleet'); })}>
+              {returnLabel}
+            </Button>
+          </div>
+        </Sheet>
+      )}
+    </div>
+  );
+}
+
+function AddToRoute({ acId, onClose, used, markets }: { acId: string; onClose: () => void; used: number; markets?: Record<string, import('../lib/types').Market> }) {
+  const { ref, airline } = useGame();
+  const fleet = useFleet();
+  const net = useRoutes();
+  const { run, busy } = useAction();
+  const ac = fleet.data!.find((a) => a.id === acId)!;
+  const t = ref.type[ac.type_id];
+  const taken = new Set((net.data?.rotations ?? []).filter((r) => r.aircraft_id === acId).map((r) => r.route_id));
+  const options = (net.data?.routes ?? []).filter((r) => !taken.has(r.id) && ac.base_iata && [r.origin, r.dest].includes(ac.base_iata));
+  const [pick, setPick] = useState<string | null>(options[0]?.id ?? null);
+  const r = options.find((x) => x.id === pick);
+  const km = r ? markets?.[pairKey(r.origin, r.dest)]?.km ?? 0 : 0;
+  const max = r ? maxWeekly(t, ac, km, used) : 0;
+  const [trips, setTrips] = useState<number | null>(null);
+  const tv = trips ?? Math.min(max, 14);
+  return (
+    <Sheet title={`Add ${ac.reg} to a route`} onClose={onClose}>
+      <div className="stack">
+        {options.length === 0 ? <div className="card warn small">You have no other open route from {ac.base_iata}. Open one on the Network screen.</div> : (
+          <>
+            <div className="card flush"><div className="list">
+              {options.map((o) => (
+                <div key={o.id} className={`item link ${o.id === pick ? 'me' : ''}`} onClick={() => { setPick(o.id); setTrips(null); }}>
+                  <span className="grow">{ref.airport[o.origin]?.city} – {ref.airport[o.dest]?.city}</span>
+                  <span className="tiny muted">{num(markets?.[pairKey(o.origin, o.dest)]?.km)} km</span>
+                </div>
+              ))}
+            </div></div>
+            {r && (max === 0 ? <div className="card warn small">No free hours left for this route. Take it off another route first.</div> : (
+              <Field label={`Round trips a week (up to ${max})`}>
+                <Stepper label="round trips a week" value={tv} min={1} max={max} onChange={setTrips} format={(x) => `${x} a week`} />
+              </Field>
+            ))}
+            <Button block disabled={!r || max === 0} busy={busy === 'add'} onClick={() => run('add', () => call('set_rotation', {
+              p_airline: airline.id, p_aircraft: ac.id, p_route: r!.id, p_weekly_trips: tv,
+            }), `${ac.reg} will fly ${tv} round trips a week`).then((x) => x !== undefined && onClose())}>Add</Button>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+function MoveBase({ acId, current, hasRoutes, onClose }: { acId: string; current: string | null; hasRoutes: boolean; onClose: () => void }) {
+  const { ref, airline } = useGame();
+  const bases = useBases();
+  const { run, busy } = useAction();
+  const options = (bases.data ?? []).filter((b) => b.iata !== current);
+  const [pick, setPick] = useState(options[0]?.iata ?? '');
+  return (
+    <Sheet title="Move to another base" onClose={onClose}>
+      <div className="stack">
+        {hasRoutes && <div className="card warn small">Take this aircraft off its routes first.</div>}
+        {options.length === 0 ? <div className="card info small">You have only one base. Open another on the Network screen.</div> : (
+          <>
+            <Field label="New base">
+              <select className="input" value={pick} onChange={(e) => setPick(e.target.value)}>
+                {options.map((b) => <option key={b.iata} value={b.iata}>{ref.airport[b.iata]?.city} ({b.iata})</option>)}
+              </select>
+            </Field>
+            <Button block disabled={hasRoutes || !pick} busy={busy === 'move'} onClick={() => run('move', () => call('rebase_aircraft', {
+              p_airline: airline.id, p_aircraft: acId, p_base: pick,
+            }), `Moved to ${pick}`).then((x) => x !== undefined && onClose())}>Move</Button>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+}
