@@ -187,6 +187,11 @@ const fares = await q(`select m.a || '-' || m.b mkt, round(avg(r.fare_econ::nume
   count(*) filter (where not al.is_ai) n_players from public.routes r join public.airlines al on al.id = r.airline_id join public.markets m on m.a = least(r.origin, r.dest) and m.b = greatest(r.origin, r.dest)
   where r.status = 'open' and exists (select 1 from public.rotations ro where ro.route_id = r.id) group by 1 order by sum(m.n_biz + m.n_lei + m.n_bud) desc limit 8`);
 console.table(fares);
+console.log('routes computer-run airlines started and gave up to contest players');
+console.table(await q(`select a.name, count(*) filter (where n.body like '%starts flying%')::int started, count(*) filter (where n.body like '%stops flying%')::int gave_up,
+  (select count(*)::int from public.routes r where r.airline_id = a.id and r.status = 'open' and game.bot_entered(a.id, r.origin, r.dest)) open_now
+  from public.airlines a left join public.news n on n.airline_id = a.id and n.kind = 'route' and not n.private
+  where a.is_ai group by a.id, a.name order by a.name`));
 console.log('engine log:', await q(`select game_day, message from game.engine_log limit 5`));
 if (arg('--save', null)) { const b = await db.dumpDataDir('gzip'); fs.writeFileSync(arg('--save'), Buffer.from(await b.arrayBuffer())); }
 process.exit(0);
