@@ -18,12 +18,22 @@ export function AuthScreen() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
+      let existing = false;
       if (mode === 'join') {
-        await joinGame(email.trim(), password, code.trim());
         localStorage.setItem(INVITE_KEY, code.trim().toLowerCase());
+        try {
+          await joinGame(email.trim(), password, code.trim());
+        } catch (err) {
+          // Already a player: sign in instead and keep the invite, so the next screen founds an airline in that world.
+          if (!/already exists/i.test((err as Error).message)) throw err;
+          existing = true;
+        }
       }
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) throw new Error(error.message === 'Invalid login credentials' ? 'That email and password do not match.' : error.message);
+      if (error) {
+        if (existing) throw new Error('You already have an account with this email, and that password does not match it. Use Sign in.');
+        throw new Error(error.message === 'Invalid login credentials' ? 'That email and password do not match.' : error.message);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
