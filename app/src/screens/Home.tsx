@@ -52,8 +52,8 @@ export function Home() {
       if (!c || c.need === 0) continue;
       const sc = c.need - c.captains, sf = c.need - c.fos;
       if (sc > 0 || sf > 0) {
-        alerts.push({ key: `p${fm.id}`, tone: 'warn', to: '/pilots', title: `Short of ${fm.name} pilots`,
-          body: `${[sc > 0 ? `${sc} captain${sc === 1 ? '' : 's'}` : '', sf > 0 ? `${sf} first officer${sf === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} short. Flights with nobody to fly them are cancelled until more join.` });
+        alerts.push({ key: `p${fm.id}`, tone: 'warn', to: '/fleet', title: `Short of ${fm.name} pilots`,
+          body: `${[sc > 0 ? `${sc} captain${sc === 1 ? '' : 's'}` : '', sf > 0 ? `${sf} first officer${sf === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} short. Flights with nobody to fly them are cancelled until more join. Spare pilots and pay are under Fleet.` });
       }
     }
   }
@@ -216,7 +216,6 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
         <div className="card flush">
           <div className="list">
             <div className="item link" onClick={() => go('/market')}><Icon name="market" /><span className="grow">Get aircraft</span><Icon name="right" /></div>
-            <div className="item link" onClick={() => go('/pilots')}><Icon name="pilot" /><span className="grow">Pilots</span><Icon name="right" /></div>
             <div className="item link" onClick={() => go('/ranks')}><Icon name="trophy" /><span className="grow">Leaderboard and news</span><Icon name="right" /></div>
             {profile?.is_admin && <div className="item link" onClick={() => go('/admin')}><Icon name="shield" /><span className="grow">Admin</span><Icon name="right" /></div>}
           </div>

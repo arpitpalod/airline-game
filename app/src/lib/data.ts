@@ -292,20 +292,18 @@ export function useStudies() {
 
 export interface PilotFamily { id: string; name: string; sort: number; pay_c_inr_day: number; pay_f_inr_day: number; pool_c: number; pool_f: number }
 export interface AirlinePilots { airline_id: string; family: string; captains: number; fos: number; expats: number; need: number }
-export interface PilotMove { id: number; airline_id: string; family: string; rank: 'c' | 'f'; kind: 'hire' | 'expat' | 'cadet' | 'upgrade' | 'leave'; n: number; start_day: number; due_day: number; done: boolean }
 export interface PilotMarket { world_id: string; family: string; captains: number; fos: number; pay_index: number }
 export function usePilots() {
   const { airline, world } = useGame();
   return useQuery({
     queryKey: ['a', airline.id, 'pilots'],
     queryFn: async () => {
-      const [families, crews, moves, market] = await Promise.all([
+      const [families, crews, market] = await Promise.all([
         rows<PilotFamily>(supabase.from('pilot_families').select('*').order('sort')),
         rows<AirlinePilots>(supabase.from('airline_pilots').select('*').eq('airline_id', airline.id)),
-        rows<PilotMove>(supabase.from('pilot_moves').select('*').eq('airline_id', airline.id).eq('done', false).order('due_day')),
         rows<PilotMarket>(supabase.from('pilot_market').select('*').eq('world_id', world.id)),
       ]);
-      return { families, crews: Object.fromEntries(crews.map((c) => [c.family, c])) as Record<string, AirlinePilots>, moves,
+      return { families, crews: Object.fromEntries(crews.map((c) => [c.family, c])) as Record<string, AirlinePilots>,
                market: Object.fromEntries(market.map((m) => [m.family, m])) as Record<string, PilotMarket> };
     },
   });

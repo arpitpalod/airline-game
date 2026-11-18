@@ -50,7 +50,7 @@ export async function checks5(t) {
   const c2 = await crew(P);
   ok('a fully crewed airline flies every flight', dP.cancelled === 0 && dP.flights > 0, `${c2.captains} captains, ${c2.fos} first officers, need ${c2.need}`);
   const pay = await q(`select pay_index::float idx from public.pilot_market where world_id = $1 and family = 'A320'`, [W]);
-  const sal = pay[0].idx * (c2.captains * 19800 + c2.fos * 9000);
+  const sal = pay[0].idx * (c2.captains * 17800 + c2.fos * 8100);
   const flying = await one(`select sum(2 * ro.weekly_trips / 7.0 * (m.km::numeric / t.cruise_kmh + t.block_offset_h) * (t.pilot_inr_bh + 4 * 600))::float
      from public.rotations ro join public.aircraft x on x.id = ro.aircraft_id join public.aircraft_types t on t.id = x.type_id
      join public.aircraft_terms tm on tm.aircraft_id = x.id and tm.holding <> 'wet'
@@ -58,7 +58,11 @@ export async function checks5(t) {
   ok('pilot salaries replace the flat pilot cost per aircraft', Math.abs(dP.c_crew - (sal + flying + 2 * 4 * 10000)) < 0.02 * dP.c_crew,
     `crew cost ${Math.round(dP.c_crew)}, of which salaries ${Math.round(sal)} (flat cost was ${2 * 190000})`);
 
-  // Q leases two as well but the market has no captains left: it hires first officers, promotes a few, and is short
+  ok('every airline takes foreign captains as the last resort unless the engine is told otherwise',
+    (await one(`select bool_and(pilot_expats) from public.airline_finance where airline_id in ($1, $2)`, [P, Q])) === true);
+  // Q leases two as well but the market has no captains left (and, for this test, no foreign captains): it hires
+  // first officers, promotes a few, and is short
+  await q(`select public.set_pilot_policy($1, 1, 0.1, 0, false)`, [Q]);
   await q(`update public.game_params set num = 0 where key = 'pilot_pool_in_qtr'`);
   await q(`update public.pilot_market set captains = 0 where world_id = $1 and family = 'A320'`, [W]);
   for (const id of pool.slice(2, 4)) await q(`select public.lease_aircraft($1, $2, 'DEL')`, [Q, id]);
