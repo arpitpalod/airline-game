@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.5, 18 Nov 2026 (Stage 3 built: the app, section 14.4). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.6, 19 Nov 2026 (computer-run airlines contest player routes, section 14.5). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -195,7 +195,7 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 - **MVP events:** fuel shock, currency swing, engine grounding, new airport opening.
 - **Later:** rival collapse, pilot shortage, fare caps, demand shocks.
-- **Computer-run airlines:** six fictional carriers with fixed networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up. As built: section 14.3.
+- **Computer-run airlines:** six fictional carriers with fixed starting networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up, and from migration 0009 they also start flying routes where players earn well (14.5). As built: section 14.3.
 
 ## 13. Scope
 
@@ -379,6 +379,22 @@ Migration `0007_bots_and_tuning.sql`. Every number is (G) and lives in `game_par
 
 **Local test.** `tools/localstack/run_e2e.sh` builds the whole back end in a local Postgres 16 (every migration), runs `shim.mjs` in place of Supabase's sign-in, REST and the join function (same row-level security, since each request runs as the caller's role), builds the app against it and drives it with Playwright at phone (390 x 844) and laptop (1440 x 900) sizes: join from an invite link, found an airline, start the world as admin, and use every action in the table above across 50 game days. It saves screenshots and fails on any page error or failed action.
 
+### 14.5 Computer-run airlines contest player routes (migration 0009)
+
+Asked for by the owner after Stage 3: rivals that "stay smart enough". Before this, the computer-run airlines' route networks were fixed, so a player could find a route none of them flew and keep it uncontested all season. The aim is rivals that punish an easy, uncontested profit, not rivals that play perfectly. Every number is (G) in `game_params`.
+
+| Rule | Value |
+|---|---|
+| When | At each quarter end, after the existing moves, returns and additions |
+| Which routes | A city pair players have flown for at least 28 days, at 85% load or more over the last 28 days, with their lowest economy fare at or above the reference fare, flown by fewer than 3 airlines, with one end at a base of the computer-run airline |
+| How many | Each computer-run airline starts at most 1 such route a quarter; two never enter the same pair in the same quarter; the pair with the most player revenue goes first |
+| Aircraft | Taken from its own emptiest route that has two or more aircraft, moved to the base if needed. No new aircraft are added for this |
+| Entry fare | 95% of the players' lowest fare, inside the airline's band; then the daily pricing rules take over, including defending a base route |
+| Giving up | After 56 days, a contested route below 60% load over 28 days is closed and its aircraft go back to the lessor pool. No computer-run airline contests that pair again for 364 days. Starting-network routes are never given up this way |
+| News | Public news items: "Koel Air starts flying Delhi to Patna, against the airlines already there." and "... stops flying ..." |
+
+**Season check** (three full-season runs with contesting, one without; same set-up as 14.3; single runs vary a lot, so read the direction, not the exact figures). With contesting, players' revenue-weighted margins in years 2 to 5 were 2 to 8 points lower than without; final-year results stayed within the run-to-run spread (players +3% to +13%, computer-run airlines +10% to +19%). In one run the computer-run airlines started 69 contested routes over the season (about 3 a quarter across the world), gave up 46 and kept 23. Long haul, full service and low-cost trunk stay the three best strategies; wet-lease-only, regional and niche routes still lose money.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -417,6 +433,9 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 16. Small airlines (1 to 3 aircraft) carry the full Rs 6 lakh a day of head office, and turboprops pay the same slot price per movement as an A350: the simulated turboprop and secondary-route players never grew past a few aircraft, and Myna Regional ends the season far below break-even once Bengaluru and Hyderabad fill up (computer-run airlines keep one aircraft on every route of their network, so it cannot leave). Watch this in the playtest before changing it; a slot price per seat rather than per movement is one option.
 17. The simulated players in `season.mjs` are simple rules, not people. Results for year 1 (everyone losing money) depend on how fast players add capacity; re-check with the playtest (Stage 5).
 18. Set a world's `demand_scale` to about (expected players / 50) before starting it: demand, computer-run fleets and slot caps all scale with it. World 1 is set to 0.5 for at least 25 players.
+
+19. Myna Regional and Flamingo Air lose money in every season run (about −12% to −136% margin at `demand_scale` 0.36), with or without contesting. Computer-run airlines never fail, so they keep flying; tune their starting networks, or let them shrink further, before World 1 starts.
+20. An AI strategist for the computer-run airlines (a model choosing once a quarter which routes to enter and how hard to price, through the same functions) was suggested by the owner. Deferred until the playtest shows whether the rules in 14.5 feel predictable. It would need an Anthropic API key held as a server secret and makes season runs non-repeatable.
 
 **Sources for (V) figures**
 
