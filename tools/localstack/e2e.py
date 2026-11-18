@@ -109,7 +109,8 @@ with sync_playwright() as p:
     print('lease from the pool')
     go(page, '/market')
     page.locator('.list .item.link').first.click()
-    page.get_by_role('button', name='Lease it').click()
+    page.get_by_role('button', name='More aircraft to lease').click()
+    page.get_by_role('button', name='Lease 2 aircraft').click()
     toast_ok(page, 'leased')
     page.get_by_role('heading', name='Fleet').wait_for()
     shot(page, 'p09-fleet')
@@ -127,8 +128,18 @@ with sync_playwright() as p:
     page.get_by_role('button', name='More business rows').click()
     page.wait_for_timeout(500)
     shot(page, 'p10-configurator')
-    page.get_by_role('button', name='Order for').click()
-    toast_ok(page, 'ordered')
+    page.get_by_role('button', name='More aircraft to order').click()
+    page.get_by_role('button', name='Order 2 for').click()
+    toast_ok(page, 'aircraft ordered')
+
+    print('extras: include meals, raise the bag price')
+    go(page, '/extras')
+    page.get_by_text('How extras work').wait_for()
+    page.locator('.card', has_text='Meal on board').get_by_role('tab', name='Include free').click()
+    page.get_by_role('button', name='More Checked bag price').click()
+    shot(page, 'p16-extras')
+    page.get_by_role('button', name='Save extras').click()
+    toast_ok(page, 'Extras saved')
 
     print('borrow, repay, marketing')
     go(page, '/money')
@@ -202,7 +213,7 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Sign in', exact=True).click()
     page.get_by_text("Yesterday's profit").wait_for()
     shot(page, 'd01-home')
-    for h, n in [('/network', 'd02-network'), ('/fleet', 'd04-fleet'), ('/money', 'd05-money'), ('/market', 'd06-market'), ('/ranks', 'd08-ranks'), ('/configure/A21N', 'd07-configurator')]:
+    for h, n in [('/extras', 'd09-extras'), ('/network', 'd02-network'), ('/fleet', 'd04-fleet'), ('/money', 'd05-money'), ('/market', 'd06-market'), ('/ranks', 'd08-ranks'), ('/configure/A21N', 'd07-configurator')]:
         go(page, h); page.wait_for_timeout(700); shot(page, n)
     go(page, '/network')
     if page.locator('.list .item.link').count():

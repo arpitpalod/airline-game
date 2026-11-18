@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.6, 19 Nov 2026 (computer-run airlines contest player routes, section 14.5). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.7, 19 Nov 2026 (bulk orders and extras, section 14.6; roadmap with cargo and loyalty, section 18). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -160,7 +160,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 
 - One fare per cabin per route in the MVP, changeable any time, effective next game day.
 - The route screen shows the reference fare, rivals' public fares and frequencies, and yesterday's load factor and spill.
-- Ancillary revenue: flat 8% of ticket revenue in the MVP (G); later a set of choices (bags, seats, meals).
+- Extras (ancillaries): four extras each sold at a price or included free, set once for the whole network (section 14.6). Replaced the flat 8% of ticket revenue.
 
 ## 9. Costs
 
@@ -395,6 +395,27 @@ Asked for by the owner after Stage 3: rivals that "stay smart enough". Before th
 
 **Season check** (three full-season runs with contesting, one without; same set-up as 14.3; single runs vary a lot, so read the direction, not the exact figures). With contesting, players' revenue-weighted margins in years 2 to 5 were 2 to 8 points lower than without; final-year results stayed within the run-to-run spread (players +3% to +13%, computer-run airlines +10% to +19%). In one run the computer-run airlines started 69 contested routes over the season (about 3 a quarter across the world), gave up 46 and kept 23. Long haul, full service and low-cost trunk stay the three best strategies; wet-lease-only, regional and niche routes still lose money.
 
+### 14.6 Bulk orders, bulk leases and extras (migration 0011)
+
+Asked for by the owner after the first playtest evening.
+
+**Bulk orders and leases.** `order_aircraft_bulk` orders up to 10 new aircraft of one type and cabin at once; each takes the next delivery slot (three A320neos ordered together arrived on days 547, 553 and 559 in the test). `lease_aircraft_bulk` leases up to 10 aircraft from the pool at once; the app picks the youngest of the chosen group (same cabin, same age band). Both are all or nothing, and the pool limit of 6 in any 91 days still applies, with a message saying how many are left.
+
+**Extras.** Four extras, each either sold at a price or included free, set once for the whole network (`set_extras`). Prices are multiples (0.25 to 3) of a reference price that follows each route's reference fare, so one setting works from short hops to long haul. Every number is (G) in `ancillary_products` and `game_params`.
+
+| Extra | Reference price (share of the reference fare) | Bought at the reference price | Used when free | Cost when free (share of the reference fare) | Who counts its price: business / leisure / budget |
+|---|---|---|---|---|---|
+| Checked bag | 17% | 35% | 55% | 3.0% | 30% / 50% / 40% |
+| Seat choice | 6% | 30% | – | 0 | 50% / 30% / 10% |
+| Meal on board | 6% | 22% | 85% | 4.0% | 40% / 30% / 10% |
+| Priority check-in and boarding | 7% | 7% | 15% | 0.5% | 30% / 5% / 2% |
+
+- **Take-up** of a sold extra falls with its price: share x exp(−0.6 x (multiple − 1)).
+- **Choice.** Travellers judge the trip price. For each segment, the economy fare in the utility (section 4) becomes `fare / reference + Σ w x reference share x (multiple − 1)` over sold extras, minus `w x reference share` for each extra included free. Selling everything at the reference price changes nothing, so the tuning in 14.3 holds for an airline that never touches its extras.
+- **Revenue and cost.** Extras earn `Σ reference share x multiple x take-up` of the reference fare per economy passenger (9.6% when everything is sold at the reference price, the same as the old 8% of a fare 1.2 times the reference). Business-cabin passengers get everything included and add 8% of their fare. Extras included free cost money per passenger, booked with distribution and service.
+- **What it teaches.** Including everything works like a fare cut of about 12% of the reference fare for leisure travellers, at a cost of about 15%: in the test, an airline including all four extras carried 176 passengers a day against 90 for an identical airline selling them, but earned nothing from extras. Meals cost more to include than travellers value them; seat choice and priority are cheap to give and business travellers notice; bags win leisure-heavy routes.
+- The computer-run airlines sell every extra at the reference price.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -450,3 +471,50 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 - Cabin crew, one per 50 seats: https://flightsmilesandpoints.com/aviation/how-many-cabin-crew-per-flight/ and https://www.easa.europa.eu/en/the-agency/faqs/minimum-required-cabin-crew
 - Indian rule text as quoted: https://www.pprune.org/6262435-post641.html
 - Lease rate bands, 2026: https://safefly.aero/blog-a320ceo-vs-a320neo/
+
+## 18. Roadmap
+
+Set 19 Nov 2026 with the owner. Each later feature unlocks per airline, inside a season, once the airline is ready for it; it must be live before the first airline in World 1 could reach it. At World 1's clock of 60 minutes a game day, game day 365 comes about 15 real days after the start and day 729 about 30 days after.
+
+| When (real time) | What |
+|---|---|
+| 19 Nov | Bulk orders and leases, extras (14.6) |
+| Test World playtest, next few days | Fix what the owner finds; add the route study (below) |
+| Before World 1 starts | Tune Myna Regional and Flamingo Air (item 19); confirm the clock (item 21) |
+| World 1 start + 10 days | Cargo live (unlocks from game day 365) |
+| World 1 start + 25 days | Loyalty live (unlocks from game day 729) |
+| Season 2 | Player-to-player aircraft market, alliances and codeshares, freighters, loyalty tiers |
+
+### 18.1 Cargo (belly cargo first)
+
+- **Unlocks** for an airline at least 1 game year old with at least Rs 250 crore of revenue in its last quarter (G). Starting cargo sales costs Rs 10 crore once (G) for the sales team and handling contracts.
+- **Demand.** Each market gets cargo demand in tonnes a day from the same gravity model as passengers, weighted by the airports' business index and a new cargo index (Delhi, Mumbai, Bengaluru, Chennai and the Gulf high) (G). Grows 5% a year (G).
+- **Capacity.** Belly space left after passengers' bags: about 0.5 tonnes on an ATR 72, 2 on an A320neo, 3 on an A321neo, 16 on an A350 (G, to check against published figures). Fewer bags when bags are sold rather than included.
+- **Price.** One rate per kg for the whole network as a multiple of a reference rate that rises with distance; airlines share demand by price and frequency like passengers.
+- **Cost.** Handling per kg, a small fuel penalty for the weight, distribution share.
+- **Teaches.** Belly cargo as extra revenue on flights already flying, why widebodies earn more from it, and how bag policy and cargo compete for the same space.
+- **Later.** Freighters (a converted A321 and a widebody freighter) in season 2.
+
+### 18.2 Loyalty programme
+
+- **Unlocks** for an airline at least 2 game years old, with a brand of 55 or more and 2 million passengers carried (G). Launching costs Rs 25 crore (G).
+- **Members.** A growing share of an airline's passengers join, faster with more flights from their city. Members prefer their own airline: a utility bonus, largest for business travellers (G).
+- **Points.** Members earn points on every fare. Points are a liability: part of each fare is deferred until the points are used or expire (breakage).
+- **Redemptions.** Award seats come from seats that would otherwise be empty, so they cost little on half-empty flights and displace paying passengers on full ones. The player sets how many award seats a flight may carry.
+- **Co-brand card.** A partner bank buys points to give its card holders: monthly income in proportion to members, often the programme's biggest earner (G).
+- **Decisions.** Earn rate, award-seat availability, and whether to sign a co-brand card. Tiers (silver, gold) come in season 2.
+- **Teaches.** Loyalty economics: the liability on the balance sheet, displacement cost, partner income and the value of retention.
+
+### 18.3 Ideas from Airlines Manager
+
+Airlines Manager (Playrion) offers real-time and fast modes, an R&D centre with over 500 research items, more than 200 services, buying hubs at airports, aircraft maintenance, a second-hand market where players trade aircraft by bidding, and alliances. Route audits show a demand estimate with a marker of how reliable it is. Filtered through this game's principles (every feature teaches a real trade-off; five minutes a day is enough):
+
+| Idea | Verdict | When |
+|---|---|---|
+| Route study: pay to see a demand range for a city pair, wider when cheap | Take. Fits the rule that the game never shows an exact demand figure | Next, with the playtest fixes |
+| Route ramp-up: a new route starts below its full demand and builds with time and frequency | Take. Real airlines lose money on new routes for months | After cargo |
+| Second-hand market between players | Take (already later layer 1) | Season 2 |
+| Alliances and codeshares between players | Take | Season 2 |
+| Real-time and fast modes | Already covered by the per-world clock (`admin_set_speed`) | Done |
+| Services catalogue | Started with extras; business lounges at bases later | Later |
+| R&D tree, managers and staff, buying airports | Leave out: they add time per day without teaching an airline trade-off | – |

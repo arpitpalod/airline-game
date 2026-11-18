@@ -26,7 +26,7 @@ export function Shell({ children }: { children: ReactNode }) {
     const p = loc.pathname;
     if (to === '/') return p === '/';
     if (to === '/fleet') return p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/market') || p.startsWith('/configure');
-    if (to === '/network') return p.startsWith('/network') || p.startsWith('/route');
+    if (to === '/network') return p.startsWith('/network') || p.startsWith('/route') || p.startsWith('/extras');
     if (to === '/ranks') return p.startsWith('/ranks') || p.startsWith('/admin');
     return p.startsWith(to);
   };

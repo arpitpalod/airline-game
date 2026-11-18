@@ -53,7 +53,7 @@ export function Money() {
               <table className="table">
                 <tbody>
                   <tr><td>Tickets</td><td className="r">{inr(line('rev_ticket'))}</td></tr>
-                  <tr><td>Extras (bags, seats, food)</td><td className="r">{inr(line('rev_anc'))}</td></tr>
+                  <tr><td><a href="#/extras">Extras (bags, seats, meals)</a></td><td className="r">{inr(line('rev_anc'))}</td></tr>
                   <tr><td className="strong">Revenue</td><td className="r strong">{inr(s.revenue)}</td></tr>
                   {COST_LINES.map((c) => { const v = line(c.key); return v ? <tr key={c.key}><td className="muted">{c.label}</td><td className="r muted">−{inr(v).replace('−', '')}</td></tr> : null; })}
                   <tr><td className="strong">Operating profit</td><td className={`r strong ${s.opProfit >= 0 ? 'good' : 'bad'}`}>{inr(s.opProfit, { sign: true })} · {s.revenue ? pct(s.opProfit / s.revenue) : '–'}</td></tr>

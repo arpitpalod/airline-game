@@ -259,3 +259,19 @@ export function useInvalidate() {
     qc.invalidateQueries({ queryKey: ['world', world.id] }),
   ]);
 }
+
+export interface AncProduct { id: string; name: string; sort: number; ref_share: number; takeup: number; inc_use: number; cost_share: number; w_biz: number; w_lei: number; w_bud: number }
+export interface AirlineExtra { airline_id: string; product_id: string; included: boolean; price_mult: number }
+export function useExtras() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'extras'],
+    queryFn: async () => {
+      const [products, mine] = await Promise.all([
+        rows<AncProduct>(supabase.from('ancillary_products').select('*').order('sort')),
+        rows<AirlineExtra>(supabase.from('airline_extras').select('*').eq('airline_id', airline.id)),
+      ]);
+      return { products, mine: Object.fromEntries(mine.map((m) => [m.product_id, m])) as Record<string, AirlineExtra> };
+    },
+  });
+}

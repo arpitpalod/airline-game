@@ -61,6 +61,6 @@ export function windowShare(ac: FleetItem, hours: number, ref: Ref) {
 export const COST_LINES: { key: keyof AirlineDaily; label: string }[] = [
   { key: 'c_fuel', label: 'Fuel' }, { key: 'c_rent', label: 'Aircraft rent' }, { key: 'c_crew', label: 'Crew' },
   { key: 'c_maint', label: 'Maintenance' }, { key: 'c_airport', label: 'Airport and navigation' }, { key: 'c_slots', label: 'Slots' },
-  { key: 'c_dist', label: 'Sales and service' }, { key: 'c_marketing', label: 'Marketing' }, { key: 'c_overhead', label: 'Head office and bases' },
+  { key: 'c_dist', label: 'Sales, service and free extras' }, { key: 'c_marketing', label: 'Marketing' }, { key: 'c_overhead', label: 'Head office and bases' },
   { key: 'c_depr', label: 'Depreciation' }, { key: 'c_other', label: 'Other' },
 ];
