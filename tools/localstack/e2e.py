@@ -74,6 +74,9 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Start the world').click()
     page.locator('.sheet').get_by_role('button', name='Start', exact=True).click()
     toast_ok(page, 'has started')
+    page.get_by_label('One game day takes').select_option('15')
+    page.get_by_role('button', name='Change the clock').click()
+    toast_ok(page, 'now takes 15 minutes')
 
     print('open a route and assign the aircraft')
     go(page, '/network')

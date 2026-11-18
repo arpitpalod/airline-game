@@ -358,7 +358,7 @@ Migration `0007_bots_and_tuning.sql`. Every number is (G) and lives in `game_par
 
 **Sign-in (section 14).** The `join` edge function (`supabase/functions/join`, deployed with JWT checks off) takes email, password and invite code, checks the code and creates a confirmed account, so joining never depends on email delivery. The app then signs in with the password and founds the airline through `found_airline`, which checks the code again. An invite link is `.../#/join?code=<code>`. There is no password reset by email; an admin resets a forgotten password.
 
-**Admins.** `profiles.is_admin` (set by the owner through the database) shows an Admin screen: the world's invite link (new function `admin_world_invite`, migration `0008_app_support.sql`, admins only) and start, pause and resume.
+**Admins.** `profiles.is_admin` (set by the owner through the database) shows an Admin screen: the world's invite link (new function `admin_world_invite`, migration `0008_app_support.sql`, admins only) and start, pause and resume. Migration 0010 adds `admin_set_speed(world, minutes per game day)`, 5 minutes to 24 hours, on the same screen. The world keeps the day it has processed and the next day starts counting at the new pace, so nothing jumps; every rule stays in game days, so lead times, groundings and the 14 days before administration shrink in real time with the clock.
 
 **Screens and actions.** Every player action in 14.2 has a control:
 
@@ -436,6 +436,8 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 
 19. Myna Regional and Flamingo Air lose money in every season run (about −12% to −136% margin at `demand_scale` 0.36), with or without contesting. Computer-run airlines never fail, so they keep flying; tune their starting networks, or let them shrink further, before World 1 starts.
 20. An AI strategist for the computer-run airlines (a model choosing once a quarter which routes to enter and how hard to price, through the same functions) was suggested by the owner. Deferred until the playtest shows whether the rules in 14.5 feel predictable. It would need an Anthropic API key held as a server secret and makes season runs non-repeatable.
+
+21. Clock for World 1. The owner found an hour per game day slow in Test World, which now runs at 15 minutes a day (96x). At that pace a season lasts about 25 real days instead of 26 weeks, a quarter passes in under a day, and an airline can go from first cash trouble to administration in about 3.5 hours, so a colleague who checks once a day can miss it. Decide World 1's clock before it starts.
 
 **Sources for (V) figures**
 

@@ -6,7 +6,7 @@ import { useGame, useWorldAirlines } from '../lib/data';
 import { clock } from '../lib/game';
 import { dayLabel, num, realSpan } from '../lib/format';
 import { useToast } from '../components/toast';
-import { Badge, Button, Empty, Kpi, PageHeader, Sheet } from '../components/ui';
+import { Badge, Button, Empty, Field, Kpi, PageHeader, Sheet } from '../components/ui';
 
 export function Admin() {
   const { profile, world } = useGame();
@@ -66,6 +66,7 @@ export function Admin() {
           </>}
           {world.status === 'paused' && <Button onClick={() => setConfirm('resume')}>Resume</Button>}
           {world.status === 'ended' && <Badge>Season over</Badge>}
+          {world.status !== 'ended' && <SpeedControl />}
         </div>
       </div>
       {confirm && (
@@ -79,6 +80,39 @@ export function Admin() {
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+const SPEEDS = [10, 15, 20, 30, 60, 111];
+
+function SpeedControl() {
+  const { world } = useGame();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const now = Math.round(1440 / world.speed);
+  const [mins, setMins] = useState(now);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="stack" style={{ marginTop: 8 }}>
+      <div className="divider" />
+      <Field label="One game day takes">
+        <select className="input" value={mins} onChange={(e) => setMins(Number(e.target.value))}>
+          {[...new Set([...SPEEDS, now])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m} minutes{m === now ? ' (now)' : ''}</option>)}
+        </select>
+      </Field>
+      <p className="tiny muted">
+        A season of {world.season_days} game days then lasts about {realSpan(world.season_days, 1440 / mins)}. Lead times, groundings and the
+        {' '}14 days before administration all shrink with it: at {mins} minutes a quarter passes in {realSpan(91, 1440 / mins)}.
+      </p>
+      <Button kind="secondary" disabled={mins === now} busy={busy} onClick={async () => {
+        setBusy(true);
+        try {
+          await call('admin_set_speed', { p_world: world.id, p_minutes_per_day: mins });
+          toast(`A game day now takes ${mins} minutes`);
+          await qc.invalidateQueries({ queryKey: ['world', world.id] });
+        } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
+      }}>Change the clock</Button>
     </div>
   );
 }

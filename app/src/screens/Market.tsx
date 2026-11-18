@@ -52,7 +52,7 @@ export function Market() {
       <div className="card info small">
         {tab === 'lease' && <>An operating lease from the lessor pool arrives in {realSpan(39, world.speed)} to {realSpan(91, world.speed)} and runs {num(ref.param.lease_term_days / 364, 0)} game years. Rent rises as the pool empties. You pay {ref.param.lease_deposit_months} months' rent as a deposit. You can take {left} more from the pool right now: lessors place at most {ref.param.pool_lease_max_qtr} with one airline in any 91 game days.</>}
         {tab === 'order' && <>A new aircraft is the cheapest to run but takes about {realSpan(ref.param.order_lead_min_days, world.speed)} to arrive. You pay 15% now and the rest on delivery: cash, an aircraft loan, or a sale and leaseback. You choose its cabin.</>}
-        {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives the next real day. It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
+        {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives in {ref.param.wet_lead_days ?? 13} game days ({realSpan(ref.param.wet_lead_days ?? 13, world.speed)}). It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
       </div>
 
       {market.isLoading ? <Loading h={240} /> : tab === 'lease' ? (
