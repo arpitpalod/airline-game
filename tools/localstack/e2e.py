@@ -206,6 +206,26 @@ with sync_playwright() as p:
         page.locator('.list .item.link').first.click(); page.get_by_text('How full, last 28 days').wait_for()
         shot(page, 'd03-route')
     ctx.close()
+
+    print('an existing player joins a second world from its invite link')
+    sql("insert into worlds (name, demand_scale) values ('Test World', 0.5)")
+    sql("insert into world_secrets (world_id, invite_code) select id, 'second01' from worlds where name = 'Test World'")
+    ctx = b.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
+    page = ctx.new_page(); watch(page)
+    mark = len(errors)   # the join function answers 400 "already exists" here by design
+    go(page, '/join?code=second01')
+    page.get_by_label('Email').fill(EMAIL)
+    page.get_by_label('Password').fill(PW)
+    page.get_by_role('button', name='Create account').click()
+    page.get_by_text('Found your airline').wait_for()
+    expect(page.get_by_label('Invite code')).to_have_value('second01')
+    page.get_by_label('Airline name').fill('Second Air')
+    page.locator('.item', has_text='BOM').first.click()
+    page.get_by_role('button', name='Found Second Air').click()
+    page.get_by_role('heading', name='Second Air').wait_for()
+    shot(page, 'p15-second-world')
+    errors[mark:] = [e for e in errors[mark:] if 'status of 400' not in e]
+    ctx.close()
     b.close()
 
 print('\nerrors:' if errors else '\nno page errors')

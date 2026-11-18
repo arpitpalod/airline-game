@@ -243,7 +243,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 
 /* ---------- Misc ---------- */
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-.logo { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-family: var(--display); font-weight: 700; font-size: 13px; flex-shrink: 0; }
+.logo { background: var(--accent); width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-family: var(--display); font-weight: 700; font-size: 13px; flex-shrink: 0; }
 .logo.lg { width: 48px; height: 48px; border-radius: 14px; font-size: 16px; }
 .bar { height: 8px; border-radius: 4px; background: var(--bg); overflow: hidden; }
 .bar > div { height: 100%; background: var(--accent); border-radius: 4px; }
