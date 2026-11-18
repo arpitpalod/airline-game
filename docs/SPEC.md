@@ -437,7 +437,7 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 19. Myna Regional and Flamingo Air lose money in every season run (about −12% to −136% margin at `demand_scale` 0.36), with or without contesting. Computer-run airlines never fail, so they keep flying; tune their starting networks, or let them shrink further, before World 1 starts.
 20. An AI strategist for the computer-run airlines (a model choosing once a quarter which routes to enter and how hard to price, through the same functions) was suggested by the owner. Deferred until the playtest shows whether the rules in 14.5 feel predictable. It would need an Anthropic API key held as a server secret and makes season runs non-repeatable.
 
-21. Clock for World 1. The owner found an hour per game day slow in Test World, which now runs at 15 minutes a day (96x). At that pace a season lasts about 25 real days instead of 26 weeks, a quarter passes in under a day, and an airline can go from first cash trouble to administration in about 3.5 hours, so a colleague who checks once a day can miss it. Decide World 1's clock before it starts.
+21. Clock for World 1. The owner found an hour per game day slow in Test World, which now runs at 15 minutes a day (96x). At that pace a season lasts about 25 real days instead of 26 weeks, a quarter passes in under a day, and an airline can go from first cash trouble to administration in about 3.5 hours, so a colleague who checks once a day can miss it. World 1 is set to 60 minutes a game day for now (season about 14 weeks, a quarter about 4 days, administration after about 14 hours of trouble); the owner will revisit it before the start.
 
 **Sources for (V) figures**
 
