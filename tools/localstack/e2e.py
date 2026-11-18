@@ -93,6 +93,15 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Assign').click()
     toast_ok(page, 'round trips a week')
 
+    print('pilots: set pay and spare pilots')
+    go(page, '/pilots')
+    page.get_by_text('Pilot market').wait_for()
+    page.get_by_role('button', name='More pilot pay').click()
+    page.get_by_role('button', name='More spare pilots').click()
+    page.get_by_role('button', name='Save pilot settings').click()
+    toast_ok(page, 'Pilot settings saved')
+    shot(page, 'p05b-pilots')
+
     print('fly 8 days')
     for _ in range(8):
         sql(f"select game.run_day('{WORLD}')")
@@ -220,7 +229,7 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Sign in', exact=True).click()
     page.get_by_text("Yesterday's profit").wait_for()
     shot(page, 'd01-home')
-    for h, n in [('/extras', 'd09-extras'), ('/network', 'd02-network'), ('/fleet', 'd04-fleet'), ('/money', 'd05-money'), ('/market', 'd06-market'), ('/ranks', 'd08-ranks'), ('/configure/A21N', 'd07-configurator')]:
+    for h, n in [('/pilots', 'd10-pilots'), ('/extras', 'd09-extras'), ('/network', 'd02-network'), ('/fleet', 'd04-fleet'), ('/money', 'd05-money'), ('/market', 'd06-market'), ('/ranks', 'd08-ranks'), ('/configure/A21N', 'd07-configurator')]:
         go(page, h); page.wait_for_timeout(700); shot(page, n)
     go(page, '/network')
     if page.locator('.list .item.link').count():

@@ -19,13 +19,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const { airline, world, profile, myAirlines, switchAirline } = useGame();
   const loc = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
-  const side = [...TABS.slice(0, 3), { to: '/market', label: 'Get aircraft', icon: 'market' }, ...TABS.slice(3),
+  const side = [...TABS.slice(0, 3), { to: '/market', label: 'Get aircraft', icon: 'market' }, { to: '/pilots', label: 'Pilots', icon: 'pilot' }, ...TABS.slice(3),
     ...(profile?.is_admin ? [{ to: '/admin', label: 'Admin', icon: 'shield' }] : [])];
   // Market and aircraft pages belong to the Fleet tab, route pages to Network.
   const tabActive = (to: string) => {
     const p = loc.pathname;
     if (to === '/') return p === '/';
-    if (to === '/fleet') return p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/market') || p.startsWith('/configure');
+    if (to === '/fleet') return p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/market') || p.startsWith('/configure') || p.startsWith('/pilots');
     if (to === '/network') return p.startsWith('/network') || p.startsWith('/route') || p.startsWith('/extras');
     if (to === '/ranks') return p.startsWith('/ranks') || p.startsWith('/admin');
     return p.startsWith(to);
@@ -33,6 +33,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const sideActive = (to: string) => {
     const p = loc.pathname;
     if (to === '/market') return p.startsWith('/market');
+    if (to === '/pilots') return p.startsWith('/pilots');
     if (to === '/fleet') return p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/configure');
     if (to === '/ranks') return p.startsWith('/ranks');
     if (to === '/admin') return p.startsWith('/admin');

@@ -53,7 +53,7 @@ export function Fleet() {
   return (
     <div className="stack-lg">
       <PageHeader title="Fleet" sub={`${fl.length} aircraft · day ${world.game_day}`}
-        actions={<Button size="sm" onClick={() => nav('/market')}><Icon name="plus" />Get aircraft</Button>} />
+        actions={<><Button size="sm" kind="secondary" onClick={() => nav('/pilots')}><Icon name="pilot" />Pilots</Button><Button size="sm" onClick={() => nav('/market')}><Icon name="plus" />Get aircraft</Button></>} />
       <div className="chips" role="tablist">
         {([['all', 'All'], ['flying', 'Flying'], ['attention', 'Needs attention'], ['arriving', 'Arriving']] as [Filter, string][]).map(([k, l]) => (
           <button key={k} className={`chip ${filter === k ? 'on' : ''}`} onClick={() => setFilter(k)}>{l} {groups[k].length}</button>

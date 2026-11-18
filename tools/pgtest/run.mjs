@@ -8,6 +8,7 @@ import { checks2c } from './checks_2c.mjs';
 import { checks2d } from './checks_2d.mjs';
 import { checks3 } from './checks_3.mjs';
 import { checks4 } from './checks_4.mjs';
+import { checks5 } from './checks_5.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -25,6 +26,9 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {
   try { await db.exec(fs.readFileSync(`${dir}/${f}`, 'utf8')); console.log('ok', f, Date.now() - t0, 'ms'); }
   catch (e) { console.log('FAIL', f, e.message); process.exit(1); }
 }
+
+// The checks written before migration 0013 expect the flat pilot cost per aircraft: their worlds run without pilots.
+await db.exec(`update public.worlds set pilots = false; alter table public.worlds alter column pilots set default false;`);
 
 let failed = 0;
 const t = {
@@ -46,5 +50,6 @@ await checks2c(t);
 await checks2d(t);
 await checks3(t);
 await checks4(t);
+await checks5(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

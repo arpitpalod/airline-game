@@ -6,7 +6,7 @@ import { useGame, useWorldAirlines } from '../lib/data';
 import { clock } from '../lib/game';
 import { dayLabel, num, realSpan } from '../lib/format';
 import { useToast } from '../components/toast';
-import { Badge, Button, Empty, Field, Kpi, PageHeader, Sheet } from '../components/ui';
+import { Badge, Button, Empty, Field, Kpi, PageHeader, Sheet, Stepper } from '../components/ui';
 
 export function Admin() {
   const { profile, world } = useGame();
@@ -67,6 +67,7 @@ export function Admin() {
           {world.status === 'paused' && <Button onClick={() => setConfirm('resume')}>Resume</Button>}
           {world.status === 'ended' && <Badge>Season over</Badge>}
           {world.status !== 'ended' && <SpeedControl />}
+          {world.status !== 'ended' && <PlacesControl />}
         </div>
       </div>
       {confirm && (
@@ -113,6 +114,38 @@ function SpeedControl() {
           await qc.invalidateQueries({ queryKey: ['world', world.id] });
         } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
       }}>Change the clock</Button>
+    </div>
+  );
+}
+
+// Principle 7: places set demand (places / 50) and every scarce pool together.
+function PlacesControl() {
+  const { world } = useGame();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [places, setPlaces] = useState(world.max_airlines);
+  const [busy, setBusy] = useState(false);
+  const min = world.status === 'setup' ? 2 : world.max_airlines;
+  return (
+    <div className="stack" style={{ marginTop: 8 }}>
+      <div className="divider" />
+      <div className="field">
+        <label>Places for players · {places}</label>
+        <Stepper label="places" value={places} step={1} min={min} max={200} onChange={setPlaces} />
+      </div>
+      <p className="tiny muted">
+        Set this to the number of colleagues expected. Travellers, aircraft in the lessor pool, delivery slots, pilots and airport capacity all
+        {' '}scale with it, so the game is as tight with 10 players as with 100. When the world is full, nobody else can join.
+        {world.status !== 'setup' && ' Once the world has started, places can only go up; the computer-run airlines keep their size.'}
+      </p>
+      <Button kind="secondary" disabled={places === world.max_airlines} busy={busy} onClick={async () => {
+        setBusy(true);
+        try {
+          await call('admin_set_places', { p_world: world.id, p_places: places });
+          toast(`The world now has ${places} places`);
+          await qc.invalidateQueries({ queryKey: ['world', world.id] });
+        } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
+      }}>Change places</Button>
     </div>
   );
 }

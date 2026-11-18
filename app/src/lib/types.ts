@@ -4,7 +4,7 @@ export interface World {
   id: string; name: string; status: 'setup' | 'running' | 'paused' | 'ended';
   speed: number; started_at: string | null; paused_at: string | null; paused_seconds: number;
   game_day: number; season: number; season_days: number; demand_scale: number;
-  fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number;
+  fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number; pilots: boolean;
 }
 
 export interface Airline {
@@ -15,6 +15,7 @@ export interface Airline {
 
 export interface Finance {
   airline_id: string; cash_inr: number; debt_inr: number; credit_limit_inr: number; insolvent_days: number;
+  pilot_pay: number; pilot_buffer: number; pilot_cadets: number; pilot_expats: boolean;
 }
 
 export interface Base { airline_id: string; iata: string; opened_day: number }

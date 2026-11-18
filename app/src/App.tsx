@@ -20,6 +20,7 @@ import { Money } from './screens/Money';
 import { Ranks } from './screens/Ranks';
 import { Admin } from './screens/Admin';
 import { Extras } from './screens/Extras';
+import { Pilots } from './screens/Pilots';
 
 const PICK_KEY = 'airline-game-airline';
 
@@ -112,6 +113,7 @@ function GameProvider({ game }: { game: Game }) {
           <Route path="/ranks" element={<Ranks />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/extras" element={<Extras />} />
+          <Route path="/pilots" element={<Pilots />} />
           <Route path="/join" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

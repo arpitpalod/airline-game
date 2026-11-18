@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call, supabase } from '../lib/api';
-import { useAirlineDaily, useAirlineRow, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, useRivals, useRouteDaily, useRoutes } from '../lib/data';
+import { useAirlineDaily, useAirlineRow, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes } from '../lib/data';
 import { dailyNetProfit, routeStat, sumDaily } from '../lib/derive';
 import { pairKey } from '../lib/game';
 import { dayLabel, inr, num, pct } from '../lib/format';
@@ -23,6 +23,7 @@ export function Home() {
   const daily = useAirlineDaily(28);
   const rd = useRouteDaily();
   const news = useNews(12);
+  const pilots = usePilots();
   const routes = net.data?.routes ?? [];
   const rots = net.data?.rotations ?? [];
   const endpoints = routes.flatMap((r) => [r.origin, r.dest]);
@@ -44,6 +45,17 @@ export function Home() {
   if (f && f.insolvent_days > 0) {
     alerts.push({ key: 'insolvent', tone: 'bad', title: `Out of cash for ${f.insolvent_days} days`, to: '/money',
       body: `Cash is below zero and the credit line is used up. After ${ref.param.insolvency_days} days the airline goes into administration. Cut costs, return aircraft or raise fares.` });
+  }
+  if (world.pilots && pilots.data) {
+    for (const fm of pilots.data.families) {
+      const c = pilots.data.crews[fm.id];
+      if (!c || c.need === 0) continue;
+      const sc = c.need - c.captains, sf = c.need - c.fos;
+      if (sc > 0 || sf > 0) {
+        alerts.push({ key: `p${fm.id}`, tone: 'warn', to: '/pilots', title: `Short of ${fm.name} pilots`,
+          body: `${[sc > 0 ? `${sc} captain${sc === 1 ? '' : 's'}` : '', sf > 0 ? `${sf} first officer${sf === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} short. Flights with nobody to fly them are cancelled until more join.` });
+      }
+    }
   }
   const fl = fleet.data ?? [];
   const flying = new Set(rots.map((r) => r.aircraft_id));
@@ -204,6 +216,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
         <div className="card flush">
           <div className="list">
             <div className="item link" onClick={() => go('/market')}><Icon name="market" /><span className="grow">Get aircraft</span><Icon name="right" /></div>
+            <div className="item link" onClick={() => go('/pilots')}><Icon name="pilot" /><span className="grow">Pilots</span><Icon name="right" /></div>
             <div className="item link" onClick={() => go('/ranks')}><Icon name="trophy" /><span className="grow">Leaderboard and news</span><Icon name="right" /></div>
             {profile?.is_admin && <div className="item link" onClick={() => go('/admin')}><Icon name="shield" /><span className="grow">Admin</span><Icon name="right" /></div>}
           </div>

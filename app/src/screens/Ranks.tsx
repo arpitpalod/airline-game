@@ -8,7 +8,7 @@ import type { Profile } from '../lib/types';
 import { Badge, Loading, Logo, PageHeader, Seg } from '../components/ui';
 
 const EVENT_TEXT: Record<string, string> = {
-  fuel_shock: 'Fuel price shock', fx_swing: 'Rupee weakens', engine_grounding: 'Engine problem grounds part of a fleet', airport_opening: 'New airport opens',
+  fuel_shock: 'Fuel price shock', fx_swing: 'Rupee weakens', engine_grounding: 'Engine problem grounds part of a fleet', airport_opening: 'New airport opens', duty_rules: 'Stricter pilot duty-time rules',
 };
 
 export function Ranks() {
