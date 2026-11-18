@@ -25,12 +25,14 @@ const PICK_KEY = 'airline-game-airline';
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const loc = useLocation();
+  const [invite, setInvite] = useState<string | null>(() => localStorage.getItem(INVITE_KEY));
 
-  // An invite link (#/join?code=...) is remembered until the airline is founded.
+  // An invite link (#/join?code=...) is remembered until an airline is founded with it or the player cancels.
   useEffect(() => {
     const code = new URLSearchParams(loc.search).get('code');
-    if (code) localStorage.setItem(INVITE_KEY, code.trim().toLowerCase());
+    if (code) { localStorage.setItem(INVITE_KEY, code.trim().toLowerCase()); setInvite(code.trim().toLowerCase()); }
   }, [loc.search]);
+  const clearInvite = () => { localStorage.removeItem(INVITE_KEY); setInvite(null); };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -40,7 +42,7 @@ export function App() {
 
   if (session === undefined) return <Splash />;
   if (!session) return <AuthScreen />;
-  return <SignedIn session={session} />;
+  return <SignedIn session={session} invite={invite} clearInvite={clearInvite} />;
 }
 
 function Splash() {
@@ -51,7 +53,7 @@ function Splash() {
   );
 }
 
-function SignedIn({ session }: { session: Session }) {
+function SignedIn({ session, invite, clearInvite }: { session: Session; invite: string | null; clearInvite: () => void }) {
   const uid = session.user.id;
   const mine = useMyAirlines(uid);
   const profile = useProfile(uid);
@@ -65,9 +67,11 @@ function SignedIn({ session }: { session: Session }) {
 
   if (mine.isLoading || ref.isLoading) return <Splash />;
   if (mine.error || ref.error) return <div className="main"><ErrorBox error={mine.error || ref.error} retry={() => { mine.refetch(); ref.refetch(); }} /></div>;
-  if (!airline || founding) {
-    return <SetupScreen uid={uid} email={session.user.email ?? ''} onDone={(id) => { localStorage.setItem(PICK_KEY, id); setPicked(id); setFounding(false); mine.refetch(); }}
-      onCancel={airline ? () => setFounding(false) : undefined} />;
+  // A pending invite means the player wants an airline in another world: show setup even if they already have one.
+  if (!airline || founding || invite) {
+    return <SetupScreen uid={uid} email={session.user.email ?? ''}
+      onDone={(id) => { localStorage.setItem(PICK_KEY, id); setPicked(id); setFounding(false); clearInvite(); mine.refetch(); }}
+      onCancel={airline ? () => { setFounding(false); clearInvite(); } : undefined} />;
   }
   if (!world.data) return world.error ? <div className="main"><ErrorBox error={world.error} retry={() => world.refetch()} /></div> : <Splash />;
 
