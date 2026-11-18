@@ -6,6 +6,7 @@ import { checks2a } from './checks_2a.mjs';
 import { checks2b } from './checks_2b.mjs';
 import { checks2c } from './checks_2c.mjs';
 import { checks2d } from './checks_2d.mjs';
+import { checks3 } from './checks_3.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -42,5 +43,6 @@ await checks2a(t);
 await checks2b(t, process.argv.includes('--perf'));
 await checks2c(t);
 await checks2d(t);
+await checks3(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

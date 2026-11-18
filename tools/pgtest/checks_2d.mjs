@@ -1,6 +1,6 @@
 // Computer-run airlines contest player routes (migration 0009). Runs in its own quiet world.
 export async function checks2d(t) {
-  const { q, one, ok, as } = t;
+  const { q, one, ok, fails, as } = t;
   await as(null);
   const W = await one(`with w as (insert into public.worlds (name, demand_scale) values ('Test 2d', 0.5) returning id)
     insert into public.world_secrets (world_id, invite_code) select id, 'test2d00' from w returning world_id`);
@@ -46,4 +46,14 @@ export async function checks2d(t) {
   ok('and no computer-run airline goes straight back in', (await pairRoutes()).filter((r) => r.is_ai && r.status === 'open').length === 0);
   ok('starting-network routes are never given up this way',
     (await one(`select count(*)::int from public.routes r join public.airlines a on a.id = r.airline_id where r.world_id = $1 and a.is_ai and r.status = 'closed' and not game.bot_entered(a.id, r.origin, r.dest)`, [W])) === 0);
+
+  console.log('Admins set the clock (0010)');
+  const d0 = Number(await one(`select game_day from public.worlds where id = $1`, [W]));
+  ok('a game day can be set to 15 minutes of real time', Number(await one(`select public.admin_set_speed($1, 15)`, [W])) === 96);
+  ok('the processed day stays and the next one starts counting now', Number(await one(`select game.due_day($1)`, [W])) === d0);
+  await fails('a game day under 5 minutes is refused', `select public.admin_set_speed('${W}', 2)`, /between 5 minutes/);
+  await q(`select public.admin_pause_world($1)`, [W]);
+  await q(`select public.admin_set_speed($1, 20)`, [W]);
+  await q(`select public.admin_resume_world($1)`, [W]);
+  ok('changing it while paused also keeps the day', Number(await one(`select game.due_day($1)`, [W])) === d0);
 }

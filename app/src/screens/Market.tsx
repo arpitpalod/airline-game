@@ -7,7 +7,7 @@ import { ageYears, poolRentUsd } from '../lib/game';
 import { inr, num, realSpan, usd } from '../lib/format';
 import type { Aircraft } from '../lib/types';
 import { useAction } from '../components/toast';
-import { Badge, Button, Empty, Field, Loading, PageHeader, Seg, Sheet } from '../components/ui';
+import { Badge, Button, Empty, Field, Loading, PageHeader, Seg, Sheet, Stepper } from '../components/ui';
 
 type Tab = 'lease' | 'order' | 'wet';
 
@@ -20,7 +20,7 @@ export function Market() {
   const txns = useTxns();
   const nav = useNavigate();
   const [typeFilter, setTypeFilter] = useState<string>('A20N');
-  const [leasing, setLeasing] = useState<Aircraft | null>(null);
+  const [leasing, setLeasing] = useState<PoolGroup | null>(null);
   const [wet, setWet] = useState<string | null>(null);
 
   const leasedRecently = (txns.data ?? []).filter((x) => x.kind === 'lease' && x.game_day > world.game_day - 91).length;
@@ -31,15 +31,16 @@ export function Market() {
   const groups = useMemo(() => {
     const bands: [number, number, string][] = [[0, 3, 'Up to 3 years old'], [3, 6, '3 to 6 years old'], [6, 9, '6 to 9 years old'], [9, 99, 'Over 9 years old']];
     const q = quote(typeFilter);
-    const out: Record<string, { key: string; label: string; n: number; pick: Aircraft; rent: number; age: number }> = {};
+    const out: Record<string, PoolGroup> = {};
     for (const a of poolOfType) {
       const age = ageYears(a, world.game_day);
       const band = bands.find(([lo, hi]) => age >= lo && age < hi) ?? bands[3];
       const key = `${a.seats_biz}+${a.seats_econ}|${band[0]}`;
       const g = out[key];
-      if (!g) out[key] = { key, label: band[2], n: 1, pick: a, rent: q ? poolRentUsd(ref.type[a.type_id], q.rent_mult, age) : 0, age };
-      else { g.n++; if (age < g.age) { g.pick = a; g.age = age; g.rent = q ? poolRentUsd(ref.type[a.type_id], q.rent_mult, age) : 0; } }
+      if (!g) out[key] = { key, label: band[2], n: 1, pick: a, rent: q ? poolRentUsd(ref.type[a.type_id], q.rent_mult, age) : 0, age, members: [a] };
+      else { g.n++; g.members.push(a); if (age < g.age) { g.pick = a; g.age = age; g.rent = q ? poolRentUsd(ref.type[a.type_id], q.rent_mult, age) : 0; } }
     }
+    for (const g of Object.values(out)) g.members.sort((x, y) => y.built_day - x.built_day);   // youngest first
     return Object.values(out).sort((x, y) => x.age - y.age || x.pick.seats_econ - y.pick.seats_econ);
   }, [poolOfType, world.game_day, ref.type, typeFilter, market.data]);
 
@@ -52,7 +53,7 @@ export function Market() {
       <div className="card info small">
         {tab === 'lease' && <>An operating lease from the lessor pool arrives in {realSpan(39, world.speed)} to {realSpan(91, world.speed)} and runs {num(ref.param.lease_term_days / 364, 0)} game years. Rent rises as the pool empties. You pay {ref.param.lease_deposit_months} months' rent as a deposit. You can take {left} more from the pool right now: lessors place at most {ref.param.pool_lease_max_qtr} with one airline in any 91 game days.</>}
         {tab === 'order' && <>A new aircraft is the cheapest to run but takes about {realSpan(ref.param.order_lead_min_days, world.speed)} to arrive. You pay 15% now and the rest on delivery: cash, an aircraft loan, or a sale and leaseback. You choose its cabin.</>}
-        {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives the next real day. It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
+        {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives in {ref.param.wet_lead_days ?? 13} game days ({realSpan(ref.param.wet_lead_days ?? 13, world.speed)}). It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
       </div>
 
       {market.isLoading ? <Loading h={240} /> : tab === 'lease' ? (
@@ -70,7 +71,7 @@ export function Market() {
               ) : (
                 <div className="list">
                   {groups.map((g) => (
-                    <div key={g.key} className="item link" onClick={() => setLeasing(g.pick)}>
+                    <div key={g.key} className="item link" onClick={() => setLeasing(g)}>
                       <div className="grow">
                         <div className="strong">{g.label} <span className="muted" style={{ fontWeight: 400 }}>· {g.n} available</span></div>
                         <div className="tiny muted">{g.pick.seats_biz ? `${g.pick.seats_biz} business + ` : ''}{g.pick.seats_econ} economy · economy at {g.pick.econ_pitch} in</div>
@@ -122,7 +123,7 @@ export function Market() {
           })}
         </div>
       )}
-      {leasing && <LeaseSheet ac={leasing} onClose={() => setLeasing(null)} left={left} />}
+      {leasing && <LeaseSheet group={leasing} onClose={() => setLeasing(null)} left={left} />}
       {wet && <WetSheet typeId={wet} onClose={() => setWet(null)} />}
     </div>
   );
@@ -171,30 +172,47 @@ function useDefaultBase(typeId: string) {
   return (bases.data ?? []).find((b) => (ref.airport[b.iata]?.runway_class ?? 0) >= ref.type[typeId].runway_class)?.iata ?? '';
 }
 
-function LeaseSheet({ ac, onClose, left }: { ac: Aircraft; onClose: () => void; left: number }) {
+interface PoolGroup { key: string; label: string; n: number; pick: Aircraft; rent: number; age: number; members: Aircraft[] }
+
+function LeaseSheet({ group, onClose, left }: { group: PoolGroup; onClose: () => void; left: number }) {
   const { ref, airline, world } = useGame();
   const market = useAircraftMarket();
   const { run, busy } = useAction();
   const nav = useNavigate();
+  const ac = group.pick;
   const def = useDefaultBase(ac.type_id);
   const [base, setBase] = useState('');
+  const most = Math.max(0, Math.min(group.members.length, left, ref.param.bulk_max ?? 10));
+  const [count, setCount] = useState(1);
+  const n = Math.min(count, Math.max(1, most));
   const t = ref.type[ac.type_id]; const q = market.data!.find((x) => x.type_id === ac.type_id)!;
-  const rent = poolRentUsd(t, q.rent_mult, ageYears(ac, world.game_day));
+  const chosen = group.members.slice(0, n);
+  const rent = chosen.reduce((s, a) => s + poolRentUsd(t, q.rent_mult, ageYears(a, world.game_day)), 0);
   return (
-    <Sheet title={`Lease ${ac.reg}`} onClose={onClose}>
+    <Sheet title={`Lease ${t.name}: ${group.label.toLowerCase()}`} onClose={onClose}>
       <div className="stack">
         <div className="kv">
-          <span>Aircraft</span><span>{t.name}, {num(ageYears(ac, world.game_day), 0)} years old</span>
-          <span>Cabin</span><span>{ac.seats_biz ? `${ac.seats_biz} + ` : ''}{ac.seats_econ} seats</span>
-          <span>Rent, about</span><span>{usd(rent)} a month</span>
-          <span>Deposit, about</span><span>{inr(rent * ref.param.lease_deposit_months * world.fx_inr_usd)}</span>
-          <span>Arrives</span><span>day {world.game_day + q.lease_lead_days}</span>
+          <span>Cabin</span><span>{ac.seats_biz ? `${ac.seats_biz} + ` : ''}{ac.seats_econ} seats, economy at {ac.econ_pitch} in</span>
+          <span>Available like this</span><span>{group.members.length}</span>
+          <span>Arrive</span><span>day {world.game_day + q.lease_lead_days}</span>
         </div>
-        {left === 0 && <div className="card warn small">You have reached the pool limit of {ref.param.pool_lease_max_qtr} leases in 91 days. Order new or wet-lease instead.</div>}
+        {most === 0 ? (
+          <div className="card warn small">You have reached the pool limit of {ref.param.pool_lease_max_qtr} leases in 91 days. Order new or wet-lease instead.</div>
+        ) : (
+          <Field label={`How many (up to ${most})`}>
+            <Stepper label="aircraft to lease" value={n} min={1} max={most} onChange={setCount} format={(v) => `${v} aircraft`} />
+          </Field>
+        )}
+        <div className="kv">
+          <span>Rent, about</span><span>{usd(rent)} a month{n > 1 ? ` for ${n}` : ''}</span>
+          <span>Deposit now, about</span><span>{inr(rent * ref.param.lease_deposit_months * world.fx_inr_usd)}</span>
+        </div>
         <BasePicker typeId={ac.type_id} value={base || def} onChange={setBase} />
-        <Button block disabled={left === 0} busy={busy === 'lease'} onClick={() => run('lease', () => call<{ reg: string; arrives_day: number }>('lease_aircraft', {
-          p_airline: airline.id, p_aircraft: ac.id, p_base: base || def,
-        }), (r) => `${r.reg} leased. It arrives on day ${r.arrives_day}; you can plan its routes now.`).then((r) => r && nav('/fleet'))}>Lease it</Button>
+        <Button block disabled={most === 0} busy={busy === 'lease'} onClick={() => run('lease', () => call<{ reg: string; arrives_day: number }[]>('lease_aircraft_bulk', {
+          p_airline: airline.id, p_aircraft: chosen.map((a) => a.id), p_base: base || def,
+        }), (r) => `${r.map((x) => x.reg).join(', ')} leased. ${r.length > 1 ? 'They arrive' : 'It arrives'} on day ${r[0].arrives_day}; you can plan routes now.`).then((r) => r && nav('/fleet'))}>
+          {n > 1 ? `Lease ${n} aircraft` : 'Lease it'}
+        </Button>
       </div>
     </Sheet>
   );

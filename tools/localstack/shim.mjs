@@ -112,7 +112,7 @@ async function rpc(fn, args, claims) {
     if (!IDENT.test(k)) throw new Error('bad argument');
     const i = (meta.proargnames || []).indexOf(k);
     if (i < 0) throw Object.assign(new Error(`Could not find the function public.${fn}(${k})`), { status: 404, code: 'PGRST202' });
-    params.push(v !== null && typeof v === 'object' ? JSON.stringify(v) : v);
+    params.push(v !== null && typeof v === 'object' && (!Array.isArray(v) || /json/.test(meta.types[i])) ? JSON.stringify(v) : v);
     named.push(`${k} => $${params.length}::${meta.types[i]}`);
   }
   const call = `public."${fn}"(${named.join(', ')})`;

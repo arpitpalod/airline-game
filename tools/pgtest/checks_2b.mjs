@@ -115,7 +115,9 @@ export async function checks2b(t, perf) {
     from public.route_daily where route_id = '${R}' and game_day = 14`))[0];
   ok('day 14: the wet-leased A320 arrives and flies 6 sectors, 1,080 seats', r14.flights === 6 && r14.seats_econ === 1080);
   ok('an empty trunk route fills the aircraft and spills the rest', r14.pax_econ === 1080 && r14.spill > 1000, `spill ${r14.spill}`);
-  ok('revenue = passengers x fare, plus 8% ancillaries', r14.rev === Math.round(1080 * ref * 1.08) && d14.rev === 1080 * ref);
+  const anY = Number(await one(`select yield from game.anc_terms('${A}')`));
+  ok('revenue = passengers x fare, plus extras sold at their reference prices', r14.rev === Math.round(1080 * ref * (1 + anY)) && d14.rev === 1080 * ref,
+    `extras ${(anY * 100).toFixed(1)}% of the reference fare a passenger`);
   ok('wet lease: hourly rent, no crew or maintenance bill', d14.crew === 0 && d14.maint === 0
     && Math.abs(d14.rent - wet.wet_usd_bh * 90 * 6 * (1137 / 830 + 0.7)) < 2, `rent Rs ${(d14.rent / 1e5).toFixed(1)} lakh a day`);
   const tx14 = await one(`select coalesce(sum(amount_inr), 0)::float from public.transactions where airline_id = '${A}' and game_day = 14`);

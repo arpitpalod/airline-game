@@ -119,6 +119,7 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
   const okBases = (bases.data ?? []).filter((b) => (ref.airport[b.iata]?.runway_class ?? 0) >= t.runway_class);
   const [base, setBase] = useState<string | null>(null);
   const [pay, setPay] = useState<'cash' | 'loan' | 'slb'>('loan');
+  const [count, setCount] = useState(1);
   const { run, busy } = useAction();
   const nav = useNavigate();
   const b = base ?? okBases[0]?.iata ?? '';
@@ -129,11 +130,15 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
   return (
     <div className="card stack">
       <h2>Order new</h2>
+      <Field label="How many with this cabin">
+        <Stepper label="aircraft to order" value={count} min={1} max={ref.param.bulk_max ?? 10} onChange={setCount} format={(v) => `${v} aircraft`} />
+      </Field>
       <div className="kv">
-        <span>Price</span><span>{usd(q.order_price_usd)} ({inr(priceInr)})</span>
-        <span>Deposit now</span><span>{inr(dep)}</span>
-        <span>Delivery</span><span>day {q.order_delivery_day} · about {realSpan(wait, world.speed)} from now</span>
+        <span>Price each</span><span>{usd(q.order_price_usd)} ({inr(priceInr)})</span>
+        <span>Deposit now</span><span>{inr(dep * count)}</span>
+        <span>{count > 1 ? 'First delivery' : 'Delivery'}</span><span>day {q.order_delivery_day} · about {realSpan(wait, world.speed)} from now</span>
       </div>
+      {count > 1 && <p className="tiny muted">Each aircraft takes the next free delivery slot, so the later ones may arrive a little later. All are ordered or none is.</p>}
       <Field label="Pay the balance on delivery with">
         <Seg block value={pay} onChange={setPay} options={[{ value: 'loan', label: 'Loan' }, { value: 'cash', label: 'Cash' }, { value: 'slb', label: 'Leaseback' }]} />
       </Field>
@@ -149,10 +154,11 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
           </select>
         </Field>
       )}
-      <Button block disabled={!valid || !b} busy={busy === 'order'} onClick={() => run('order', () => call<{ reg: string; arrives_day: number }>('order_aircraft', {
-        p_airline: airline.id, p_type: typeId, p_base: b, p_biz_rows: br, p_biz_pitch: bp, p_econ_pitch: ep, p_pay: pay,
-      }), (r) => `${r.reg} ordered. It arrives on day ${r.arrives_day}.`).then((r) => r && nav('/fleet'))}>
-        Order for {inr(dep)} deposit
+      <Button block disabled={!valid || !b} busy={busy === 'order'} onClick={() => run('order', () => call<{ reg: string; arrives_day: number }[]>('order_aircraft_bulk', {
+        p_airline: airline.id, p_type: typeId, p_base: b, p_count: count, p_biz_rows: br, p_biz_pitch: bp, p_econ_pitch: ep, p_pay: pay,
+      }), (r) => r.length === 1 ? `${r[0].reg} ordered. It arrives on day ${r[0].arrives_day}.`
+        : `${r.length} aircraft ordered. They arrive from day ${r[0].arrives_day} to day ${r[r.length - 1].arrives_day}.`).then((r) => r && nav('/fleet'))}>
+        {count > 1 ? `Order ${count} for ${inr(dep * count)} deposit` : `Order for ${inr(dep)} deposit`}
       </Button>
       <p className="tiny muted">Every order joins one queue for this type, so a rush of orders lengthens everyone's wait.</p>
     </div>
