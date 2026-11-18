@@ -7,6 +7,7 @@ import { hoursByAircraft, routeStat } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct } from '../lib/format';
 import { LoadChart } from '../components/charts';
+import { StudyCard } from '../components/Study';
 import { useAction } from '../components/toast';
 import { Badge, Button, Empty, Kpi, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -128,6 +129,7 @@ export function RouteDetail() {
               </div>
             )}
           </div>
+          <StudyCard a={route.origin} b={route.dest} />
           <Button kind="danger" onClick={() => setClosing(true)}>Close this route</Button>
         </div>
       </div>

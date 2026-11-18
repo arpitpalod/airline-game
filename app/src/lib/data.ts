@@ -275,3 +275,17 @@ export function useExtras() {
     },
   });
 }
+
+export interface RouteStudy {
+  id: number; airline_id: string; a: string; b: string; game_day: number; depth: 'quick' | 'full'; carriers: number;
+  flying_lo: number | null; flying_hi: number | null; turned_lo: number | null; turned_hi: number | null;
+  lf_lo: number | null; lf_hi: number | null; untapped_lo: number | null; untapped_hi: number | null;
+  biz_share: number | null; lei_share: number | null; bud_share: number | null; next_qtr: number | null;
+}
+export function useStudies() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'studies'],
+    queryFn: () => rows<RouteStudy>(supabase.from('route_studies').select('*').eq('airline_id', airline.id).order('id', { ascending: false })),
+  });
+}

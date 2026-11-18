@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.7, 19 Nov 2026 (bulk orders and extras, section 14.6; roadmap with cargo and loyalty, section 18). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.8, 19 Nov 2026 (route studies, section 14.7; no aircraft trading between players, principle 6; pilots under discussion, section 18.4). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -13,6 +13,7 @@ A persistent multiplayer airline business game for office colleagues, built to t
 3. **Scarcity sets the price and never says no.** There is always a way to get capacity; the question is what it costs.
 4. **Server decides everything.** Phones only display and submit decisions, so nobody can cheat and nothing depends on a phone being open.
 5. **Five minutes a day** is enough to play well.
+6. **Aircraft never become plentiful** (owner's rule, 19 Nov 2026). Nothing may create an easy supply of aircraft: no trading of aircraft or delivery slots between players, ever. Aircraft come only from the manufacturer queue, the lessor pool and wet leases, each limited or expensive. This is why the owner left Airlines Manager.
 
 ## 2. Decisions locked
 
@@ -147,7 +148,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 - **Manufacturer queue.** Fixed delivery slots per game quarter per type. Every order joins the queue, so a rush of orders lengthens everyone's wait and raises the price.
 - **Age.** Older aircraft rent for less, burn more fuel (+0.5% a year), cost more to maintain (+3% a year) and ground more often (G).
 - **Groundings.** Random technical groundings per aircraft, plus occasional fleet-wide engine events that ground a share of one type for weeks.
-- **Player market (after MVP).** Sell or sublease aircraft, delivery slots and airport slots to each other.
+- **No player market for aircraft** (principle 6): players never sell, sublease or trade aircraft or delivery slots to each other. Airport slots only, if ever.
 
 ## 7. Network, scheduling and slots
 
@@ -215,11 +216,11 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 **Later layers, in rough order**
 
-1. Player-to-player market for aircraft and slots
+1. Player-to-player market for airport slots only (never aircraft or delivery slots: principle 6)
 2. Departure-time bands, booking curve and overbooking
 3. Ancillary choices, loyalty programme, corporate deals
 4. Sub-fleet penalties, spare aircraft strategy
-5. Crew: pilot training lead time and poaching
+5. Crew: pilot hiring, training lead time, attrition and poaching (brought forward: section 18.4)
 6. Hub connections, cargo, codeshares, international traffic rights
 7. Fuel hedging
 
@@ -416,6 +417,17 @@ Asked for by the owner after the first playtest evening.
 - **What it teaches.** Including everything works like a fare cut of about 12% of the reference fare for leisure travellers, at a cost of about 15%: in the test, an airline including all four extras carried 176 passengers a day against 90 for an identical airline selling them, but earned nothing from extras. Meals cost more to include than travellers value them; seat choice and priority are cheap to give and business travellers notice; bags win leisure-heavy routes.
 - The computer-run airlines sell every extra at the reference price.
 
+### 14.7 Route studies (migration 0012)
+
+Asked for by the owner on 19 Nov 2026, taken from Airlines Manager's route audits (18.3).
+
+- `route_study(airline, a, b, 'quick' | 'full')` costs Rs 5 lakh (quick) or Rs 40 lakh (full) (G), booked as a one-off cost on the next game day. Results are private to the airline (`route_studies`, read-own).
+- **What it shows**, all as ranges: travellers flying the city pair each way a day with every airline, travellers turned away, and how full all airlines' flights are, over the last 28 days. None of this is otherwise visible: players only see their own loads and rivals' fares and schedules. For a pair nobody flies: travellers who would fly with one airline flying twice a day at the reference fare (the section 4 utility with a standard A320neo cabin and a brand of 50).
+- **Full study adds** the business, leisure and budget mix and next quarter's demand against today (season and growth).
+- **Error.** Each figure gets its own random error (standard deviation half the range width), then the range: ±35% for a quick study, ±12% for a full one (G). A study is usually right, sometimes off, so a second opinion has value.
+- **App.** A Route study card in the open-route sheet and on Route detail shows the latest study of that pair while it is under 91 game days old (G).
+- **Tested.** Local checks (150 in all) and a rolled-back live run in Test World: on Delhi–Hyderabad a full study gave 3,504 to 4,460 travellers a day each way against an actual 4,079, 39 to 50 turned away against 49, and 78 to 88% full against 80%.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -460,6 +472,8 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 
 21. Clock for World 1. The owner found an hour per game day slow in Test World, which now runs at 15 minutes a day (96x). At that pace a season lasts about 25 real days instead of 26 weeks, a quarter passes in under a day, and an airline can go from first cash trouble to administration in about 3.5 hours, so a colleague who checks once a day can miss it. World 1 is set to 60 minutes a game day for now (season about 14 weeks, a quarter about 4 days, administration after about 14 hours of trouble); the owner will revisit it before the start.
 
+22. Second currency (owner asked whether to copy Airlines Manager's). Recommendation: no. Airlines Manager's premium currency exists to sell subscriptions and packs that speed things up; here it would either buy nothing or buy speed, which breaks principle 6 and the teaching aim. Rupees stay the only currency; the second scarce resource is pilots (18.4). Owner to confirm.
+
 **Sources for (V) figures**
 
 - Indian airport passengers, FY 2025-26 (Airports Authority of India data): https://en.wikipedia.org/wiki/List_of_busiest_airports_in_India
@@ -471,6 +485,9 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 - Cabin crew, one per 50 seats: https://flightsmilesandpoints.com/aviation/how-many-cabin-crew-per-flight/ and https://www.easa.europa.eu/en/the-agency/faqs/minimum-required-cabin-crew
 - Indian rule text as quoted: https://www.pprune.org/6262435-post641.html
 - Lease rate bands, 2026: https://safefly.aero/blog-a320ceo-vs-a320neo/
+- Pilot notice periods (commanders one year, first officers six months): https://www.hrkatha.com/?p=38624 and https://www.thecore.in/business/why-indias-pilots-say-dgcas-anti-poaching-aviation-airline-the-point-842254
+- IndiGo's December 2025 crew shortage under the new duty-time rules: https://www.businesstoday.in/latest/corporate/story/big-expansion-small-team-indigo-expanded-by-200-flights-a-day-but-hired-only-418-pilots-505541-2025-12-08 and https://superkalam.com/current-affairs/11-02-2026/a-reckoning-for-india-s-aviation-sector-pg8-2aecfcc3-2131-40aa-90ac-c6c018437fc9
+- Akasa's spare pilots and India's pilot pipeline: https://www.100knots.com/indigos-massive-pilot-hiring-spree-inside-indias-aviation-crisis-and-recovery-plan/
 
 ## 18. Roadmap
 
@@ -479,11 +496,12 @@ Set 19 Nov 2026 with the owner. Each later feature unlocks per airline, inside a
 | When (real time) | What |
 |---|---|
 | 19 Nov | Bulk orders and leases, extras (14.6) |
-| Test World playtest, next few days | Fix what the owner finds; add the route study (below) |
+| 19 Nov | Route studies (14.7) |
+| Test World playtest, next few days | Fix what the owner finds; settle pilots (18.4) |
 | Before World 1 starts | Tune Myna Regional and Flamingo Air (item 19); confirm the clock (item 21) |
 | World 1 start + 10 days | Cargo live (unlocks from game day 365) |
 | World 1 start + 25 days | Loyalty live (unlocks from game day 729) |
-| Season 2 | Player-to-player aircraft market, alliances and codeshares, freighters, loyalty tiers |
+| Season 2 | Alliances and codeshares, freighters, loyalty tiers |
 
 ### 18.1 Cargo (belly cargo first)
 
@@ -511,10 +529,26 @@ Airlines Manager (Playrion) offers real-time and fast modes, an R&D centre with 
 
 | Idea | Verdict | When |
 |---|---|---|
-| Route study: pay to see a demand range for a city pair, wider when cheap | Take. Fits the rule that the game never shows an exact demand figure | Next, with the playtest fixes |
+| Route study: pay to see a demand range for a city pair, wider when cheap | Take. Fits the rule that the game never shows an exact demand figure | Done (14.7) |
 | Route ramp-up: a new route starts below its full demand and builds with time and frequency | Take. Real airlines lose money on new routes for months | After cargo |
-| Second-hand market between players | Take (already later layer 1) | Season 2 |
+| Second-hand market between players | Leave out, for good: it makes aircraft plentiful (principle 6) | – |
+| Premium second currency | Leave out: it exists to sell speed-ups (item 22) | – |
 | Alliances and codeshares between players | Take | Season 2 |
 | Real-time and fast modes | Already covered by the per-world clock (`admin_set_speed`) | Done |
 | Services catalogue | Started with extras; business lounges at bases later | Later |
 | R&D tree, managers and staff, buying airports | Leave out: they add time per day without teaching an airline trade-off | – |
+
+### 18.4 Pilots (draft for discussion, 19 Nov 2026)
+
+Asked for by the owner. Not built. Today pilots are a fixed cost per aircraft plus a rate per block hour, and never run short.
+
+- **Why.** Pilots, not aircraft, stopped Indian growth in 2025: IndiGo cancelled over 4,500 flights in early December 2025 when stricter duty-time rules met a thin crew buffer (about 14 pilots per aircraft against a global benchmark of 18 to 20), while Akasa kept spare pilots and cancelled nothing. A notice period of one year for captains and six months for first officers means crew cannot be bought quickly.
+- **Requirement.** Each fleet family (ATR, A320 family, A350) needs captains and first officers in proportion to the block hours it flies, divided by the hours one pilot may fly (G, from the duty-time rules), plus leave and training. Calibrated so a steady airline at default settings pays what it pays today.
+- **Short of pilots** means flights are cancelled, which already costs brand and punctuality. Wet lease (crew included) is the relief, at its usual price.
+- **Getting pilots.** Direct entry from a world pool of type-rated pilots (arrive in about 28 game days; pool refills slowly, scaled by `demand_scale`); cadets (cheap, about a game year to first officer); first officers become captains after about 2 game years with command training; foreign pilots at a high premium as the always-available, expensive route (principle 3).
+- **Attrition and poaching.** Pilots leave more often when pay is below the world's market rate, when they fly near the limit, and when the airline is in trouble. A rival paying above market draws pilots away, but they serve their notice (182 game days for a first officer, 364 for a captain), so the victim sees the loss coming and can respond with pay.
+- **Player decisions, kept to a few settings:** pay against market (for example −10% to +20%), spare pilots to keep (for example 0 to 20% above need), cadets a quarter. The engine hires from the pool to meet the target; nobody hires pilots one by one.
+- **Events.** The regulator tightens duty-time rules with 91 days' notice (fewer hours per pilot); airlines with thin buffers cancel flights.
+- **Computer-run airlines** use the same pool and rules, with a market-rate, 10% buffer policy.
+- **Open:** whether this goes in before World 1 starts (it changes core costs and needs the season tuning re-run) or waits for season 2.
+
