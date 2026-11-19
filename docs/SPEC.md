@@ -471,7 +471,7 @@ The owner works from a phone, and the Supabase tool's approval prompt for change
 - Files applied by hand before the workflow existed (0001 to 0013) are listed in `supabase/applied_before_workflow.txt` and recorded without running.
 - **Merging the pull request is the approval.** There is no second confirmation, so a migration must be reviewed before merging.
 - It needs the repository secret `SUPABASE_DB_URL`: the Session pooler connection string from the Supabase dashboard (Connect), with the database password in it. It is never printed or committed.
-- 0013 was split on 19 Nov 2026 at the point that went live through the tool: 0013 (tables, settings, pilot functions) is live; 0014 (the day engine, letting pilots go on administration, the daily pilot step, 25 places for both worlds, crews for running worlds) and 0015 (pay 10% lower, foreign captains automatic) are the first files the workflow applies. Tested locally against a copy of the live state: both applied, a running world got crews (no airline short), and a second run applied nothing.
+- 0013 was split on 19 Nov 2026 at the point that went live through the tool: 0013 (tables, settings, pilot functions) is live; 0014 (the day engine, letting pilots go on administration, the daily pilot step, 25 places for both worlds, crews for running worlds) and 0015 (pay 10% lower, foreign captains automatic) are the first files the workflow applies. Tested locally against a copy of the live state: both applied, a running world got crews (no airline short), and a second run applied nothing. First live run on 19 Nov 2026 (13:47 IST): 0014 and 0015 applied, all live functions match the local test database, both worlds at 25 places, and Test World's nine crews at need plus 10%.
 
 ## 15. Screens
 
