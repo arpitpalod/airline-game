@@ -44,6 +44,7 @@ export function RouteDetail() {
     .map((day) => { const st = routeStat((rd.data ?? []).filter((d) => d.game_day === day), route.id, day); return { day, lf: st.lf }; });
   const perDay = (x: number) => (s7.days ? x / s7.days : 0);
   const fe = fareE ?? route.fare_econ, fb = fareB ?? route.fare_biz ?? 0;
+  const bizMult = ref.param.biz_fare_mult ?? 3.5;
   const dirty = fe !== route.fare_econ || (route.fare_biz != null && fb !== route.fare_biz);
   const minF = Math.ceil((m?.ref_fare ?? 0) * ref.param.fare_min_mult), maxF = Math.floor((m?.ref_fare ?? 1e6) * ref.param.fare_max_mult);
   const hasBiz = rots.some((r) => (fl.find((a) => a.id === r.aircraft_id)?.seats_biz ?? 0) > 0);
@@ -107,14 +108,14 @@ export function RouteDetail() {
 
         <div className="stack-lg">
           <div className="card stack">
-            <div className="card-title" style={{ marginBottom: 0 }}><h2>Fares</h2>{m && <span className="small muted">reference {inr(m.ref_fare)}</span>}</div>
+            <div className="card-title" style={{ marginBottom: 0 }}><h2>Fares</h2></div>
             <div className="field">
-              <label>Economy · {m ? `${(fe / m.ref_fare).toFixed(2)}× reference` : ''}</label>
+              <label>Economy · {m ? `${(fe / m.ref_fare).toFixed(2)}× reference ${inr(m.ref_fare)}` : ''}</label>
               <Stepper label="economy fare" value={fe} step={100} min={minF} max={maxF} onChange={setFareE} format={(v) => inr(v)} />
             </div>
             {route.fare_biz != null && (
               <div className="field">
-                <label>Business{!hasBiz && ' · no business seats on this route yet'}</label>
+                <label>Business · {m ? `${(fb / (m.ref_fare * bizMult)).toFixed(2)}× reference ${inr(Math.round(m.ref_fare * bizMult))}` : ''}{!hasBiz && ' · no business seats on this route yet'}</label>
                 <Stepper label="business fare" value={fb} step={500} min={minF} max={maxF * 4} onChange={setFareB} format={(v) => inr(v)} />
               </div>
             )}
