@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, type FleetItem } from '../lib/data';
-import { hoursByAircraft, routeStat } from '../lib/derive';
+import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct } from '../lib/format';
 import { LoadChart } from '../components/charts';
@@ -62,6 +62,19 @@ export function RouteDetail() {
         <Kpi label="Flight profit a day" value={inr(perDay(s7.revenue - s7.varCost), { sign: true })} tone={s7.revenue - s7.varCost >= 0 ? 'good' : 'bad'}
           note="Before rent and head office" />
       </div>
+      {s7.lf != null && m && (() => {
+        const u = unitEcon(s7, m.km);
+        if (!u) return null;
+        const be = u.beLf;
+        return (
+          <div className="grid4-d">
+            <Kpi label="RASK" value={`₹${u.rask.toFixed(2)}`} note="Revenue per seat-km, fares and extras" />
+            <Kpi label="CASK" value={`₹${u.cask.toFixed(2)}`} tone={u.cask <= u.rask ? 'good' : 'bad'} note="Flying costs and aircraft rent per seat-km" />
+            <Kpi label="Break-even load" value={be != null ? pct(be) : '–'} tone={be != null && s7.lf! >= be ? 'good' : 'bad'}
+              note={be == null ? '' : be > 1 ? 'Even full, today\'s fares don\'t cover the costs' : `Needed to cover costs at today's fares. You fly ${pct(s7.lf!)}.`} />
+          </div>
+        );
+      })()}
 
       <div className="split">
         <div className="stack-lg">

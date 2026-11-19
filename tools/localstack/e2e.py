@@ -120,6 +120,8 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Full study').click()
     toast_ok(page, 'Study done')
     expect(page.locator('.card', has_text='Route study')).to_contain_text('Business · leisure · budget')
+    expect(page.get_by_text('Break-even load')).to_be_visible()
+    expect(page.get_by_text('CASK', exact=True)).to_be_visible()
     shot(page, 'p08-route')
 
     print('lease from the pool')
@@ -179,6 +181,11 @@ with sync_playwright() as p:
 
     print('move the leased aircraft to BOM, then refit it')
     go(page, '/fleet')
+    expect(page.locator('.card.link', has_text='Wet lease').first).to_contain_text('Result a day')
+    page.locator('.card.link', has_text='Wet lease').first.click()
+    expect(page.locator('.card', has_text='Money')).to_contain_text('Wet-lease charge')
+    shot(page, 'p12a-aircraft-money')
+    page.go_back()
     page.locator('.card.link', has_text='Leased').first.click()
     page.get_by_role('button', name='Move to another base').click()
     page.get_by_label('New base').select_option('BOM')
