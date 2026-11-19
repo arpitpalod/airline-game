@@ -1,6 +1,7 @@
 // Full-season simulation: the computer-run airlines plus simulated players with different strategies.
 // Used to tune Stage 2c. Usage: node season.mjs ../../supabase/migrations [--days 2366] [--scale auto] [--seed snapshot.tgz]
 // Players act once a game week through the public action functions, like a person checking the app.
+// --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 
@@ -44,10 +45,11 @@ const tryq = async (s) => { try { return await q(s); } catch (e) { return null; 
 for (const [k, v] of Object.entries(JSON.parse(arg('--params', '{}')))) await q(`update public.game_params set num = $1 where key = $2`, [v, k]);
 const W = await one(`select id from public.worlds limit 1`);
 const code = await one(`select invite_code from public.world_secrets where world_id = $1`, [W]);
-await q(`update public.worlds set demand_scale = $1 where id = $2`, [SCALE, W]);
+const PLACES = +arg('--places', players.length);
+await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off']);
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
 await q(`select public.admin_start_world($1)`, [W]);
-console.log(`${players.length} players, demand_scale ${SCALE.toFixed(2)}, ${DAYS} days`);
+console.log(`${players.length} players, demand_scale ${SCALE.toFixed(2)}, ${PLACES} places, pilots ${arg('--pilots', 'on')}, ${DAYS} days`);
 
 // round trips a week that fit 88% of the flying window
 async function tripsFor(ac, km) {
@@ -167,11 +169,20 @@ for (let d = 1; d <= DAYS; d++) {
              round(sum(d.rpk) / nullif(sum(d.ask), 0), 3) lf,
              round(sum(d.rev_ticket + d.rev_anc) / nullif(sum(d.ask), 0), 2) rask,
              round(sum(d.c_fuel + d.c_crew + d.c_maint + d.c_airport + d.c_rent + d.c_slots + d.c_dist + d.c_marketing + d.c_overhead + d.c_other + d.c_depr) / nullif(sum(d.ask), 0), 2) cask,
-             round(al.brand) brand, (select round(score / 1e7) from public.quarterly_reports r where r.airline_id = al.id order by quarter desc limit 1) score_cr,
+             round(sum(d.cancelled) / nullif(sum(d.flights + d.cancelled), 0), 3) cxl, round(al.brand) brand, (select round(score / 1e7) from public.quarterly_reports r where r.airline_id = al.id order by quarter desc limit 1) score_cr,
              (select rank from public.quarterly_reports r where r.airline_id = al.id order by quarter desc limit 1) rk, al.administrations adm
         from public.airlines al join public.airline_finance f on f.airline_id = al.id
         left join public.airline_daily d on d.airline_id = al.id and d.game_day > $2 - 364
        where al.world_id = $1 group by al.id, f.cash_inr order by al.is_ai, rk nulls last`, [W, d]));
+    console.table(await q(`select pm.family, round(pm.captains) mkt_c, round(pm.fos) mkt_f, pm.pay_index idx,
+        (select sum(ap.captains) from public.airline_pilots ap join public.airlines al on al.id = ap.airline_id where al.world_id = $1 and ap.family = pm.family and al.is_ai) bot_c,
+        (select sum(ap.captains) from public.airline_pilots ap join public.airlines al on al.id = ap.airline_id where al.world_id = $1 and ap.family = pm.family and not al.is_ai) player_c,
+        (select sum(ap.need) from public.airline_pilots ap join public.airlines al on al.id = ap.airline_id where al.world_id = $1 and ap.family = pm.family and not al.is_ai) player_need,
+        (select sum(ap.expats) from public.airline_pilots ap join public.airlines al on al.id = ap.airline_id where al.world_id = $1 and ap.family = pm.family) expats,
+        (select string_agg(kind || ':' || n, ' ') from (select mv.kind, sum(mv.n) n from public.pilot_moves mv where mv.world_id = $1 and mv.family = pm.family and mv.start_day > $2 - 182 group by 1) k) moves_182d
+      from public.pilot_market pm where pm.world_id = $1 order by pm.family`, [W, d]));
+    const ev = await q(`select starts_day from public.events where world_id = $1 and kind = 'duty_rules'`, [W]);
+    if (ev.length) console.log('duty-time rules tightened from day', ev[0].starts_day);
   }
 }
 console.log('cost per seat-km by component, last 364 days');

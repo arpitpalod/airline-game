@@ -1,0 +1,15 @@
+# Migrations applied to the live database by hand (through the Supabase tool) before .github/workflows/db.yml existed.
+# The workflow records them as applied without running them. Never add a file here that has not been applied in full.
+0001_schema.sql
+0002_rule_functions.sql
+0003_seed_reference.sql
+0004_player_actions.sql
+0005_daily_engine.sql
+0006_scheduler.sql
+0007_bots_and_tuning.sql
+0008_app_support.sql
+0009_bot_entry.sql
+0010_world_speed.sql
+0011_bulk_and_extras.sql
+0012_route_studies.sql
+0013_pilots.sql

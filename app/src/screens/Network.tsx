@@ -10,6 +10,7 @@ import type { Market } from '../lib/types';
 import { WorldMap } from '../components/WorldMap';
 import { useAction } from '../components/toast';
 import { Badge, Bar, Button, Empty, Field, Icon, Loading, PageHeader, Seg, Sheet } from '../components/ui';
+import { StudyCard } from '../components/Study';
 
 export function Network() {
   const { ref, world, airline } = useGame();
@@ -172,6 +173,7 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
           </div>
           {ref.airport[dest].runway_class === 1 && <div className="card warn small">{ref.airport[dest].city} takes turboprops only: only an ATR 72 can fly this route.</div>}
           {flying.has(pairKey(base, dest)) && <div className="card warn small">You already fly this route.</div>}
+          <StudyCard a={base} b={dest} />
           <Field label="Economy fare" hint="Start near the reference fare. You can change it any time; it takes effect the next game day.">
             <div className="row">
               <input className="input num" type="number" inputMode="numeric" step={100} value={fareVal} onChange={(e) => setFare(Number(e.target.value))} style={{ maxWidth: 180 }} />

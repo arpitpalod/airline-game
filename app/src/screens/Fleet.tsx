@@ -6,6 +6,7 @@ import { hoursByAircraft, windowShare } from '../lib/derive';
 import { holdingLabel, STATUS_LABEL } from '../lib/game';
 import { pct, usd } from '../lib/format';
 import { Badge, Bar, Button, Empty, Icon, Loading, PageHeader } from '../components/ui';
+import { PilotsCard } from '../components/PilotsCard';
 
 type Filter = 'all' | 'flying' | 'attention' | 'arriving';
 
@@ -54,6 +55,7 @@ export function Fleet() {
     <div className="stack-lg">
       <PageHeader title="Fleet" sub={`${fl.length} aircraft · day ${world.game_day}`}
         actions={<Button size="sm" onClick={() => nav('/market')}><Icon name="plus" />Get aircraft</Button>} />
+      <PilotsCard />
       <div className="chips" role="tablist">
         {([['all', 'All'], ['flying', 'Flying'], ['attention', 'Needs attention'], ['arriving', 'Arriving']] as [Filter, string][]).map(([k, l]) => (
           <button key={k} className={`chip ${filter === k ? 'on' : ''}`} onClick={() => setFilter(k)}>{l} {groups[k].length}</button>

@@ -21,6 +21,7 @@ const P: Record<string, ReactNode> = {
   seat: <path d="M7 4v9a2 2 0 0 0 2 2h7l2 5M7 13h9M6 20h4" />,
   more: <><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></>,
   refresh: <path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" />,
+  pilot: <><circle cx="12" cy="10" r="3.5" /><path d="M5 21c1.2-3.5 4-5 7-5s5.8 1.5 7 5M7 6.5 12 4l5 2.5" /></>,
 };
 
 export function Icon({ name, size = 20 }: { name: keyof typeof P | string; size?: number }) {
