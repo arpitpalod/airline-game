@@ -1,10 +1,10 @@
 // Fleet: every aircraft, what it does and what it costs. Cards on a phone, a table on a laptop.
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useBases, useFleet, useGame, useMarketsFrom, useRoutes, type FleetItem } from '../lib/data';
-import { hoursByAircraft, windowShare } from '../lib/derive';
+import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, type FleetItem } from '../lib/data';
+import { aircraftStats, hoursByAircraft, windowShare } from '../lib/derive';
 import { holdingLabel, STATUS_LABEL } from '../lib/game';
-import { pct, usd } from '../lib/format';
+import { inr, pct, usd } from '../lib/format';
 import { Badge, Bar, Button, Empty, Icon, Loading, PageHeader } from '../components/ui';
 import { PilotsCard } from '../components/PilotsCard';
 
@@ -31,6 +31,15 @@ export function Fleet() {
   const rots = net.data?.rotations ?? [];
   const routes = net.data?.routes ?? [];
   const hours = useMemo(() => (net.data ? hoursByAircraft(fl, routes, rots, markets.data, ref) : {}), [fl, routes, rots, markets.data, ref, net.data]);
+  const ad = useAircraftDaily();
+  const money = useMemo(() => aircraftStats(ad.data ?? [], world.game_day - 6), [ad.data, world.game_day]);
+  // result a day over the last 7 days: revenue less flying costs and what holding the aircraft costs
+  const result = (a: FleetItem) => {
+    const s = money[a.id];
+    if (!s || !s.days) return <span className="muted">–</span>;
+    const r = s.result / s.days;
+    return <span className={`num ${r >= 0 ? 'good' : 'bad'}`}>{inr(r, { sign: true })}</span>;
+  };
   const flying = new Set(rots.map((r) => r.aircraft_id));
   const needs = (a: FleetItem) => a.status === 'grounded' || (a.status === 'active' && !flying.has(a.id));
   const groups: Record<Filter, FleetItem[]> = {
@@ -84,13 +93,14 @@ export function Fleet() {
                   <div className="row between tiny muted" style={{ marginTop: 8 }}>
                     <span>{holdingLabel(a)}</span><span>{costLabel(a)}</span>
                   </div>
+                  {money[a.id] && <div className="row between small" style={{ marginTop: 6 }}><span className="muted">Result a day, last 7 days</span>{result(a)}</div>}
                 </div>
               );
             })}
           </div>
           <div className="card flush desk-only">
             <table className="table">
-              <thead><tr><th>Aircraft</th><th>Type</th><th>Base</th><th className="r">Seats</th><th>Routes</th><th>Use of day</th><th>Holding</th><th>Status</th></tr></thead>
+              <thead><tr><th>Aircraft</th><th>Type</th><th>Base</th><th className="r">Seats</th><th>Routes</th><th>Use of day</th><th>Holding</th><th className="r">Result a day</th><th>Status</th></tr></thead>
               <tbody>
                 {shown.map((a) => {
                   const use = windowShare(a, hours[a.id] ?? 0, ref);
@@ -103,6 +113,7 @@ export function Fleet() {
                       <td className="small">{routeNames(a).join(', ') || <span className="muted">–</span>}</td>
                       <td style={{ minWidth: 130 }}><div className="row"><div className="grow"><Bar value={use} warn={use > 0.85} /></div><span className="tiny muted">{pct(use)}</span></div></td>
                       <td className="small">{holdingLabel(a)}<div className="tiny muted">{costLabel(a)}</div></td>
+                      <td className="r small">{result(a)}</td>
                       <td>{status(a)}</td>
                     </tr>
                   );
@@ -112,7 +123,7 @@ export function Fleet() {
           </div>
         </>
       )}
-      <p className="small muted">An aircraft can fly {ref.type.A20N?.day_window_h ?? 17} hours a day (more for long-range types). Above 85% of that, flights start running late.</p>
+      <p className="small muted">An aircraft can fly {ref.type.A20N?.day_window_h ?? 17} hours a day (more for long-range types). Above 85% of that, flights start running late. Result a day is its revenue less its flying costs and rent or ownership, before pilot salaries, head office and marketing.</p>
     </div>
   );
 }

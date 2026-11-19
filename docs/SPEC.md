@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.11, 19 Nov 2026 (computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots as one lever with pay 10% lower, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; route studies, 14.7; no aircraft trading, principle 6).
+Status: v0.12, 19 Nov 2026 (money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -486,6 +486,16 @@ Owner's request, 19 Nov 2026: fix Myna Regional and Flamingo Air before World 1 
 **Season check** (two full seasons with players and pilots, as in 14.3; single runs vary a lot). Late years (4 to 6): Flamingo −6% to +1% at 75 to 81% full (was −14% to −64%); Myna −15% to −39% on 2 to 5 aircraft (was −120% to −190% on 6); all computer-run airlines +8% to +17% (was +4% to +16%); players within their usual spread. Myna's slot cost per seat-km fell from Rs 3.64 to Rs 0.4 to 1.1. It still loses because turboprops cost about twice as much per seat-km as jets on its 400 to 600 km trunk routes, and a small airline carries the full head office (Rs 6 lakh a day, Rs 1 to 1.9 a seat-km for Myna): item 16. Computer-run airlines are not ranked and never fail, so this costs players nothing.
 
 **Tested.** 7 new local checks (181 in all): Flamingo's new network, the ATR's slot bill at 0.4 of an A320neo's, dropping thin losing routes down to two, aircraft leaving the world, a full losing route kept, the eight busiest never dropped.
+
+### 14.11 Money by aircraft; RASK, CASK and break-even load by route (migration 0017)
+
+Owner's request, 19 Nov 2026: show each aircraft's revenue and the costs known to belong to it, and unit economics on the route screen.
+
+- **Engine.** `day_ops` writes `aircraft_daily` (kept 28 days, private): each aircraft's share of its routes' revenue (by the seats it flew in each cabin), its own flying costs (fuel, flying pay, maintenance, airport, slots) plus its share of the routes' sales and service costs, and what holding it costs (lease rent, wet-lease hours, or depreciation and loan interest for an owned one; cabin crew base pay). Idle and grounded aircraft get a row too. `route_daily.aircraft_cost_inr` is the holding cost of the aircraft that flew the route, shared by the hours each flew there. Pilot salaries, head office and marketing are not split. Aircraft figures add up exactly to the route and airline figures.
+- **Aircraft screen.** A Money card: revenue, flying costs, rent (or wet-lease charge, or ownership), result, a day over the last 7 days.
+- **Fleet screen.** Result a day for each aircraft.
+- **Route screen.** RASK (revenue per seat-km, fares and extras), CASK (flying costs and aircraft cost per seat-km) and break-even load: the load factor at which today's fares would just cover those costs (`load x cost / revenue`), against the route's actual load. Chosen as the third metric because it answers the question a route manager asks first: how full must this route be to pay?
+- **Tested.** 5 new local checks (186 in all) and the app test.
 
 ## 15. Screens
 

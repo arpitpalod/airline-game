@@ -1,7 +1,7 @@
 // Numbers derived from the raw tables, shared by several screens.
 import type { FleetItem, Ref } from './data';
 import { minTurn, pairKey, tripHours, weekHours } from './game';
-import type { AirlineDaily, Market, Rotation, Route, RouteDaily } from './types';
+import type { AircraftDaily, AirlineDaily, Market, Rotation, Route, RouteDaily } from './types';
 
 export function dailyRevenue(d: AirlineDaily) { return d.rev_ticket + d.rev_anc; }
 export function dailyOpCost(d: AirlineDaily) {
@@ -20,13 +20,13 @@ export function sumDaily(ds: AirlineDaily[]): Sum {
   return s;
 }
 
-export interface RouteStat { lf: number | null; pax: number; seats: number; revenue: number; varCost: number; spill: number; days: number; flights: number }
+export interface RouteStat { lf: number | null; pax: number; seats: number; revenue: number; varCost: number; aircraftCost: number; spill: number; days: number; flights: number }
 export function routeStat(rd: RouteDaily[], routeId: string, fromDay: number): RouteStat {
-  const s: RouteStat = { lf: null, pax: 0, seats: 0, revenue: 0, varCost: 0, spill: 0, days: 0, flights: 0 };
+  const s: RouteStat = { lf: null, pax: 0, seats: 0, revenue: 0, varCost: 0, aircraftCost: 0, spill: 0, days: 0, flights: 0 };
   for (const d of rd) {
     if (d.route_id !== routeId || d.game_day < fromDay) continue;
     s.pax += d.pax_econ + d.pax_biz; s.seats += d.seats_econ + d.seats_biz; s.revenue += d.revenue_inr;
-    s.varCost += d.var_cost_inr; s.spill += d.spill; s.days++; s.flights += d.flights;
+    s.varCost += d.var_cost_inr; s.aircraftCost += d.aircraft_cost_inr ?? 0; s.spill += d.spill; s.days++; s.flights += d.flights;
   }
   s.lf = s.seats > 0 ? s.pax / s.seats : null;
   return s;
@@ -64,3 +64,26 @@ export const COST_LINES: { key: keyof AirlineDaily; label: string }[] = [
   { key: 'c_dist', label: 'Sales, service and free extras' }, { key: 'c_marketing', label: 'Marketing' }, { key: 'c_overhead', label: 'Head office and bases' },
   { key: 'c_depr', label: 'Depreciation' }, { key: 'c_other', label: 'Other' },
 ];
+
+// Unit economics of a route over a period: revenue and cost (flying costs plus the aircraft cost it carries) per seat-km,
+// and the load factor at which revenue would just cover that cost at today's fares. Pilot salaries, head office and
+// marketing are not included.
+export function unitEcon(s: RouteStat, km: number) {
+  const ask = s.seats * km;
+  if (ask <= 0 || s.revenue <= 0) return null;
+  const cost = s.varCost + s.aircraftCost;
+  return { rask: s.revenue / ask, cask: cost / ask, beLf: s.lf != null ? s.lf * cost / s.revenue : null };
+}
+
+// An aircraft's days: revenue, flying costs and what holding it costs, summed.
+export interface AircraftStat { days: number; revenue: number; flying: number; holding: number; result: number; pax: number; flights: number }
+export function aircraftStats(ad: AircraftDaily[], fromDay: number) {
+  const out: Record<string, AircraftStat> = {};
+  for (const d of ad) {
+    if (d.game_day < fromDay) continue;
+    const s = (out[d.aircraft_id] ??= { days: 0, revenue: 0, flying: 0, holding: 0, result: 0, pax: 0, flights: 0 });
+    s.days++; s.revenue += d.revenue_inr; s.flying += d.flying_cost_inr; s.holding += d.aircraft_cost_inr; s.pax += d.pax; s.flights += d.flights;
+    s.result += d.revenue_inr - d.flying_cost_inr - d.aircraft_cost_inr;
+  }
+  return out;
+}

@@ -5,7 +5,7 @@ import { createContext, useContext } from 'react';
 import { call, rows, supabase } from './api';
 import { pairKey } from './game';
 import type {
-  Aircraft, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
+  Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
 } from './types';
 
@@ -306,5 +306,14 @@ export function usePilots() {
       return { families, crews: Object.fromEntries(crews.map((c) => [c.family, c])) as Record<string, AirlinePilots>,
                market: Object.fromEntries(market.map((m) => [m.family, m])) as Record<string, PilotMarket> };
     },
+  });
+}
+
+export function useAircraftDaily() {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'aircraft_daily', world.game_day],
+    queryFn: () => rows<AircraftDaily>(supabase.from('aircraft_daily').select('*').eq('airline_id', airline.id)
+      .gte('game_day', Math.max(0, world.game_day - 6)).order('game_day')),
   });
 }

@@ -43,7 +43,11 @@ export interface Rotation { aircraft_id: string; route_id: string; weekly_trips:
 
 export interface RouteDaily {
   route_id: string; game_day: number; airline_id: string; flights: number; seats_econ: number; seats_biz: number;
-  pax_econ: number; pax_biz: number; spill: number; revenue_inr: number; var_cost_inr: number;
+  pax_econ: number; pax_biz: number; spill: number; revenue_inr: number; var_cost_inr: number; aircraft_cost_inr: number;
+}
+export interface AircraftDaily {
+  aircraft_id: string; game_day: number; airline_id: string; flights: number; block_h: number; seats: number; pax: number;
+  revenue_inr: number; flying_cost_inr: number; aircraft_cost_inr: number;
 }
 
 export interface AirlineDaily {

@@ -2,8 +2,8 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useFleet, useGame, useMarketsFrom, useRoutes } from '../lib/data';
-import { hoursByAircraft } from '../lib/derive';
+import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes } from '../lib/data';
+import { aircraftStats, hoursByAircraft } from '../lib/derive';
 import { ageYears, cabinRange, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
 import { inr, num, pct, usd } from '../lib/format';
 import { useAction } from '../components/toast';
@@ -49,6 +49,7 @@ export function AircraftDetail() {
             <Bar value={used / weekHours(t)} warn={used / weekHours(t) > 0.85} />
             <p className="small muted">{used === 0 ? 'Idle aircraft still cost rent, crew and overheads every day.' : used / weekHours(t) > 0.85 ? 'Flying this much leaves little slack, so delays build up and punctuality suffers.' : `${pct(used / weekHours(t))} of its flying day is planned.`}</p>
           </div>
+          <AircraftMoney id={ac.id} holding={terms?.holding} />
           <div className="card flush">
             <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Routes</h2><Button size="sm" kind="ghost" onClick={() => setSheet('route')}>Add to a route</Button></div>
             {rots.length === 0 ? <Empty title="Not flying any route">Add it to a route that starts or ends at {ac.base_iata}.</Empty> : (
@@ -198,5 +199,31 @@ function MoveBase({ acId, current, hasRoutes, onClose }: { acId: string; current
         )}
       </div>
     </Sheet>
+  );
+}
+
+// Last 7 days, a day: the revenue an aircraft earned and the costs that belong to it. Pilot salaries, head office and
+// marketing are left out: they are not split by aircraft.
+function AircraftMoney({ id, holding }: { id: string; holding?: string }) {
+  const { world } = useGame();
+  const ad = useAircraftDaily();
+  const s = ad.data ? aircraftStats(ad.data, world.game_day - 6)[id] : undefined;
+  const per = (x: number) => (s && s.days ? x / s.days : 0);
+  const holdLabel = holding === 'wet' ? 'Wet-lease charge' : holding === 'owned' ? 'Ownership (depreciation, loan interest)' : 'Rent';
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Money</h2><span className="small muted">a day, last {s?.days ?? 7} days</span></div>
+      {!s ? <p className="small muted">Figures appear after its first day in service.</p> : (
+        <>
+          <div className="kv">
+            <span>Revenue (fares and extras)</span><span>{inr(per(s.revenue))}</span>
+            <span>Flying costs</span><span>−{inr(per(s.flying))}</span>
+            <span>{holdLabel}{holding === 'wet' ? '' : ', cabin crew base pay'}</span><span>−{inr(per(s.holding))}</span>
+            <span className="strong">Result</span><span className={`strong ${s.result >= 0 ? 'good' : 'bad'}`}>{inr(per(s.result), { sign: true })}</span>
+          </div>
+          <p className="tiny muted">Flying costs are fuel, flying pay, maintenance, airport charges, slots, and its share of sales and service. Pilot salaries, head office and marketing are not split by aircraft.</p>
+        </>
+      )}
+    </div>
   );
 }
