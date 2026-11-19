@@ -1,0 +1,29 @@
+# Applies new database migrations to the live Supabase database when they reach main (see tools/db/apply.sh).
+# Merging a pull request that adds a file to supabase/migrations is the approval. Needs the repository secret
+# SUPABASE_DB_URL: the Session pooler connection string from the Supabase dashboard (Connect), with the password in it.
+name: Database
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/**', 'supabase/applied_before_workflow.txt', 'tools/db/**', '.github/workflows/db.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null
+      - name: Apply new migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: sh tools/db/apply.sh

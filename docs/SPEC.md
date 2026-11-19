@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.10, 19 Nov 2026 (pilots, section 14.8, as one lever with pay 10% lower (0014); everything scarce scales with places, principle 7; route studies, 14.7; no aircraft trading, principle 6). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.10, 19 Nov 2026 (pilots, section 14.8, as one lever with pay 10% lower (0015); database changes applied on merge, 14.9; everything scarce scales with places, principle 7; route studies, 14.7; no aircraft trading, principle 6). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -429,7 +429,7 @@ Asked for by the owner on 19 Nov 2026, taken from Airlines Manager's route audit
 - **App.** A Route study card in the open-route sheet and on Route detail shows the latest study of that pair while it is under 91 game days old (G).
 - **Tested.** Local checks (150 in all) and a rolled-back live run in Test World: on Delhi–Hyderabad a full study gave 3,504 to 4,460 travellers a day each way against an actual 4,079, 39 to 50 turned away against 49, and 78 to 88% full against 80%.
 
-### 14.8 Pilots and places (migrations 0013 and 0014)
+### 14.8 Pilots and places (migrations 0013 to 0015)
 
 Asked for by the owner on 19 Nov 2026, to go in before World 1 starts. Pilots, not aircraft, held back Indian airline growth in 2025: IndiGo cancelled over 4,500 flights in early December 2025 when stricter duty-time rules met a thin crew buffer, while Akasa kept spare pilots and cancelled nothing (sources in 17). Each world has `pilots` on by default; off means the flat pilot cost per aircraft of 14.2. Every number is (G) in `game_params` and `pilot_families`.
 
@@ -447,7 +447,7 @@ Asked for by the owner on 19 Nov 2026, to go in before World 1 starts. Pilots, n
 
 **Market.** Per world and family: a pool of captains and first officers. Target per place: ATR 4 and 6, A320 family 20 and 30, A350 3 and 4. It opens at 2.5 times the target, gains a quarter of the target a quarter (newly qualified) and loses a quarter of itself a quarter (abroad, other work). Market pay = `1 + 0.6 x (1 - captains / target)^2`, moving 3% of the gap a day. Pilots who leave an airline return to the market.
 
-**Pay** (market pay index 1, a day; migration 0014): ATR captain Rs 13,800 and first officer Rs 6,300; A320 family Rs 17,800 and 8,100; A350 Rs 23,500 and 10,700. 0013 set them 10% higher, matching the old flat cost per aircraft at 12.5 block hours a day; the season runs (17, item 23) showed buffers, crews hired ahead of aircraft and cancellations adding 4 to 6 points of cost, so the owner had them brought back down. Flying pay per block hour stays. Each airline sets its pay level against the market (0.8 to 1.5).
+**Pay** (market pay index 1, a day; migration 0015): ATR captain Rs 13,800 and first officer Rs 6,300; A320 family Rs 17,800 and 8,100; A350 Rs 23,500 and 10,700. 0013 set them 10% higher, matching the old flat cost per aircraft at 12.5 block hours a day; the season runs (17, item 23) showed buffers, crews hired ahead of aircraft and cancellations adding 4 to 6 points of cost, so the owner had them brought back down. Flying pay per block hour stays. Each airline sets its pay level against the market (0.8 to 1.5).
 
 **Resignations.** 5% a year at market pay, times `exp(-5 x (pay level - 1))`, times `exp(4 x (best rival pay level - own))` when a rival pays more, times 1.5 while short of pilots and 2 while cash is below zero. Captains serve 364 days of notice, first officers 182, and keep flying meanwhile; the airline gets a news item. Foreign captains do not resign.
 
@@ -457,11 +457,21 @@ Asked for by the owner on 19 Nov 2026, to go in before World 1 starts. Pilots, n
 
 **Computer-run airlines** get their crews outside the market on day 1 (like their aircraft), then hire, resign and are poached like anyone else, at market pay, 10% spare, foreign captains allowed. A world already running when pilots arrive gives every airline its need plus 10%.
 
-**Pilots are one lever, not a screen to manage** (owner, 19 Nov 2026). Players set two things (`set_pilot_policy`): pay against the market and spare pilots (0 to 40%). They see two numbers, on a Pilots card at the top of Fleet: pilots against need (with a "Short by" badge) and salaries a day. Everything else runs on its own: hiring, promotions, and foreign captains as the last resort for every airline (0014). The engine also supports cadets and switching foreign captains off per airline; neither is a player setting, and cadets are off. Home warns when a family is short; resignations arrive as news.
+**Pilots are one lever, not a screen to manage** (owner, 19 Nov 2026). Players set two things (`set_pilot_policy`): pay against the market and spare pilots (0 to 40%). They see two numbers, on a Pilots card at the top of Fleet: pilots against need (with a "Short by" badge) and salaries a day. Everything else runs on its own: hiring, promotions, and foreign captains as the last resort for every airline (0015). The engine also supports cadets and switching foreign captains off per airline; neither is a player setting, and cadets are off. Home warns when a family is short; resignations arrive as news.
 
 **Places (principle 7).** `admin_set_places(world, places)` sets `max_airlines` and `demand_scale = places / 50` together; before the start any value from 2 to 200, once running only upwards. Extra places add their share of pilots to the market at once; the lessor pool and delivery slots follow through their quarterly refill. Migration 0013 also set both live worlds to 25 places: they had 50, so their lessor pools, delivery slots and (now) pilot markets were sized for twice the players their demand was set for. The admin screen has the control.
 
 **Tested.** 24 new local checks (174 in all) and the app test. Season runs with and without pilots: 17, item 23.
+
+### 14.9 Database changes on merge (workflow)
+
+The owner works from a phone, and the Supabase tool's approval prompt for changes that look destructive does not appear in the phone app (19 Nov 2026: three tries timed out). So database changes now reach the live database through GitHub, like the app.
+
+- `.github/workflows/db.yml` runs `tools/db/apply.sh` when a push to `main` touches `supabase/migrations` (or by hand from the Actions tab). It applies, in name order, every migration file the live database has not had, each in one transaction together with its row in `game.applied_files`, so a file is applied completely or not at all, and never twice. It ends by printing the md5 of every function in `game` and `public`, to compare with the local test database.
+- Files applied by hand before the workflow existed (0001 to 0013) are listed in `supabase/applied_before_workflow.txt` and recorded without running.
+- **Merging the pull request is the approval.** There is no second confirmation, so a migration must be reviewed before merging.
+- It needs the repository secret `SUPABASE_DB_URL`: the Session pooler connection string from the Supabase dashboard (Connect), with the database password in it. It is never printed or committed.
+- 0013 was split on 19 Nov 2026 at the point that went live through the tool: 0013 (tables, settings, pilot functions) is live; 0014 (the day engine, letting pilots go on administration, the daily pilot step, 25 places for both worlds, crews for running worlds) and 0015 (pay 10% lower, foreign captains automatic) are the first files the workflow applies. Tested locally against a copy of the live state: both applied, a running world got crews (no airline short), and a second run applied nothing.
 
 ## 15. Screens
 
@@ -509,7 +519,7 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 
 22. Second currency (owner asked whether to copy Airlines Manager's). Recommendation: no. Airlines Manager's premium currency exists to sell subscriptions and packs that speed things up; here it would either buy nothing or buy speed, which breaks principle 6 and the teaching aim. Rupees stay the only currency; the second scarce resource is pilots (18.4). Owner to confirm.
 
-23. Pilots and the season (two pairs of full-season runs, with and without pilots, 18 players and 18 places; single runs vary a lot). Players' revenue-weighted operating margin, years 3 to 6: with pilots −3.4/−4.1, −2.5/−3.4, +6.7/−2.2, +0.9/−1.0%; without −3.3/+3.3, −5.0/+7.4, +2.2/+9.2, +4.5/+8.6%. Computer-run airlines in year 6: +7.2/+10.6% with, +13.8/+15.5% without. So pilots cost about 4 to 6 points of margin late in the season, for players and computer-run airlines alike: crew cost per seat-km about 10% higher (buffers, crews hired ahead of aircraft, more pilots at high utilisation), cancellations of 1 to 3% in thin years against under 0.5%, and the A350 market running dry once long-haul players grow (market pay 1.4 to 1.6 for that family). Three strategies still lead (low-cost trunk, full service, long haul or a second low-cost trunk). The owner chose to trim pilot pay 10% (migration 0014). The runs also took about twice as long a game day (pilot step), well inside the 2-second target on the live database.
+23. Pilots and the season (two pairs of full-season runs, with and without pilots, 18 players and 18 places; single runs vary a lot). Players' revenue-weighted operating margin, years 3 to 6: with pilots −3.4/−4.1, −2.5/−3.4, +6.7/−2.2, +0.9/−1.0%; without −3.3/+3.3, −5.0/+7.4, +2.2/+9.2, +4.5/+8.6%. Computer-run airlines in year 6: +7.2/+10.6% with, +13.8/+15.5% without. So pilots cost about 4 to 6 points of margin late in the season, for players and computer-run airlines alike: crew cost per seat-km about 10% higher (buffers, crews hired ahead of aircraft, more pilots at high utilisation), cancellations of 1 to 3% in thin years against under 0.5%, and the A350 market running dry once long-haul players grow (market pay 1.4 to 1.6 for that family). Three strategies still lead (low-cost trunk, full service, long haul or a second low-cost trunk). The owner chose to trim pilot pay 10% (migration 0015). The runs also took about twice as long a game day (pilot step), well inside the 2-second target on the live database.
 
 **Sources for (V) figures**
 
