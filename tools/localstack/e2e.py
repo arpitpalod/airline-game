@@ -8,9 +8,9 @@ from playwright.sync_api import sync_playwright, expect
 BASE, OUT = sys.argv[1], sys.argv[2]
 subprocess.run(['mkdir', '-p', OUT])
 def sql(q):
-    return subprocess.run(['psql', '-h', '/tmp', '-p', '54322', '-U', 'postgres', '-Atc', q], capture_output=True, text=True, check=True).stdout.strip()
+    return subprocess.run(['psql', '-h', '/tmp', '-p', os.environ.get('PGPORT', '54322'), '-U', 'postgres', '-Atc', q], capture_output=True, text=True, check=True).stdout.strip()
 
-CODE = sql('select invite_code from world_secrets limit 1')
+CODE = sql("select s.invite_code from world_secrets s join worlds w on w.id = s.world_id where w.name = 'World 1'")
 WORLD = sql("select id from worlds where name = 'World 1'")
 EMAIL, PW = 'arpit@test.in', 'flying-high-1'
 errors = []
@@ -74,9 +74,9 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Start the world').click()
     page.locator('.sheet').get_by_role('button', name='Start', exact=True).click()
     toast_ok(page, 'has started')
-    page.get_by_label('One game day takes').select_option('15')
+    page.get_by_label('One game week takes').select_option('1')
     page.get_by_role('button', name='Change the clock').click()
-    toast_ok(page, 'now takes 15 minutes')
+    toast_ok(page, 'now takes 1 hour')
 
     print('open a route and assign the aircraft')
     go(page, '/network')
@@ -102,18 +102,30 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Save pilot settings').click()
     toast_ok(page, 'Pilot settings saved')
 
-    print('fly 8 days')
-    for _ in range(8):
+    print('the pre-launch: 13 weeks with nothing flying')
+    go(page, '/')
+    page.get_by_text('Pre-launch: 13 weeks to your first flights').wait_for()
+    expect(page.locator('.page-head .sub')).to_contain_text('Week 1 · 1 to 7 Jan 3000')
+    shot(page, 'p05c-prelaunch')
+    for _ in range(84):
+        sql(f"select game.run_day('{WORLD}')")
+    page.reload(); page.wait_for_load_state('networkidle'); page.wait_for_timeout(800)
+    page.get_by_text('Pre-launch: 1 week to your first flights').wait_for()
+    expect(page.locator('.page-head .sub')).to_contain_text('Week 13 · 26 Mar to 1 Apr 3000')
+    assert sql(f"select count(*) from airline_daily d join airlines a on a.id = d.airline_id where a.world_id = '{WORLD}'") == '0', 'something flew in the pre-launch'
+
+    print('fly week 14, the first week of flights')
+    for _ in range(14):
         sql(f"select game.run_day('{WORLD}')")
     page.reload(); page.wait_for_load_state('networkidle'); page.wait_for_timeout(800)
     go(page, '/')
-    page.get_by_text("Yesterday's profit").wait_for()
+    page.get_by_text("Last week's profit").wait_for()
     shot(page, 'p06-home')
 
     go(page, '/network'); page.wait_for_timeout(600)
     shot(page, 'p07-network')
     page.locator('.list .item.link').first.click()
-    page.get_by_text('How full, last 28 days').wait_for()
+    page.get_by_text('How full, last 4 weeks').wait_for()
     page.get_by_role('button', name='More economy fare').click()
     page.get_by_role('button', name='Save fares').click()
     toast_ok(page, 'Fares saved')
@@ -137,7 +149,7 @@ with sync_playwright() as p:
     go(page, '/market?tab=wet')
     page.get_by_role('button', name='Wet-lease one').nth(1).click()
     page.get_by_role('button', name='Wet-lease it').click()
-    toast_ok(page, 'arrives on day')
+    toast_ok(page, 'arrives in week')
 
     print('order with a business cabin, on a loan')
     go(page, '/market?tab=order')
@@ -164,7 +176,7 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Borrow').click(); toast_ok(page, 'Borrowed')
     page.get_by_label('Amount (₹ crore)').fill('5')
     page.get_by_role('button', name='Repay').click(); toast_ok(page, 'Repaid')
-    for _ in range(3): page.get_by_role('button', name='More marketing a day').click()
+    for _ in range(3): page.get_by_role('button', name='More marketing a week').click()
     page.get_by_role('button', name='Save marketing').click(); toast_ok(page, 'Marketing spend saved')
     shot(page, 'p11-money')
 
@@ -174,14 +186,14 @@ with sync_playwright() as p:
     page.get_by_role('button', name='Open a base here').click()
     toast_ok(page, 'is now a base')
 
-    print('fly to day 50 so the leased aircraft arrives')
-    for _ in range(41):
+    print('fly 7 more weeks so the leased aircraft arrive')
+    for _ in range(49):
         sql(f"select game.run_day('{WORLD}')")
     page.reload(); page.wait_for_load_state('networkidle')
 
     print('move the leased aircraft to BOM, then refit it')
     go(page, '/fleet')
-    expect(page.locator('.card.link', has_text='Wet lease').first).to_contain_text('Result a day')
+    expect(page.locator('.card.link', has_text='Wet lease').first).to_contain_text('Result last week')
     page.locator('.card.link', has_text='Wet lease').first.click()
     expect(page.locator('.card', has_text='Money')).to_contain_text('Wet-lease charge')
     shot(page, 'p12a-aircraft-money')
@@ -200,7 +212,7 @@ with sync_playwright() as p:
     if not os.environ.get('SKIP_TEARDOWN'):   # keeps a flying airline for screenshots
         print('take VT-AAA off its route, end its wet lease, close the route')
         go(page, '/network'); page.locator('.list .item.link').first.click()
-        page.get_by_text('How full, last 28 days').wait_for()
+        page.get_by_text('How full, last 4 weeks').wait_for()
         for _ in range(30):
             b_less = page.get_by_role('button', name='Less round trips a week').first
             if b_less.is_disabled(): break
@@ -234,13 +246,13 @@ with sync_playwright() as p:
     page.get_by_label('Email').fill(EMAIL)
     page.get_by_label('Password').fill(PW)
     page.get_by_role('button', name='Sign in', exact=True).click()
-    page.get_by_text("Yesterday's profit").wait_for()
+    page.get_by_text("Last week's profit").wait_for()
     shot(page, 'd01-home')
     for h, n in [('/extras', 'd09-extras'), ('/network', 'd02-network'), ('/fleet', 'd04-fleet'), ('/money', 'd05-money'), ('/market', 'd06-market'), ('/ranks', 'd08-ranks'), ('/configure/A21N', 'd07-configurator')]:
         go(page, h); page.wait_for_timeout(700); shot(page, n)
     go(page, '/network')
     if page.locator('.list .item.link').count():
-        page.locator('.list .item.link').first.click(); page.get_by_text('How full, last 28 days').wait_for()
+        page.locator('.list .item.link').first.click(); page.get_by_text('How full, last 4 weeks').wait_for()
         shot(page, 'd03-route')
     ctx.close()
 

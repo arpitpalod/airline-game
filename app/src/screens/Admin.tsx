@@ -3,8 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { call } from '../lib/api';
 import { useGame, useWorldAirlines } from '../lib/data';
-import { clock } from '../lib/game';
-import { dayLabel, num, realSpan } from '../lib/format';
+import { clock, inPrelaunch } from '../lib/game';
+import { currentWeek, num, realTime, weekHours, weekLabel } from '../lib/format';
 import { useToast } from '../components/toast';
 import { Badge, Button, Empty, Field, Kpi, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -36,8 +36,8 @@ export function Admin() {
     <div className="stack-lg">
       <PageHeader title="Admin" sub={world.name} />
       <div className="grid4-d">
-        <Kpi label="Status" value={world.status} note={world.status === 'running' ? `${num(world.speed)}× speed` : ''} />
-        <Kpi label="Game day" value={world.game_day} note={dayLabel(Math.max(1, world.game_day))} />
+        <Kpi label="Status" value={world.status} note={world.status === 'running' && inPrelaunch(world) ? 'pre-launch' : `a week in ${weekHours(world.speed)}`} />
+        <Kpi label="Game week" value={currentWeek(world)} note={weekLabel(currentWeek(world), world.start_date).split(' · ')[1]} />
         <Kpi label="Players" value={`${players.length} / ${world.max_airlines}`} />
         <Kpi label="Demand scale" value={num(world.demand_scale, 2)} note="about players / 50" />
       </div>
@@ -57,11 +57,11 @@ export function Admin() {
         <div className="card stack">
           <h2>Clock</h2>
           {world.status === 'setup' && <>
-            <p className="small muted">Starting fills the lessor pool and starts the clock: one game day every {realSpan(1, world.speed)}. The computer-run airlines are set up on day 1. Check the demand scale first: it can't change after the start.</p>
+            <p className="small muted">Starting fills the lessor pool and starts the clock. First comes the pre-launch: {world.prelaunch_weeks} weeks in {realTime(world.prelaunch_minutes * 60)}, with nothing flying. First flights are in week {world.prelaunch_weeks + 1}; after that a game week takes {weekHours(world.speed)}. The computer-run airlines are set up on day 1. Check the places first: they can only go up after the start.</p>
             <Button onClick={() => setConfirm('start')}>Start the world</Button>
           </>}
           {world.status === 'running' && <>
-            <p className="small muted">Running. Next day due in about {c.nextInSec != null ? realSpan(c.nextInSec / 86400 * world.speed, world.speed) : '–'}.</p>
+            <p className="small muted">Running{inPrelaunch(world) ? ', in the pre-launch' : ''}. This week's results in about {c.nextInSec != null ? realTime(c.nextInSec) : '–'}.</p>
             <Button kind="secondary" onClick={() => setConfirm('pause')}>Pause</Button>
           </>}
           {world.status === 'paused' && <Button onClick={() => setConfirm('resume')}>Resume</Button>}
@@ -73,7 +73,7 @@ export function Admin() {
       {confirm && (
         <Sheet title={confirm === 'start' ? 'Start the world?' : confirm === 'pause' ? 'Pause the world?' : 'Resume the world?'} onClose={() => setConfirm(null)}>
           <div className="stack">
-            <p className="small">{confirm === 'start' ? `${players.length} players have joined. Players can still join after the start.` : confirm === 'pause' ? 'No game days are processed while paused, and players cannot act.' : 'Game days start again from where they stopped.'}</p>
+            <p className="small">{confirm === 'start' ? `${players.length} players have joined. Players can still join after the start.` : confirm === 'pause' ? 'No game weeks are processed while paused, and players cannot act.' : 'Game weeks start again from where they stopped.'}</p>
             <Button block busy={busy} onClick={() => act(confirm === 'start' ? 'admin_start_world' : confirm === 'pause' ? 'admin_pause_world' : 'admin_resume_world',
               confirm === 'start' ? 'The world has started' : confirm === 'pause' ? 'Paused' : 'Resumed')}>
               {confirm === 'start' ? 'Start' : confirm === 'pause' ? 'Pause' : 'Resume'}
@@ -85,32 +85,34 @@ export function Admin() {
   );
 }
 
-const SPEEDS = [10, 15, 20, 30, 60, 111];
+const WEEK_HOURS = [0.5, 1, 2, 3, 4, 6, 8, 12, 24];
 
 function SpeedControl() {
   const { world } = useGame();
   const toast = useToast();
   const qc = useQueryClient();
-  const now = Math.round(1440 / world.speed);
-  const [mins, setMins] = useState(now);
+  const now = Math.round((168 / world.speed) * 100) / 100;
+  const [hours, setHours] = useState(now);
   const [busy, setBusy] = useState(false);
+  const label = (h: number) => (h < 1 ? `${Math.round(h * 60)} minutes` : h === 1 ? '1 hour' : `${h} hours`);
+  const weeksLeft = Math.max(0, Math.floor(world.season_days / 7) - currentWeek(world) + 1);
   return (
     <div className="stack" style={{ marginTop: 8 }}>
       <div className="divider" />
-      <Field label="One game day takes">
-        <select className="input" value={mins} onChange={(e) => setMins(Number(e.target.value))}>
-          {[...new Set([...SPEEDS, now])].sort((a, b) => a - b).map((m) => <option key={m} value={m}>{m} minutes{m === now ? ' (now)' : ''}</option>)}
+      <Field label="One game week takes">
+        <select className="input" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+          {[...new Set([...WEEK_HOURS, now])].sort((a, b) => a - b).map((h) => <option key={h} value={h}>{label(h)}{h === now ? ' (now)' : ''}</option>)}
         </select>
       </Field>
       <p className="tiny muted">
-        A season of {world.season_days} game days then lasts about {realSpan(world.season_days, 1440 / mins)}. Lead times, groundings and the
-        {' '}14 days before administration all shrink with it: at {mins} minutes a quarter passes in {realSpan(91, 1440 / mins)}.
+        The {num(weeksLeft)} weeks left in the season then take about {realTime(weeksLeft * hours * 3600)}. A quarter (13 weeks) takes {realTime(13 * hours * 3600)}.
+        {' '}The pre-launch is not affected: its weeks always pass in {realTime(world.prelaunch_minutes * 60)}.
       </p>
-      <Button kind="secondary" disabled={mins === now} busy={busy} onClick={async () => {
+      <Button kind="secondary" disabled={hours === now} busy={busy} onClick={async () => {
         setBusy(true);
         try {
-          await call('admin_set_speed', { p_world: world.id, p_minutes_per_day: mins });
-          toast(`A game day now takes ${mins} minutes`);
+          await call('admin_set_week_hours', { p_world: world.id, p_hours: hours });
+          toast(`A game week now takes ${label(hours)}`);
           await qc.invalidateQueries({ queryKey: ['world', world.id] });
         } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
       }}>Change the clock</Button>

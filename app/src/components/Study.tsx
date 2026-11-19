@@ -8,16 +8,18 @@ import { Badge, Button } from './ui';
 const range = (lo: number | null, hi: number | null, f: (x: number) => string = (x) => num(x)) =>
   lo == null || hi == null ? '–' : lo === hi ? f(lo) : `${f(lo)} to ${f(hi)}`;
 
+const wk = (x: number | null) => (x == null ? null : x * 7);   // studies estimate a day; shown by the week
+
 function Findings({ s }: { s: RouteStudy }) {
   return (
     <div className="stack">
       {s.flying_lo == null && <p className="small">Nobody flies it now. With one airline flying it twice a day at the reference fare,
-        about <strong>{range(s.untapped_lo, s.untapped_hi)}</strong> travellers a day would fly each way.</p>}
+        about <strong>{range(wk(s.untapped_lo), wk(s.untapped_hi))}</strong> travellers a week would fly each way.</p>}
       <div className="kv">
         {s.flying_lo != null && <>
           <span>Airlines flying it</span><span>{s.carriers}</span>
-          <span>Flying it a day, each way</span><span>{range(s.flying_lo, s.flying_hi)}</span>
-          <span>Turned away a day, each way</span><span>{range(s.turned_lo, s.turned_hi)}</span>
+          <span>Flying it a week, each way</span><span>{range(wk(s.flying_lo), wk(s.flying_hi))}</span>
+          <span>Turned away a week, each way</span><span>{range(wk(s.turned_lo), wk(s.turned_hi))}</span>
           <span>Seats filled, all airlines</span><span>{range(s.lf_lo, s.lf_hi, (x) => pct(x))}</span>
         </>}
         {s.biz_share != null && <>
@@ -43,7 +45,7 @@ export function StudyCard({ a, b, flat }: { a: string; b: string; flat?: boolean
     <div className={flat ? 'stack' : 'card stack'}>
       <div className="card-title" style={{ marginBottom: 0 }}>
         <h2>Route study</h2>
-        {last && <Badge tone={fresh ? 'info' : 'warn'}>{last.depth === 'full' ? 'Full' : 'Quick'} · {age === 0 ? 'today' : `${age} days old`}</Badge>}
+        {last && <Badge tone={fresh ? 'info' : 'warn'}>{last.depth === 'full' ? 'Full' : 'Quick'} · {age! < 7 ? 'this week' : `${Math.floor(age! / 7)} ${age! < 14 ? 'week' : 'weeks'} old`}</Badge>}
       </div>
       {last && fresh ? <Findings s={last} />
         : <p className="small muted">{last ? 'Your last study of this route is out of date. ' : ''}A study estimates what the market is doing: how many travellers fly it with every airline, how many are turned away and how full the flights are. Estimates come as a range and can be off.</p>}

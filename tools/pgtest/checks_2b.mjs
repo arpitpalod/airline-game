@@ -220,21 +220,22 @@ export async function checks2b(t, perf) {
     (await one(`select lease_end_day from public.aircraft_terms where aircraft_id = '${pick}'`)) === 92 + 728
     && (await one(`select count(*)::int from public.news where private and body like 'The lease on%'`)) === 1);
 
-  // the clock
-  const setDue = (n) => q(`update public.worlds set started_at = now() - make_interval(secs => (game_day + ${n} + 0.5) * 86400 / speed) where id = '${W}'`);
-  await setDue(3);
-  ok('the scheduler catches up exactly the days that are due', (await one(`select game.tick()`)) === 3 && (await one(`select game.tick()`)) === 0);
-  await setDue(100);
-  ok('at most 30 days per run', (await one(`select game.tick()`)) === 30);
-  await q(`update public.season_factors set month = 13 - month where false`);
-  await setDue(0);
+  // the clock (whole weeks since migration 0018): set it so that the end of week k from now is due
+  const setDueWeeks = (k) => q(`update public.worlds set started_at = now() - make_interval(secs => (7 * (floor(game_day / 7.0) + ${k}) + 0.5) * 86400 / speed) where id = '${W}'`);
+  const gA = await day();
+  await setDueWeeks(1);
+  ok('the scheduler runs to the end of the week that is due, and no further',
+    (await one(`select game.tick()`)) === 7 * (Math.floor(gA / 7) + 1) - gA && (await one(`select game.tick()`)) === 0 && (await day()) % 7 === 0);
+  await setDueWeeks(100);
+  ok('at most 4 weeks per run', (await one(`select game.tick()`)) === 28);
+  await setDueWeeks(0);
   const g0 = await day();
   await q(`alter table public.season_factors rename to season_factors_x`);
-  await setDue(2);
+  await setDueWeeks(1);
   ok('a failing day is rolled back and logged, not half-applied', (await one(`select game.tick()`)) === 0 && (await day()) === g0
     && (await one(`select count(*)::int from game.engine_log`)) === 1 && (await one(`select count(*)::int from public.airline_daily where game_day > ${g0}`)) === 0);
   await q(`alter table public.season_factors_x rename to season_factors`);
-  ok('and is retried on the next run', (await one(`select game.tick()`)) === 2);
+  ok('and is retried on the next run', (await one(`select game.tick()`)) === 7);
 
   // insolvency
   await q(`update public.airline_finance set cash_inr = -5e9, debt_inr = credit_limit_inr where airline_id = '${B}'`);

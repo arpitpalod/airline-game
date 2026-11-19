@@ -88,7 +88,7 @@ function GameProvider({ game }: { game: Game }) {
   const qc = useQueryClient();
   const loc = useLocation();
   const lastDay = useRef(game.world.game_day);
-  // A new game day means new results everywhere.
+  // A new game week means new results everywhere.
   useEffect(() => {
     if (game.world.game_day !== lastDay.current) {
       lastDay.current = game.world.game_day;

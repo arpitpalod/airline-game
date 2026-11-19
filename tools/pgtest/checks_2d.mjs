@@ -50,10 +50,10 @@ export async function checks2d(t) {
   console.log('Admins set the clock (0010)');
   const d0 = Number(await one(`select game_day from public.worlds where id = $1`, [W]));
   ok('a game day can be set to 15 minutes of real time', Number(await one(`select public.admin_set_speed($1, 15)`, [W])) === 96);
-  ok('the processed day stays and the next one starts counting now', Number(await one(`select game.due_day($1)`, [W])) === d0);
-  await fails('a game day under 5 minutes is refused', `select public.admin_set_speed('${W}', 2)`, /between 5 minutes/);
+  ok('the processed day stays and nothing more falls due', Number(await one(`select game.due_day($1)`, [W])) === 7 * Math.floor(d0 / 7));
+  await fails('a game week under 15 minutes is refused', `select public.admin_set_week_hours('${W}', 0.2)`, /between 15 minutes and 7 days/);
   await q(`select public.admin_pause_world($1)`, [W]);
   await q(`select public.admin_set_speed($1, 20)`, [W]);
   await q(`select public.admin_resume_world($1)`, [W]);
-  ok('changing it while paused also keeps the day', Number(await one(`select game.due_day($1)`, [W])) === d0);
+  ok('changing it while paused also keeps the day', Number(await one(`select game.due_day($1)`, [W])) === 7 * Math.floor(d0 / 7));
 }

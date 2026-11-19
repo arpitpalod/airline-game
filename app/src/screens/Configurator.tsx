@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAircraftMarket, useBases, useFleet, useGame, useLayout } from '../lib/data';
 import { crewFor, layoutRows } from '../lib/game';
-import { inr, num, pct, realSpan, usd } from '../lib/format';
+import { arrivalLabel, arrivalWeek, inr, num, pct, usd, weeks } from '../lib/format';
 import { SeatMap } from '../components/SeatMap';
 import { useAction } from '../components/toast';
 import { Button, Empty, Field, Loading, PageHeader, Seg, Stepper } from '../components/ui';
@@ -93,11 +93,11 @@ export function Configurator() {
               <div className="kv">
                 <span>Seats changed</span><span>{changed}</span>
                 <span>Cost</span><span>{inr(refitCost)}</span>
-                <span>Time on the ground</span><span>{ref.param.refit_days} game days ({realSpan(ref.param.refit_days, world.speed)})</span>
+                <span>Time on the ground</span><span>{weeks(Math.max(7, Math.ceil(ref.param.refit_days / 7) * 7))}, back in week {arrivalWeek(world.game_day + 1 + ref.param.refit_days)}</span>
               </div>
               <Button block disabled={!!same || !L?.valid} busy={busy === 'refit'} onClick={() => run('refit', () => call<{ cost_inr: number; back_day: number }>('refit_aircraft', {
                 p_airline: airline.id, p_aircraft: ac.id, p_biz_rows: br, p_biz_pitch: br ? bp : null, p_econ_pitch: ep,
-              }), (r) => `Refit booked for ${inr(r.cost_inr)}. Back on day ${r.back_day}.`).then((r) => r && nav(`/aircraft/${ac.id}`))}>
+              }), (r) => `Refit booked for ${inr(r.cost_inr)}. Back in week ${arrivalWeek(r.back_day)}.`).then((r) => r && nav(`/aircraft/${ac.id}`))}>
                 {same ? 'This is the current cabin' : `Refit for ${inr(refitCost)}`}
               </Button>
             </div>
@@ -136,7 +136,7 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
       <div className="kv">
         <span>Price each</span><span>{usd(q.order_price_usd)} ({inr(priceInr)})</span>
         <span>Deposit now</span><span>{inr(dep * count)}</span>
-        <span>{count > 1 ? 'First delivery' : 'Delivery'}</span><span>day {q.order_delivery_day} · about {realSpan(wait, world.speed)} from now</span>
+        <span>{count > 1 ? 'First delivery' : 'Delivery'}</span><span>{arrivalLabel(q.order_delivery_day, world.start_date)} · in {weeks(Math.max(7, Math.ceil(wait / 7) * 7))}</span>
       </div>
       {count > 1 && <p className="tiny muted">Each aircraft takes the next free delivery slot, so the later ones may arrive a little later. All are ordered or none is.</p>}
       <Field label="Pay the balance on delivery with">

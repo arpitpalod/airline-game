@@ -54,16 +54,29 @@ export function poolRentUsd(t: AircraftType, rentMult: number, age: number) {
   return t.lease_usd_month * rentMult * Math.max(0.5, 1 - 0.03 * Math.floor(age));
 }
 
-/** Where the world clock stands. Results for a day appear when the scheduler next runs (every 5 minutes). */
-export function clock(w: World, now = Date.now()) {
-  const secPerDay = 86400 / w.speed;
-  if (w.status !== 'running' || !w.started_at) return { dueDay: w.game_day, nextInSec: null as number | null, secPerDay };
-  const elapsed = (now - Date.parse(w.started_at)) / 1000 - w.paused_seconds;
-  const dueDay = Math.floor(elapsed / secPerDay);
-  const nextDue = (w.game_day + 1) * secPerDay - elapsed;   // when the next day falls due
-  const nextInSec = Math.max(0, nextDue) + 150;             // plus half a scheduler interval on average
-  return { dueDay, nextInSec, secPerDay };
+/** The world clock, as in game.clock_day (migration 0018): the pre-launch's weeks pass in prelaunch_minutes, then
+ *  speed game days per real day. Only whole weeks fall due; results appear when the scheduler next runs (every 5 minutes). */
+export function clockDay(w: World, sec: number) {
+  const pre = w.prelaunch_weeks > 0 ? w.prelaunch_minutes * 60 : 0;
+  if (w.prelaunch_weeks > 0 && sec < pre) return (sec * w.prelaunch_weeks * 7) / pre;
+  return w.prelaunch_weeks * 7 + ((sec - pre) * w.speed) / 86400;
 }
+export function clockSeconds(w: World, day: number) {
+  const pre = w.prelaunch_weeks > 0 ? w.prelaunch_minutes * 60 : 0;
+  if (w.prelaunch_weeks > 0 && day < w.prelaunch_weeks * 7) return (day * pre) / (w.prelaunch_weeks * 7);
+  return pre + ((day - w.prelaunch_weeks * 7) * 86400) / w.speed;
+}
+export function clock(w: World, now = Date.now()) {
+  if (w.status !== 'running' || !w.started_at) return { dueDay: w.game_day, nextInSec: null as number | null };
+  const elapsed = (now - Date.parse(w.started_at)) / 1000 - w.paused_seconds;
+  const dueDay = 7 * Math.floor(clockDay(w, elapsed) / 7);
+  const nextWeekEnd = 7 * (Math.floor(w.game_day / 7) + 1);              // results for the week being played
+  const nextInSec = Math.max(0, clockSeconds(w, nextWeekEnd) - elapsed) + 150;   // plus half a scheduler interval on average
+  return { dueDay, nextInSec };
+}
+/** The first game day a world's airlines fly, and whether the world is still in its pre-launch. */
+export const worldFirstFlight = (w: World) => w.prelaunch_weeks * 7 + 1;
+export const inPrelaunch = (w: World) => w.game_day + 1 < worldFirstFlight(w);
 
 export const LIVERY_COLORS = ['#0E7C70', '#1E5AA8', '#7A3FD1', '#B4530F', '#C2185B', '#2E7D32', '#37474F', '#D4A017'];
 

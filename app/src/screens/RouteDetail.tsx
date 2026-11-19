@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, type FleetItem } from '../lib/data';
 import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
-import { inr, num, pct } from '../lib/format';
+import { inr, num, pct, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
 import { useAction } from '../components/toast';
@@ -40,9 +40,9 @@ export function RouteDetail() {
 
   const A = ref.airport[route.origin], B = ref.airport[route.dest];
   const s7 = routeStat(rd.data ?? [], route.id, world.game_day - 6);
-  const series = Array.from(new Set((rd.data ?? []).filter((d) => d.route_id === route.id).map((d) => d.game_day))).sort((a, b) => a - b)
-    .map((day) => { const st = routeStat((rd.data ?? []).filter((d) => d.game_day === day), route.id, day); return { day, lf: st.lf }; });
-  const perDay = (x: number) => (s7.days ? x / s7.days : 0);
+  const series = Array.from(new Set((rd.data ?? []).filter((d) => d.route_id === route.id).map((d) => weekOf(d.game_day)))).sort((a, b) => a - b)
+    .map((w) => { const st = routeStat((rd.data ?? []).filter((d) => weekOf(d.game_day) === w), route.id, 0); return { day: w, lf: st.lf }; });
+  const perWeek = (x: number) => (s7.days ? (x * 7) / s7.days : 0);
   const fe = fareE ?? route.fare_econ, fb = fareB ?? route.fare_biz ?? 0;
   const bizMult = ref.param.biz_fare_mult ?? 3.5;
   const dirty = fe !== route.fare_econ || (route.fare_biz != null && fb !== route.fare_biz);
@@ -55,12 +55,12 @@ export function RouteDetail() {
   return (
     <div className="stack-lg">
       <PageHeader back="/network" title={`${A.city} – ${B.city}`}
-        sub={`${route.origin}–${route.dest} · ${m ? `${num(m.km)} km` : ''}${m?.intl ? ' · international' : ''} · opened day ${route.opened_day}`} />
+        sub={`${route.origin}–${route.dest} · ${m ? `${num(m.km)} km` : ''}${m?.intl ? ' · international' : ''} · opened week ${weekOf(route.opened_day)}`} />
       <div className="grid4-d">
-        <Kpi label="Seats sold, 7 days" value={s7.lf != null ? pct(s7.lf) : '–'} note={s7.lf == null ? 'No flights yet' : s7.lf >= 0.95 ? 'Full: room to raise the fare' : s7.lf < 0.6 ? 'Many empty seats' : 'Healthy is 80 to 88%'} />
-        <Kpi label="Passengers a day" value={num(perDay(s7.pax))} note={`${num(perDay(s7.spill))} turned away a day`} />
-        <Kpi label="Revenue a day" value={inr(perDay(s7.revenue))} />
-        <Kpi label="Flight profit a day" value={inr(perDay(s7.revenue - s7.varCost), { sign: true })} tone={s7.revenue - s7.varCost >= 0 ? 'good' : 'bad'}
+        <Kpi label="Seats sold, last week" value={s7.lf != null ? pct(s7.lf) : '–'} note={s7.lf == null ? 'No flights yet' : s7.lf >= 0.95 ? 'Full: room to raise the fare' : s7.lf < 0.6 ? 'Many empty seats' : 'Healthy is 80 to 88%'} />
+        <Kpi label="Passengers a week" value={num(perWeek(s7.pax))} note={`${num(perWeek(s7.spill))} turned away`} />
+        <Kpi label="Revenue a week" value={inr(perWeek(s7.revenue))} />
+        <Kpi label="Flight profit a week" value={inr(perWeek(s7.revenue - s7.varCost), { sign: true })} tone={s7.revenue - s7.varCost >= 0 ? 'good' : 'bad'}
           note="Before rent and head office" />
       </div>
       {s7.lf != null && m && (() => {
@@ -80,7 +80,7 @@ export function RouteDetail() {
       <div className="split">
         <div className="stack-lg">
           <div className="card">
-            <div className="card-title"><h2>How full, last 28 days</h2></div>
+            <div className="card-title"><h2>How full, last 4 weeks</h2></div>
             <LoadChart points={series} />
           </div>
           <div className="card flush">
@@ -119,10 +119,10 @@ export function RouteDetail() {
                 <Stepper label="business fare" value={fb} step={500} min={minF} max={maxF * 4} onChange={setFareB} format={(v) => inr(v)} />
               </div>
             )}
-            <p className="tiny muted">A higher fare earns more per seat but sells fewer. Change it a little at a time and watch the next few days. New fares count from the next game day.</p>
+            <p className="tiny muted">A higher fare earns more per seat but sells fewer. Change it a little at a time and watch the next few weeks. New fares count for the week being played.</p>
             <Button block disabled={!dirty} busy={busy === 'fares'} onClick={() => run('fares', () => call('set_fares', {
               p_airline: airline.id, p_route: route.id, p_fare_econ: fe, p_fare_biz: route.fare_biz != null ? fb : null,
-            }), 'Fares saved. They count from the next game day.').then(() => { setFareE(null); setFareB(null); })}>Save fares</Button>
+            }), 'Fares saved. They count from this week.').then(() => { setFareE(null); setFareB(null); })}>Save fares</Button>
           </div>
 
           <div className="card flush">
@@ -155,7 +155,7 @@ export function RouteDetail() {
       {closing && (
         <Sheet title="Close this route?" onClose={() => setClosing(false)}>
           <div className="stack">
-            <p className="small">Its aircraft stop flying it from the next game day and become free for other routes. You can open it again later.</p>
+            <p className="small">Its aircraft stop flying it from this week and become free for other routes. You can open it again later.</p>
             <Button kind="danger-solid" block busy={busy === 'close'} onClick={() => run('close', () => call('close_route', { p_airline: airline.id, p_route: route.id }), 'Route closed').then((r) => {
               if (r !== undefined) nav('/network');
             })}>Close route</Button>

@@ -5,7 +5,7 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 DATA=${1:-/tmp/airline-pg}
 BIN=/usr/lib/postgresql/16/bin
-PORT=54322
+PORT=${PGPORT:-54322}
 su postgres -c "$BIN/pg_ctl -D $DATA stop -m fast" >/dev/null 2>&1 || true
 rm -rf "$DATA"; mkdir -p "$DATA"; chown postgres "$DATA"
 su postgres -c "$BIN/initdb -D $DATA -A trust -U postgres" >/dev/null
