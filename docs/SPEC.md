@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.10, 19 Nov 2026 (pilots, section 14.8, as one lever with pay 10% lower (0015); database changes applied on merge, 14.9; everything scarce scales with places, principle 7; route studies, 14.7; no aircraft trading, principle 6). Source of truth: `docs/SPEC.md` in the `airline-game` repo.
+Status: v0.11, 19 Nov 2026 (computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots as one lever with pay 10% lower, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; route studies, 14.7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -473,6 +473,20 @@ The owner works from a phone, and the Supabase tool's approval prompt for change
 - It needs the repository secret `SUPABASE_DB_URL`: the Session pooler connection string from the Supabase dashboard (Connect), with the database password in it. It is never printed or committed.
 - 0013 was split on 19 Nov 2026 at the point that went live through the tool: 0013 (tables, settings, pilot functions) is live; 0014 (the day engine, letting pilots go on administration, the daily pilot step, 25 places for both worlds, crews for running worlds) and 0015 (pay 10% lower, foreign captains automatic) are the first files the workflow applies. Tested locally against a copy of the live state: both applied, a running world got crews (no airline short), and a second run applied nothing. First live run on 19 Nov 2026 (13:47 IST): 0014 and 0015 applied, all live functions match the local test database, both worlds at 25 places, and Test World's nine crews at need plus 10%.
 
+### 14.10 Computer-run airlines that pay their way; slot prices by aircraft size (migration 0016)
+
+Owner's request, 19 Nov 2026: fix Myna Regional and Flamingo Air before World 1 (item 19). Measured first: in a world of only computer-run airlines at World 1's size, Myna made +7% and Flamingo −15%; in season runs with players, Myna made −120% to −190% and Flamingo −14% to −64%. Three causes, three fixes. Every number is (G).
+
+| Cause | Fix |
+|---|---|
+| Flamingo's starting network was sized above its demand: four Gulf routes ran 40 to 59% full even with no players, and a scaled-down world rounds a thin route up to a daily flight on its own aircraft | Kochi to Abu Dhabi and Kochi to Doha leave its starting network; Mumbai to Dubai 2 x 15 round trips a week (was 2 x 14), Mumbai to Abu Dhabi 10 (14), Mumbai to Goa 16 (30), Mumbai to Kochi 18 (21). 11 aircraft at full scale become 9 |
+| A computer-run airline had to keep at least one aircraft on every starting route, however empty | From its second year (`bot_drop_min_days` 364), at each quarter end it drops a starting route that over the last 28 days was under 55% full and did not cover its flying costs and aircraft rent (and flew on at least 21 of those days). Never one of the eight busiest domestic markets, never below 2 routes, worst first. The load-factor test means fuel, currency and fare swings never drop a route, only a lack of travellers. Its aircraft leave the world rather than joining the lessor pool (principle 6). News says so |
+| Slots were Myna's largest cost (Rs 1.5 to 3.6 a seat-km at Bengaluru and Hyderabad, against Rs 0.2 to 0.4 for jet airlines): a movement cost the same for a 72-seat ATR as for a 186-seat A320neo (item 16) | A movement at a congested airport costs the congestion price x reference seats / 180: ATR 0.4, A320neo 1, A321neo 1.2, A350 1.8. Congestion is still counted in movements |
+
+**Season check** (two full seasons with players and pilots, as in 14.3; single runs vary a lot). Late years (4 to 6): Flamingo −6% to +1% at 75 to 81% full (was −14% to −64%); Myna −15% to −39% on 2 to 5 aircraft (was −120% to −190% on 6); all computer-run airlines +8% to +17% (was +4% to +16%); players within their usual spread. Myna's slot cost per seat-km fell from Rs 3.64 to Rs 0.4 to 1.1. It still loses because turboprops cost about twice as much per seat-km as jets on its 400 to 600 km trunk routes, and a small airline carries the full head office (Rs 6 lakh a day, Rs 1 to 1.9 a seat-km for Myna): item 16. Computer-run airlines are not ranked and never fail, so this costs players nothing.
+
+**Tested.** 7 new local checks (181 in all): Flamingo's new network, the ATR's slot bill at 0.4 of an A320neo's, dropping thin losing routes down to two, aircraft leaving the world, a full losing route kept, the eight busiest never dropped.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -508,11 +522,11 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 13. Settled in Stage 2c (14.3): aircraft loans; the season score counts profit after interest.
 14. Owner to confirm: the season score now uses profit after interest instead of operating profit (section 11). Without it, buying every aircraft with a loan would dominate the score.
 15. Long haul has the highest upside in small worlds: beyond London and Singapore no computer-run airline flies long haul. Consider more Sarus long-haul routes or a second long-haul carrier after the playtest.
-16. Small airlines (1 to 3 aircraft) carry the full Rs 6 lakh a day of head office, and turboprops pay the same slot price per movement as an A350: the simulated turboprop and secondary-route players never grew past a few aircraft, and Myna Regional ends the season far below break-even once Bengaluru and Hyderabad fill up (computer-run airlines keep one aircraft on every route of their network, so it cannot leave). Watch this in the playtest before changing it; a slot price per seat rather than per movement is one option.
+16. Small airlines (1 to 3 aircraft) carry the full Rs 6 lakh a day of head office, and turboprops pay the same slot price per movement as an A350: the simulated turboprop and secondary-route players never grew past a few aircraft, and Myna Regional ends the season far below break-even once Bengaluru and Hyderabad fill up (computer-run airlines keep one aircraft on every route of their network, so it cannot leave). Watch this in the playtest before changing it; a slot price per seat rather than per movement is one option. Update 19 Nov 2026: slot prices now scale with aircraft size (14.10). The head office part stands: a small airline still carries the full Rs 6 lakh a day (Rs 1 to 1.9 a seat-km for Myna Regional and the simulated regional players).
 17. The simulated players in `season.mjs` are simple rules, not people. Results for year 1 (everyone losing money) depend on how fast players add capacity; re-check with the playtest (Stage 5).
 18. Set a world's `demand_scale` to about (expected players / 50) before starting it: demand, computer-run fleets and slot caps all scale with it. World 1 is set to 0.5 for at least 25 players.
 
-19. Myna Regional and Flamingo Air lose money in every season run (about −12% to −136% margin at `demand_scale` 0.36), with or without contesting. Computer-run airlines never fail, so they keep flying; tune their starting networks, or let them shrink further, before World 1 starts.
+19. Settled 19 Nov 2026 (14.10): Flamingo's network re-sized, computer-run airlines drop thin losing routes from their second year, slot prices scale with aircraft size. Myna still loses about 15 to 35% late in a season (turboprop costs and its head office; item 16).
 20. An AI strategist for the computer-run airlines (a model choosing once a quarter which routes to enter and how hard to price, through the same functions) was suggested by the owner. Deferred until the playtest shows whether the rules in 14.5 feel predictable. It would need an Anthropic API key held as a server secret and makes season runs non-repeatable.
 
 21. Clock for World 1. The owner found an hour per game day slow in Test World, which now runs at 15 minutes a day (96x). At that pace a season lasts about 25 real days instead of 26 weeks, a quarter passes in under a day, and an airline can go from first cash trouble to administration in about 3.5 hours, so a colleague who checks once a day can miss it. World 1 is set to 60 minutes a game day for now (season about 14 weeks, a quarter about 4 days, administration after about 14 hours of trouble); the owner will revisit it before the start.
@@ -545,8 +559,9 @@ Set 19 Nov 2026 with the owner. Each later feature unlocks per airline, inside a
 | 19 Nov | Bulk orders and leases, extras (14.6) |
 | 19 Nov | Route studies (14.7) |
 | 19 Nov | Pilots and places (14.8), before World 1 starts |
+| 19 Nov | Myna Regional and Flamingo Air fixed; slot prices by aircraft size (14.10) |
 | Test World playtest, next few days | Fix what the owner finds; watch pilots |
-| Before World 1 starts | Tune Myna Regional and Flamingo Air (item 19); confirm the clock (item 21) |
+| Before World 1 starts | Confirm the clock (item 21) |
 | World 1 start + 10 days | Cargo live (unlocks from game day 365) |
 | World 1 start + 25 days | Loyalty live (unlocks from game day 729) |
 | Season 2 | Alliances and codeshares, freighters, loyalty tiers |
