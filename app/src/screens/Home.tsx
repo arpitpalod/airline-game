@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call, supabase } from '../lib/api';
-import { useAirlineDaily, useAirlineRow, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes } from '../lib/data';
+import { useAirlineDaily, useAirlineRow, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes, useSoonDepartures } from '../lib/data';
 import { dailyNetProfit, routeStat, sumDaily } from '../lib/derive';
 import { pairKey } from '../lib/game';
 import { dayLabel, inr, num, pct } from '../lib/format';
@@ -24,6 +24,7 @@ export function Home() {
   const rd = useRouteDaily();
   const news = useNews(12);
   const pilots = usePilots();
+  const soon = useSoonDepartures(3);
   const routes = net.data?.routes ?? [];
   const rots = net.data?.rotations ?? [];
   const endpoints = routes.flatMap((r) => [r.origin, r.dest]);
@@ -86,7 +87,7 @@ export function Home() {
       const fare = Math.round((r.fare_econ * 1.05) / 50) * 50;
       alerts.push({ key: `f${r.id}`, tone: 'warn', to: `/route/${r.id}`, title: `${name} is full`,
         body: `${pct(s.lf)} of seats sold this week and ${num(s.spill)} travellers turned away. A higher fare would earn more from the same seats.`,
-        action: { label: `Raise fare 5% to ${inr(fare)}`, busy: busy === `f${r.id}`,
+        action: { label: `Raise ${world.rm ? 'base fare' : 'fare'} 5% to ${inr(fare)}`, busy: busy === `f${r.id}`,
           run: () => run(`f${r.id}`, () => call('set_fares', { p_airline: airline.id, p_route: r.id, p_fare_econ: fare, p_fare_biz: r.fare_biz }), `Fare on ${name} is now ${inr(fare)} from tomorrow`) } });
     } else if (s.lf != null && s.lf < 0.6 && s.days >= 3) {
       alerts.push({ key: `e${r.id}`, tone: 'warn', to: `/route/${r.id}`, title: `${name} is ${pct(s.lf)} full`,
@@ -94,9 +95,19 @@ export function Home() {
     }
     const theirs = (rivals.data?.[pairKey(r.origin, r.dest)] ?? []).filter((x) => x.route.airline_id !== airline.id && x.weekly > 0);
     const cheapest = theirs.sort((a, b) => a.route.fare_econ - b.route.fare_econ)[0];
-    if (cheapest && cheapest.route.fare_econ < r.fare_econ * 0.9 && (s.lf ?? 1) < 0.8) {
+    if (!world.rm && cheapest && cheapest.route.fare_econ < r.fare_econ * 0.9 && (s.lf ?? 1) < 0.8) {
       alerts.push({ key: `u${r.id}`, tone: 'info', to: `/route/${r.id}`, title: `${cheapest.airline?.name ?? 'A rival'} is cheaper on ${name}`,
         body: `${inr(cheapest.route.fare_econ)} against your ${inr(r.fare_econ)}. Match it, or hold if your flights are full enough.` });
+    }
+  }
+  // revenue management: flights leaving in the next three days with many seats unsold
+  for (const r of routes) {
+    const ds = (soon.data ?? []).filter((d) => d.route_id === r.id && d.dep_day > world.game_day);
+    const cap = ds.reduce((a, d) => a + d.cap_e + d.cap_b, 0), sold = ds.reduce((a, d) => a + d.sold_e.reduce((x, v) => x + v, 0) + d.sold_b.reduce((x, v) => x + v, 0), 0);
+    if (cap > 0 && sold / cap < 0.6) {
+      const name = `${ref.airport[r.origin]?.city ?? r.origin}–${ref.airport[r.dest]?.city ?? r.dest}`;
+      alerts.push({ key: `s${r.id}`, tone: 'info', to: `/route/${r.id}/sell`, title: `${name}: next 3 days ${pct(sold / cap)} sold`,
+        body: 'Only the dear fare levels sell this late, mostly to business travellers. Keep a cheaper level on sale later, or close a date to cheap fares earlier next time.' });
     }
   }
   const wet = fl.filter((a) => a.terms?.holding === 'wet' && a.status === 'active');

@@ -11,6 +11,7 @@ import { checks4 } from './checks_4.mjs';
 import { checks5 } from './checks_5.mjs';
 import { checks6 } from './checks_6.mjs';
 import { checks7 } from './checks_7.mjs';
+import { checks8 } from './checks_8.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -31,6 +32,8 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {
 
 // The checks written before migration 0013 expect the flat pilot cost per aircraft: their worlds run without pilots.
 await db.exec(`update public.worlds set pilots = false; alter table public.worlds alter column pilots set default false;`);
+// The checks written before migration 0018 expect the daily demand of section 4: their worlds run without revenue management.
+await db.exec(`update public.worlds set rm = false; alter table public.worlds alter column rm set default false;`);
 
 let failed = 0;
 const t = {
@@ -55,5 +58,6 @@ await checks4(t);
 await checks5(t);
 await checks6(t);
 await checks7(t);
+await checks8(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

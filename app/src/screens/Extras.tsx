@@ -34,7 +34,7 @@ function FeelLine({ f, verb }: { f: Seg3; verb: 'higher' | 'cut' }) {
 }
 
 export function Extras() {
-  const { ref, airline } = useGame();
+  const { ref, airline, world } = useGame();
   const ex = useExtras();
   const net = useRoutes();
   const markets = useMarketsFrom((net.data?.routes ?? []).flatMap((r) => [r.origin, r.dest]));
@@ -76,7 +76,7 @@ export function Extras() {
       <PageHeader back="/network" title="Extras" sub="Bag, seat, meal and priority boarding. One setting for all your routes; prices grow with each route's distance." />
       <div className="card stack">
         <div className="card-title" style={{ marginBottom: 0 }}><h2>What travellers compare on {sample.label}</h2></div>
-        <p className="small">Travellers add the extras they need to the seat fare. Your economy fare {sample.mine != null ? `is ${inr(base)}` : `would be about ${inr(base)}`}; with these extras it feels like:</p>
+        <p className="small">Travellers add the extras they need to the seat fare. Your economy {world.rm ? 'base fare' : 'fare'} {sample.mine != null ? `is ${inr(base)}` : `would be about ${inr(base)}`}; with these extras it feels like:</p>
         <table className="table">
           <thead><tr><th>Traveller</th><th className="r">Extras add</th><th className="r">Feels like</th></tr></thead>
           <tbody>

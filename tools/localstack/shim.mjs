@@ -11,7 +11,7 @@ import pg from 'pg';
 
 pg.types.setTypeParser(1700, Number);   // numeric: PostgREST sends JSON numbers
 pg.types.setTypeParser(20, Number);     // bigint
-const pool = new pg.Pool({ host: '/tmp', port: 54322, user: 'postgres', database: 'postgres', max: 8 });
+const pool = new pg.Pool({ host: '/tmp', port: Number(process.env.PGPORT || 54322), user: 'postgres', database: 'postgres', max: 8 });
 const SECRET = 'local-test-secret-not-used-anywhere-else';
 const PORT = Number(process.env.PORT || 54321);
 

@@ -272,3 +272,21 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 .map-ctl { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .map-ctl button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 18px; cursor: pointer; box-shadow: var(--shadow); }
 .map-legend { position: absolute; left: 10px; bottom: 10px; background: rgba(255,255,255,.92); border-radius: 10px; padding: 6px 10px; font-size: 12px; display: flex; gap: 12px; }
+
+/* Selling calendar (revenue management) */
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-h { font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 2px; }
+.cal-c { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; min-height: 54px;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--card); font: inherit; color: var(--ink); cursor: pointer; }
+.cal-c.off { border-color: transparent; background: transparent; color: var(--faint); font-size: 11px; cursor: default; }
+.cal-c.ahead { background: var(--info-bg); border-color: #C7DAF5; }
+.cal-c.on { background: var(--good-bg); border-color: #B5EAC9; }
+.cal-c.behind { background: var(--warn-bg); border-color: #F6CF9E; }
+.cal-c.full { background: var(--accent-soft); border-color: var(--accent); }
+.cal-d { font-size: 11px; color: var(--muted); }
+.cal-v { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-f { font-size: 10px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.cal-ev { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 3px; background: #7A3FD1; }
+.lg-k { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.lg-k.a { background: var(--accent); } .lg-k.t { background: var(--faint); } .lg-k.y { background: #7A3FD1; }
+tr.link { cursor: pointer; }

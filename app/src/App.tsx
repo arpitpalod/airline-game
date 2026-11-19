@@ -12,6 +12,7 @@ import { SetupScreen } from './screens/Setup';
 import { Home } from './screens/Home';
 import { Network } from './screens/Network';
 import { RouteDetail } from './screens/RouteDetail';
+import { Selling } from './screens/Selling';
 import { Fleet } from './screens/Fleet';
 import { AircraftDetail } from './screens/AircraftDetail';
 import { Configurator } from './screens/Configurator';
@@ -104,6 +105,7 @@ function GameProvider({ game }: { game: Game }) {
           <Route path="/" element={<Home />} />
           <Route path="/network" element={<Network />} />
           <Route path="/route/:id" element={<RouteDetail />} />
+          <Route path="/route/:id/sell" element={<Selling />} />
           <Route path="/fleet" element={<Fleet />} />
           <Route path="/aircraft/:id" element={<AircraftDetail />} />
           <Route path="/configure/:type" element={<Configurator />} />

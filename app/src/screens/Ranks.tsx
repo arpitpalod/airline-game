@@ -9,6 +9,7 @@ import { Badge, Loading, Logo, PageHeader, Seg } from '../components/ui';
 
 const EVENT_TEXT: Record<string, string> = {
   fuel_shock: 'Fuel price shock', fx_swing: 'Rupee weakens', engine_grounding: 'Engine problem grounds part of a fleet', airport_opening: 'New airport opens', duty_rules: 'Stricter pilot duty-time rules',
+  city_demand: 'City event brings more travellers',
 };
 
 export function Ranks() {
@@ -80,7 +81,7 @@ export function Ranks() {
               <div className="list">
                 {events.data!.map((e) => (
                   <div key={e.id} className="item small">
-                    <span className="grow">{EVENT_TEXT[e.kind] ?? e.kind}{e.kind === 'airport_opening' && e.payload?.city ? `: ${e.payload.city as string}` : ''}</span>
+                    <span className="grow">{EVENT_TEXT[e.kind] ?? e.kind}{e.kind === 'airport_opening' && e.payload?.city ? `: ${e.payload.city as string}` : ''}{e.kind === 'city_demand' && e.payload?.iata ? `: ${e.payload.name as string} at ${e.payload.iata as string}` : ''}</span>
                     <span className="tiny muted">day {e.starts_day}{e.ends_day ? `–${e.ends_day}` : ''}</span>
                   </div>
                 ))}

@@ -2,6 +2,8 @@
 // Used to tune Stage 2c. Usage: node season.mjs ../../supabase/migrations [--days 2366] [--scale auto] [--seed snapshot.tgz]
 // Players act once a game week through the public action functions, like a person checking the app.
 // --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
+// --rm off runs without revenue management (daily demand of section 4). --pg <database> runs on the local Postgres 16 of
+// tools/localstack (socket /tmp, port 54322) in a database already loaded with every migration: much faster for revenue management.
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 
@@ -26,7 +28,13 @@ const players = Object.entries(STRATS).flatMap(([k, s]) => s.bases.map((b, i) =>
 const SCALE = arg('--scale', 'auto') === 'auto' ? players.length / 50 : +arg('--scale');
 
 let db;
-if (SNAP) db = new PGlite({ loadDataDir: new Blob([fs.readFileSync(SNAP)]) });
+const PGDB = arg('--pg', null);
+if (PGDB) {
+  const { createRequire } = await import('module');
+  const pg = createRequire(new URL('../localstack/package.json', import.meta.url))('pg');
+  db = new pg.Client({ host: '/tmp', port: 54322, user: 'postgres', database: PGDB });
+  await db.connect();
+} else if (SNAP) db = new PGlite({ loadDataDir: new Blob([fs.readFileSync(SNAP)]) });
 else {
   db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
@@ -34,7 +42,7 @@ else {
     create function auth.uid() returns uuid language sql stable as $$
       select (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')::uuid $$;`);
 }
-for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {
+for (const f of PGDB ? [] : fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {
   if (SNAP && f < '0007') continue;
   await db.exec(fs.readFileSync(`${dir}/${f}`, 'utf8'));
 }
@@ -46,10 +54,11 @@ for (const [k, v] of Object.entries(JSON.parse(arg('--params', '{}')))) await q(
 const W = await one(`select id from public.worlds limit 1`);
 const code = await one(`select invite_code from public.world_secrets where world_id = $1`, [W]);
 const PLACES = +arg('--places', players.length);
-await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off']);
+await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4, rm = $5 where id = $2`,
+  [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off', arg('--rm', 'on') !== 'off']);
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
 await q(`select public.admin_start_world($1)`, [W]);
-console.log(`${players.length} players, demand_scale ${SCALE.toFixed(2)}, ${PLACES} places, pilots ${arg('--pilots', 'on')}, ${DAYS} days`);
+console.log(`${players.length} players, demand_scale ${SCALE.toFixed(2)}, ${PLACES} places, pilots ${arg('--pilots', 'on')}, revenue management ${arg('--rm', 'on')}, ${DAYS} days`);
 
 // round trips a week that fit 88% of the flying window
 async function tripsFor(ac, km) {
@@ -181,6 +190,17 @@ for (let d = 1; d <= DAYS; d++) {
         (select sum(ap.expats) from public.airline_pilots ap join public.airlines al on al.id = ap.airline_id where al.world_id = $1 and ap.family = pm.family) expats,
         (select string_agg(kind || ':' || n, ' ') from (select mv.kind, sum(mv.n) n from public.pilot_moves mv where mv.world_id = $1 and mv.family = pm.family and mv.start_day > $2 - 182 group by 1) k) moves_182d
       from public.pilot_market pm where pm.world_id = $1 order by pm.family`, [W, d]));
+    if (arg('--rm', 'on') !== 'off') {
+      console.log('revenue management, last 91 days: average fare / reference, load, turned away, no-shows, could not board, Flexi share');
+      console.table(await q(`select al.name, round((sum(l.revenue) / nullif(sum(l.pax_e + l.pax_b), 0) / avg(m.ref_fare))::numeric, 2) fare_ref,
+          round((sum(l.pax_e + l.pax_b) / nullif(sum(l.cap_e + l.cap_b), 0))::numeric, 3) lf,
+          round((sum(l.turned) / nullif(sum(l.pax_e + l.pax_b), 0))::numeric, 3) turned, round((sum(l.noshow) / nullif(sum(l.pax_e + l.pax_b), 0))::numeric, 3) noshow,
+          round((sum(l.denied) / nullif(sum(l.pax_e + l.pax_b), 0))::numeric, 4) denied,
+          round((sum(l.flx[1] + l.flx[2] + l.flx[3]) / nullif(sum(l.sav[1] + l.sav[2] + l.sav[3] + l.flx[1] + l.flx[2] + l.flx[3]), 0))::numeric, 3) flexi
+        from public.departure_log l join public.airlines al on al.id = l.airline_id join public.routes r on r.id = l.route_id
+        join public.markets m on m.a = least(r.origin, r.dest) and m.b = greatest(r.origin, r.dest)
+        where l.world_id = $1 group by al.id, al.name, al.is_ai order by al.is_ai, al.name`, [W]));
+    }
     const ev = await q(`select starts_day from public.events where world_id = $1 and kind = 'duty_rules'`, [W]);
     if (ev.length) console.log('duty-time rules tightened from day', ev[0].starts_day);
   }
@@ -204,5 +224,6 @@ console.table(await q(`select a.name, count(*) filter (where n.body like '%start
   from public.airlines a left join public.news n on n.airline_id = a.id and n.kind = 'route' and not n.private
   where a.is_ai group by a.id, a.name order by a.name`));
 console.log('engine log:', await q(`select game_day, message from game.engine_log limit 5`));
+if (PGDB) await db.end();
 if (arg('--save', null)) { const b = await db.dumpDataDir('gzip'); fs.writeFileSync(arg('--save'), Buffer.from(await b.arrayBuffer())); }
 process.exit(0);

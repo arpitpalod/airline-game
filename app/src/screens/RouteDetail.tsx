@@ -2,7 +2,9 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, type FleetItem } from '../lib/data';
+import { useBases, useDepartures, useFleet, useGame, useMarketFares, useMarketsFrom, useRivals, useRmCalendar, useRouteDaily, useRouteRm, useRoutes, type FleetItem } from '../lib/data';
+import { booked, dateLabel, kRs, MODE_LABEL, PACE_LABEL, PACE_TONE, paceOf, sum } from '../lib/rm';
+import type { Market, Route } from '../lib/types';
 import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct } from '../lib/format';
@@ -22,6 +24,8 @@ export function RouteDetail() {
   const route = net.data?.routes.find((r) => r.id === id);
   const markets = useMarketsFrom([...(bases.data ?? []).map((b) => b.iata), ...(route ? [route.origin, route.dest] : [])]);
   const rivals = useRivals(route ? [route.origin, route.dest] : []);
+  const deps = useDepartures(world.rm ? id : undefined);
+  const mfares = useMarketFares(world.rm ? id : undefined);
   const { run, busy } = useAction();
   const nav = useNavigate();
   const [fareE, setFareE] = useState<number | null>(null);
@@ -50,6 +54,15 @@ export function RouteDetail() {
   const hasBiz = rots.some((r) => (fl.find((a) => a.id === r.aircraft_id)?.seats_biz ?? 0) > 0);
 
   const comp = (rivals.data?.[pairKey(route.origin, route.dest)] ?? []).filter((x) => x.weekly > 0 || x.route.airline_id === airline.id);
+  // with revenue management, the cheapest economy fare each airline has on sale for the next 7 days
+  const onSale: Record<string, number> = {};
+  for (const f of mfares.data ?? []) if (f.fare_e != null && f.dep_day <= world.game_day + 7) onSale[f.route_id] = Math.min(onSale[f.route_id] ?? Infinity, f.fare_e);
+  const fareOf = (r: Route) => (world.rm ? onSale[r.id] ?? null : r.fare_econ);
+  // passengers booked on flights in the next two weeks: closing the route at short notice leaves them behind
+  const soon = (deps.data ?? []).filter((d) => d.dep_day <= world.game_day + (ref.param.rm_offload_days ?? 14));
+  const soonPax = 2 * sum(soon.map(booked));
+  const soonRev = sum(soon.map((d) => d.rev_sav + d.rev_flx + d.rev_b));
+  const soonComp = soonPax ? soonPax * Math.min((ref.param.rm_deny_mult ?? 2) * (2 * soonRev) / soonPax, ref.param.rm_deny_cap_inr ?? 10000) : 0;
   const totalSeats = comp.reduce((a, x) => a + x.seatsWeek, 0);
 
   return (
@@ -87,12 +100,12 @@ export function RouteDetail() {
             <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Competition</h2><span className="small muted">public fares and schedules</span></div>
             <div className="scroll-x">
               <table className="table">
-                <thead><tr><th>Airline</th><th className="r">Economy</th><th className="r">Trips a week</th><th className="r">Seat share</th></tr></thead>
+                <thead><tr><th>Airline</th><th className="r">{world.rm ? 'Cheapest, next 7 days' : 'Economy'}</th><th className="r">Trips a week</th><th className="r">Seat share</th></tr></thead>
                 <tbody>
-                  {comp.sort((a, b) => a.route.fare_econ - b.route.fare_econ).map((x) => (
+                  {comp.sort((a, b) => (fareOf(a.route) ?? Infinity) - (fareOf(b.route) ?? Infinity)).map((x) => (
                     <tr key={x.route.id} className={x.route.airline_id === airline.id ? 'me' : ''}>
                       <td>{x.route.airline_id === airline.id ? <strong>You</strong> : x.airline?.name ?? '—'}{x.airline?.is_ai && <div className="tiny muted">computer-run</div>}</td>
-                      <td className="r">{inr(x.route.fare_econ)}</td>
+                      <td className="r">{fareOf(x.route) != null ? inr(fareOf(x.route)) : 'sold out'}</td>
                       <td className="r">{x.weekly}</td>
                       <td className="r">{totalSeats ? pct(x.seatsWeek / totalSeats) : '–'}</td>
                     </tr>
@@ -107,6 +120,7 @@ export function RouteDetail() {
         </div>
 
         <div className="stack-lg">
+          {world.rm ? m && <SellingCard route={route} m={m} /> : (
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}><h2>Fares</h2></div>
             <div className="field">
@@ -124,6 +138,7 @@ export function RouteDetail() {
               p_airline: airline.id, p_route: route.id, p_fare_econ: fe, p_fare_biz: route.fare_biz != null ? fb : null,
             }), 'Fares saved. They count from the next game day.').then(() => { setFareE(null); setFareB(null); })}>Save fares</Button>
           </div>
+          )}
 
           <div className="card flush">
             <div className="card-title" style={{ padding: '14px 16px 0' }}>
@@ -156,6 +171,9 @@ export function RouteDetail() {
         <Sheet title="Close this route?" onClose={() => setClosing(false)}>
           <div className="stack">
             <p className="small">Its aircraft stop flying it from the next game day and become free for other routes. You can open it again later.</p>
+            {world.rm && soonPax >= 1 && (
+              <div className="card warn small">{num(soonPax)} passengers are booked on its flights in the next two weeks. They cannot fly: they get their fares back and about {inr(soonComp)} in compensation in all. Passengers on later flights are refunded without compensation.</div>
+            )}
             <Button kind="danger-solid" block busy={busy === 'close'} onClick={() => run('close', () => call('close_route', { p_airline: airline.id, p_route: route.id }), 'Route closed').then((r) => {
               if (r !== undefined) nav('/network');
             })}>Close route</Button>
@@ -248,5 +266,36 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
         )}
       </div>
     </Sheet>
+  );
+}
+
+// With revenue management: how the route sells, and the next week of flights at a glance
+function SellingCard({ route, m }: { route: Route; m: Market }) {
+  const { ref, world } = useGame();
+  const rm = useRouteRm(route.id);
+  const deps = useDepartures(route.id);
+  const cal = useRmCalendar();
+  const nav = useNavigate();
+  const sm = ref.param.season_start_month ?? 4;
+  const week = (deps.data ?? []).filter((d) => d.dep_day <= world.game_day + 7);
+  const cap = sum(week.map((d) => d.cap_e + d.cap_b)), sold = sum(week.map(booked));
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Selling</h2>{rm.data && <Badge tone="accent">{MODE_LABEL[rm.data.mode]}</Badge>}</div>
+      <div className="small">Base fare {inr(route.fare_econ)} · {(route.fare_econ / m.ref_fare).toFixed(2)}× reference {inr(m.ref_fare)}{rm.data ? ` · aiming for ${pct(rm.data.target_lf)} full` : ''}</div>
+      {week.length > 0 && rm.data ? (
+        <>
+          <div className="small">Next 7 days: <strong>{pct(cap ? sold / cap : 0)}</strong> sold</div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {week.map((d) => {
+              const p = paceOf(d, world.game_day, rm.data!, m, ref, cal.data);
+              return <Badge key={d.dep_day} tone={PACE_TONE[p.pace]}>{dateLabel(d.dep_day, sm).split(' ').slice(0, 2).join(' ')} · {d.fare_e != null ? `₹${kRs(d.fare_e)}` : PACE_LABEL.full}</Badge>;
+            })}
+          </div>
+        </>
+      ) : <p className="small muted">Flights go on sale six weeks ahead once an aircraft flies the route.</p>}
+      <p className="tiny muted">Each flight sells for six weeks at fare levels that close as the day nears; business travellers book late and pay more.</p>
+      <Button block onClick={() => nav(`/route/${route.id}/sell`)}>Manage selling</Button>
+    </div>
   );
 }

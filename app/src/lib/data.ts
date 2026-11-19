@@ -7,6 +7,7 @@ import { pairKey } from './game';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
+  Departure, DepartureLog, Festival, MarketFare, RouteRm, SegFactor, WhatIf,
 } from './types';
 
 export interface Ref {
@@ -315,5 +316,76 @@ export function useAircraftDaily() {
     queryKey: ['a', airline.id, 'aircraft_daily', world.game_day],
     queryFn: () => rows<AircraftDaily>(supabase.from('aircraft_daily').select('*').eq('airline_id', airline.id)
       .gte('game_day', Math.max(0, world.game_day - 6)).order('game_day')),
+  });
+}
+
+// ---------- Revenue management (0018) ----------
+
+export function useRouteRm(routeId: string | undefined) {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'rm', routeId], enabled: !!routeId,
+    queryFn: async () => (await rows<RouteRm>(supabase.from('route_rm').select('*').eq('route_id', routeId!)))[0] ?? null,
+  });
+}
+
+export function useDepartures(routeId: string | undefined) {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'deps', routeId, world.game_day], enabled: !!routeId,
+    queryFn: () => rows<Departure>(supabase.from('departures').select('*').eq('route_id', routeId!).order('dep_day')),
+  });
+}
+
+export function useDepartureLog(routeId: string | undefined, days = 28) {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'deplog', routeId, days, world.game_day], enabled: !!routeId,
+    queryFn: () => rows<DepartureLog>(supabase.from('departure_log').select('*').eq('route_id', routeId!)
+      .gt('dep_day', world.game_day - days).order('dep_day')),
+  });
+}
+
+// Fares on sale on the route's market, every airline and date (what any traveller can see)
+export function useMarketFares(routeId: string | undefined) {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'mfares', routeId, world.game_day], enabled: !!routeId,
+    queryFn: () => call<MarketFare[]>('market_fares', { p_route: routeId }),
+  });
+}
+
+export function useWhatIf(routeId: string | undefined) {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'whatif', routeId, world.game_day], enabled: !!routeId,
+    queryFn: () => call<WhatIf[]>('rm_whatif', { p_route: routeId }),
+  });
+}
+
+// Seasons, weekdays and festivals: what moves demand by date
+export interface RmCalendar { season: Record<number, SegFactor>; weekday: Record<number, SegFactor>; festivals: Festival[] }
+export function useRmCalendar() {
+  return useQuery({
+    queryKey: ['ref', 'rmcal'], staleTime: Infinity,
+    queryFn: async (): Promise<RmCalendar> => {
+      const [season, weekday, festivals] = await Promise.all([
+        rows<SegFactor & { month: number }>(supabase.from('season_factors').select('month,biz,lei,bud')),
+        rows<SegFactor & { dow: number }>(supabase.from('rm_weekday').select('dow,biz,lei,bud')),
+        rows<Festival>(supabase.from('rm_festivals').select('*').order('from_doy')),
+      ]);
+      return {
+        season: Object.fromEntries(season.map((x) => [x.month, x])), weekday: Object.fromEntries(weekday.map((x) => [x.dow, x])), festivals,
+      };
+    },
+  });
+}
+
+// The airline's flights on sale for the next few days, all routes
+export function useSoonDepartures(days = 3) {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'soon', days, world.game_day], enabled: world.rm,
+    queryFn: () => rows<Departure>(supabase.from('departures').select('*').eq('airline_id', airline.id).lte('dep_day', world.game_day + days)),
   });
 }

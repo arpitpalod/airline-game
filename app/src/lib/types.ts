@@ -4,7 +4,7 @@ export interface World {
   id: string; name: string; status: 'setup' | 'running' | 'paused' | 'ended';
   speed: number; started_at: string | null; paused_at: string | null; paused_seconds: number;
   game_day: number; season: number; season_days: number; demand_scale: number;
-  fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number; pilots: boolean;
+  fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number; pilots: boolean; rm: boolean;
 }
 
 export interface Airline {
@@ -44,6 +44,7 @@ export interface Rotation { aircraft_id: string; route_id: string; weekly_trips:
 export interface RouteDaily {
   route_id: string; game_day: number; airline_id: string; flights: number; seats_econ: number; seats_biz: number;
   pax_econ: number; pax_biz: number; spill: number; revenue_inr: number; var_cost_inr: number; aircraft_cost_inr: number;
+  noshow: number; denied: number;
 }
 export interface AircraftDaily {
   aircraft_id: string; game_day: number; airline_id: string; flights: number; block_h: number; seats: number; pax: number;
@@ -94,3 +95,26 @@ export interface Layout {
 }
 
 export interface Profile { user_id: string; display_name: string; is_admin: boolean }
+
+// Revenue management (migration 0018). Figures on departures are each way; seats and bookings can be fractions.
+export type RmMode = 'manual' | 'curve' | 'optimise';
+export interface RouteRm {
+  route_id: string; airline_id: string; mode: RmMode;
+  e_mult: number[]; e_close: number[]; e_limit: number[]; b_mult: number[]; b_close: number[]; b_limit: number[];
+  flex: number | null; target_lf: number; pace: number; outlook: number; overbook: number;
+}
+export interface Departure {
+  route_id: string; dep_day: number; opened: number; cap_e: number; cap_b: number; sold_e: number[]; sold_b: number[];
+  sav: number[]; flx: number[]; bkb: number; rev_sav: number; rev_flx: number; rev_b: number; lvl_e: number; lvl_b: number;
+  fare_e: number | null; fare_b: number | null; turned_e: number; turned_b: number; min_e: number; min_b: number;
+  curve: (number | null)[];
+}
+export interface DepartureLog {
+  route_id: string; dep_day: number; opened: number; cap_e: number; cap_b: number; sold_e: number[]; sold_b: number[];
+  sav: number[]; flx: number[]; bkb: number; pax_e: number; pax_b: number; noshow: number; denied: number; cancelled: number; turned: number;
+  revenue: number; compensation: number; curve: (number | null)[];
+}
+export interface MarketFare { airline_id: string; route_id: string; dep_day: number; fare_e: number | null; fare_b: number | null }
+export interface WhatIf { mult: number; fare: number; demand: number; pax: number; revenue: number }
+export interface Festival { id: string; name: string; from_doy: number; to_doy: number; scope: 'all' | 'domestic' | 'international'; biz: number; lei: number; bud: number }
+export interface SegFactor { biz: number; lei: number; bud: number }

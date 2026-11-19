@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.12, 19 Nov 2026 (money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.13, 19 Nov 2026 (revenue management, section 19; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -160,7 +160,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 
 ## 8. Revenue
 
-- One fare per cabin per route in the MVP, changeable any time, effective next game day.
+- One fare per cabin per route in the MVP, changeable any time, effective next game day. Replaced by revenue management in worlds that have it (section 19): the fare becomes the route's base fare, and flights sell over six weeks at fare levels that are multiples of it.
 - The route screen shows the reference fare, rivals' public fares and frequencies, and yesterday's load factor and spill.
 - Extras (ancillaries): four extras each sold at a price or included free, set once for the whole network (section 14.6). Replaced the flat 8% of ticket revenue.
 
@@ -570,6 +570,8 @@ Set 19 Nov 2026 with the owner. Each later feature unlocks per airline, inside a
 | 19 Nov | Route studies (14.7) |
 | 19 Nov | Pilots and places (14.8), before World 1 starts |
 | 19 Nov | Myna Regional and Flamingo Air fixed; slot prices by aircraft size (14.10) |
+| 19 Nov | Revenue management, phase 1 (section 19). World 1 waits for it |
+| After World 1 starts | Revenue management, phase 2: connecting passengers and network optimising (19.6) |
 | Test World playtest, next few days | Fix what the owner finds; watch pilots |
 | Before World 1 starts | Confirm the clock (item 21) |
 | World 1 start + 10 days | Cargo live (unlocks from game day 365) |
@@ -614,3 +616,57 @@ Airlines Manager (Playrion) offers real-time and fast modes, an R&D centre with 
 ### 18.4 Pilots
 
 Built: section 14.8.
+
+## 19. Revenue management (migration 0018)
+
+Asked for by the owner on 19 Nov 2026 as the game's main draw: "people just play to understand how revenue management works". Concepts to keep (owner): seasonality, pricing by days before departure, pricing by kind of traveller (business, leisure, visiting friends and relatives), booking against an ideal curve, network flows, inventory control. Players choose how each route is run, it needs their input, and there is always more to gain because the market keeps moving. Words on screen are plain, with the airline term in small print where it helps.
+
+Phase 1 is everything except network flows: passengers who change planes do not exist yet, and they belong with hubs and network planning (19.6). Worlds have `rm` (on for every world from 0018; the checks written earlier run with it off and keep the daily demand of section 4).
+
+### 19.1 How a flight sells
+
+- **On sale six weeks ahead** (`rm_horizon` 42, G). Each route has one row per departure day (`departures`, private), each way, as averages over the week's flights like the rest of the engine. Seats follow the schedule as it is each day.
+- **Who books when.** Each traveller type books on its own curve: the share booking n days before the flight falls as `exp(-n / tau)`, with tau 6 days for business, 16 for leisure and 24 for family-visit and budget travellers (G). About 69% of business travellers book in the last week, against 38% of leisure and 31% of family and budget.
+- **Seasons and dates.** A date's potential travellers by type are the market's (section 4) x month season x weekday (`rm_weekday`; game day 1 is a Monday; business peaks Monday and Friday, leisure Friday and Saturday) x festivals (`rm_festivals`: Republic Day weekend, Holi, Eid on international routes, Independence Day weekend, Durga Puja, Diwali, Christmas and New Year) x city events x the date's own swing (log-normal, spread 0.12, fixed by a hash of world, market and date so every airline sees the same) x growth.
+- **City events.** With chance 0.03 a day (G) a big Indian city announces a summit, a final or a festival 14 to 35 days ahead: 30 to 80% more business or leisure travellers to and from it for 2 to 4 days, with news.
+- **Choice.** Each day's bookers choose among the fares on sale with the nested logit of section 4 (same coefficients); a sold-out cabin is not offered, so its travellers go to rivals or do not fly, and are counted as turned away (spill). A route takes at most its seats left, with overbooking.
+- **A route going on sale for the first time** (a new route, or every route on a world's first day with revenue management) is filled as if it had been on sale for six weeks, a week at a time. A route gaining seats sells them from then on.
+- **Flying.** On the day, no-shows (Saver: business 6%, leisure and family 2.5%, fare kept; Flexi and business cabin 6 points more, fare refunded) (G). Business travellers who do not fit their cabin take free economy seats and pay the economy fare. Anyone else over the seats cannot board and gets the fare back. Those over the seats scheduled (overbooking, or seats cut at short notice) also get twice the fare, at most Rs 10,000 each (G, after the DGCA rule), booked with distribution and service, and the brand target falls by 40 x their share of passengers. Those whose flight was cancelled on the day (a grounded aircraft, no crew) are refunded only: cancellations already cost brand (section 10), and in the first season run compensating them too drove airlines short of crew into a spiral of lost cash, quitting pilots and more cancellations. The departure moves to `departure_log` (91 days, private) with its bookings by level and type, curve, no-shows, passengers left behind or refunded, revenue and compensation.
+- **Schedule changes.** Cutting seats on a flight more than 14 days away (G) refunds the passengers who no longer fit, with no cost. Nearer flights keep their bookings and leave the extra passengers behind on the day, with compensation. Closing a route works the same way; the close screen says how many passengers and roughly how much.
+
+### 19.2 What the player sets, route by route (`route_rm`, `set_rm`)
+
+- **Fare levels (buckets).** Six economy levels and three business, each a multiple of the route's base fare (`routes.fare_econ`, `fare_biz`), so moving the base fare moves the whole ladder. Defaults (game values `rm_e_mult_*`, `rm_b_mult_*`, copied to each new route): economy 0.75, 0.85, 0.95, 1.05, 1.15, 1.30; business 0.85, 1, 1.20.
+- **Days-before-departure pricing (fences).** Each level sells until a number of days before the flight; cheaper levels stop no later than dearer ones, and the top level sells to the end. Default: levels 1 to 4 stop 21, 14, 7 and 2 days before; business levels 1 and 2 stop 7 and 2 days before. Travellers see the cheapest level still on sale.
+- **Pricing by kind of traveller.** Nobody can ask why a traveller flies, so the game does what airlines do: early fares for those who plan, late fares for those who cannot, and Flexi. Flexi costs more than Saver (default 15% of the reference fare) and can be changed and refunded; business travellers value that at 25% of the reference fare, leisure at 4%, family and budget at 2% (G). A traveller takes Flexi when it is worth more than its price (a logistic split, spread 0.15, G); Flexi raises an airline's appeal only for those who value it above its price.
+- **How the route is run** (the owner's "booking curve based / network based / everything" choice; network modes come with 19.6):
+  - *Booking curve* (default): the player sets a target load. The target curve is the target load x seats x the share of a flight's travellers expected to have booked by that day, from each type's curve weighted by the market's mix that day. Each day the game moves the level on sale one step (or 2 or 3: "pace") dearer when bookings run more than 8% and 3% of the seats ahead of the curve, cheaper when behind.
+  - *Optimiser*: each day it picks the level that earns most from the seats left: fare x least(travellers still to come who would choose it at that fare against rivals' fares now x the player's outlook 0.7 to 1.3, seats left).
+  - *Manual* (inventory control): seat limits for each cheap level, nested (the share of seats that may sell at that level or cheaper); when reached, the next level opens.
+  - In every mode the player can raise the cheapest level allowed on chosen dates (`set_rm_dates`), say for a festival.
+- **Overbooking**: 0 to 15% (default 2%).
+- Network-wide: the way of selling, target, overbooking and Flexi can be copied to every route at once (`set_rm` with no route). Fare levels are set route by route.
+
+### 19.3 What the player sees
+
+- **Route screen**: a Selling card (way of selling, base fare, the next 7 days coloured by pace and their fares), and rivals' cheapest fares on sale for the next 7 days (`market_fares`, which any player can call: fares on sale are public, as on any travel site).
+- **Selling screen**, three tabs:
+  - *Next 6 weeks*: a calendar of every date on sale, coloured selling fast / on target / selling slowly / sold out against the target curve, with how full it is and the cheapest fare on sale, and a dot for festivals and city events. A date opens its booking curve against the target and the typical curve of the same weekday, who has booked by type and Saver or Flexi, its fare and rivals' fares that date, and the cheapest level allowed on it.
+  - *Fares*: the way of selling and its settings, the fare ladder (fare, sells until, and seat limits in manual mode), Flexi, overbooking, and a price-and-demand chart (`rm_whatif`): what an average flight on sale would carry and earn at one base fare from 0.6 to 2 times today's, against rivals' fares on sale now, showing elasticity and where revenue peaks.
+  - *Results* (28 days): average fare, load against target, travellers turned away (spill), seats flown empty (spoilage), no-shows, passengers left behind and compensation, economy seats by level, who flew by type and Saver or Flexi, and advice in plain words (cheap seats sold early while travellers were turned away later; empty flights; Flexi priced above or far below what business travellers value; overbooking too much or too little).
+- **Ranks**: city events in the events list.
+
+### 19.4 Computer-run airlines
+
+They sell to the booking curve with the default ladder and settings, and keep moving their base fares as before (14.3). A player who tunes ladders, fences, Flexi, overbooking and dates should beat them; a player who leaves the defaults earns about what the old one-fare model gave.
+
+### 19.5 Tuning and checks
+
+- **Neutral by default.** The first ladder (0.70 to 1.45, level 4 closing 3 days out) cost airlines 5 to 15 points of margin in a season run: late fares that steep lost the late leisure and family travellers, and business travellers too. With the defaults above, paired one-year runs with the random shocks off (18 simulated players, `season.mjs --pg`) give players -18.0% against -19.2% for the one-fare model and computer-run airlines 0.0% against -2.2%, at similar revenue: revenue management with default settings is about neutral, so the tuning of section 14.3 holds and the gains are left for players who tune ladders, fences, Flexi, overbooking and dates. Year-one results swing by about 5 points from run to run with the random shocks on, so compare paired runs.
+- **Season run** (full season, shocks on, defaults): see the as-built notes in the pull request.
+- **Speed.** A day of six computer-run airlines (1,900 departures on sale) takes about 0.35 s on Postgres 16, against 0.06 s before. The engine functions run with JIT off (it cost a second a day planning these statements) and the small helper functions have no search_path setting so the planner inlines them.
+- **Checks.** `checks_8.mjs`: 30 checks (on sale for six weeks; first flight filled; fences; curves by type; Flexi by type; revenue identity; no-shows; booking-curve mode reacts both ways; manual seat limits; optimiser within fences; date floors; validation; overbooking and compensation; seat cuts refunded or compensated; public fares; what-if; city events; money by aircraft adds up; a running world switched on). The app test covers the calendar, a date, the fare ladder, the mode, and results.
+
+### 19.6 Phase 2: network flows (not built)
+
+Passengers who connect at an airline's hub (A to C via B) on both legs; through fares; the network optimiser values a seat on each flight (a bid price: what an empty seat is still expected to earn) and accepts a connecting passenger only when the whole-trip fare covers the seats it takes on every leg (displacement). Modes then: booking curve, network, or both. Goes with hubs and banks of flights in network planning.
