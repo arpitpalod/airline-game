@@ -20,6 +20,7 @@ insert into public.game_params (key, num, note) values
 ('rm_noshow_lei', 0.025, 'the same for leisure travellers'),
 ('rm_noshow_bud', 0.025, 'the same for budget and family-visit travellers'),
 ('rm_noshow_flex', 0.06, 'Flexi and business-cabin ticket holders miss their flight this much more often, and get their fare back'),
+('rm_noshow_sd', 0.35, 'no-shows on a departure swing around those rates, log-normal with this spread: overbooking is a bet'),
 ('rm_deny_mult', 2, 'a passenger who cannot board gets the fare back and this many times the fare in compensation'),
 ('rm_deny_cap_inr', 10000, 'compensation is at most this much a passenger'),
 ('rm_deny_brand_k', 40, 'brand target falls by this x the share of passengers who could not board an overbooked flight'),
@@ -33,7 +34,7 @@ insert into public.game_params (key, num, note) values
 ('rm_log_days', 91, 'flown departures are kept this many days'),
 -- a new route's selling settings (each route's own copy can then be changed)
 ('rm_target_lf', 0.85, 'new route: load to aim for'),
-('rm_overbook', 0.02, 'new route: overbooking, share of seats'),
+('rm_overbook', 0.04, 'new route: overbooking, share of seats'),
 ('rm_e_mult_1', 0.75, 'new route: economy fare level 1 as a multiple of the base fare'),
 ('rm_e_mult_2', 0.85, 'level 2'), ('rm_e_mult_3', 0.95, 'level 3'), ('rm_e_mult_4', 1.05, 'level 4'),
 ('rm_e_mult_5', 1.15, 'level 5'), ('rm_e_mult_6', 1.30, 'level 6'),
@@ -97,7 +98,7 @@ create table public.route_rm (
   target_lf  numeric not null default 0.85 check (target_lf between 0.5 and 1.1),   -- booking-curve mode: load to aim for
   pace       int not null default 1 check (pace between 1 and 3),                   -- booking-curve mode: levels moved a day
   outlook    numeric not null default 1 check (outlook between 0.7 and 1.3),        -- optimiser: its demand forecast x this
-  overbook   numeric not null default 0.02 check (overbook >= 0)
+  overbook   numeric not null default 0.04 check (overbook >= 0)
 );
 create index route_rm_airline_idx on public.route_rm (airline_id);
 
@@ -586,7 +587,7 @@ declare
 begin
   select * into g from jsonb_to_record((select jsonb_object_agg(key, num) from public.game_params)) as x(
     rm_noshow_biz numeric, rm_noshow_lei numeric, rm_noshow_bud numeric, rm_noshow_flex numeric,
-    rm_deny_mult numeric, rm_deny_cap_inr numeric, anc_biz_share numeric, biz_fare_mult numeric, rm_log_days numeric);
+    rm_deny_mult numeric, rm_deny_cap_inr numeric, anc_biz_share numeric, biz_fare_mult numeric, rm_log_days numeric, rm_noshow_sd numeric);
 
   create temp table if not exists _fly (
     route_id uuid primary key, airline_id uuid, a text, b text, km int, ref float8, brand float8,
@@ -607,18 +608,21 @@ begin
          coalesce(c.block_h, m.km / 750.0 + 0.5), r.fare_econ, coalesce(r.fare_biz, round(m.ref_fare * g.biz_fare_mult)),
          ax.yield, ax.cost,
          d.sav[1] + d.sav[2] + d.sav[3], d.flx[1] + d.flx[2] + d.flx[3], d.bkb,
-         d.sav[1] * (1 - g.rm_noshow_biz) + d.sav[2] * (1 - g.rm_noshow_lei) + d.sav[3] * (1 - g.rm_noshow_bud)
-           + d.flx[1] * (1 - g.rm_noshow_biz - g.rm_noshow_flex) + d.flx[2] * (1 - g.rm_noshow_lei - g.rm_noshow_flex)
-           + d.flx[3] * (1 - g.rm_noshow_bud - g.rm_noshow_flex),
-         d.bkb * (1 - g.rm_noshow_biz - g.rm_noshow_flex),
-         d.flx[1] * (g.rm_noshow_biz + g.rm_noshow_flex) + d.flx[2] * (g.rm_noshow_lei + g.rm_noshow_flex)
-           + d.flx[3] * (g.rm_noshow_bud + g.rm_noshow_flex),
+         d.sav[1] * (1 - q.q * g.rm_noshow_biz) + d.sav[2] * (1 - q.q * g.rm_noshow_lei) + d.sav[3] * (1 - q.q * g.rm_noshow_bud)
+           + d.flx[1] * (1 - q.q * (g.rm_noshow_biz + g.rm_noshow_flex)) + d.flx[2] * (1 - q.q * (g.rm_noshow_lei + g.rm_noshow_flex))
+           + d.flx[3] * (1 - q.q * (g.rm_noshow_bud + g.rm_noshow_flex)),
+         d.bkb * (1 - q.q * (g.rm_noshow_biz + g.rm_noshow_flex)),
+         q.q * (d.flx[1] * (g.rm_noshow_biz + g.rm_noshow_flex) + d.flx[2] * (g.rm_noshow_lei + g.rm_noshow_flex)
+                + d.flx[3] * (g.rm_noshow_bud + g.rm_noshow_flex)),
          d.rev_sav, d.rev_flx, d.rev_b, d.turned_e + d.turned_b
     from public.departures d
     join public.routes r on r.id = d.route_id
     join public.airlines al on al.id = d.airline_id
     join public.markets m on m.a = least(r.origin, r.dest) and m.b = greatest(r.origin, r.dest)
     cross join lateral game.anc_terms(d.airline_id) ax
+    -- this departure's no-show swing, fixed by its route and date
+    cross join lateral (select least(3, exp(g.rm_noshow_sd * game.hash_normal(d.route_id::text || d.dep_day::text || 'noshow')
+                                            - g.rm_noshow_sd * g.rm_noshow_sd / 2)) as q) q
     left join (select route_id, sum(f) as f, coalesce(sum(f) filter (where seats_b > 0), 0) as f_b,
                       sum(f * seats_e) as cap_e, sum(f * seats_b) as cap_b,
                       sum(f * seats_e * comf_e) / nullif(sum(f * seats_e), 0) as comf_e,

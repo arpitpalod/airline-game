@@ -4,7 +4,7 @@ export async function checks8(t) {
   await as(null);
   console.log('Revenue management (0018)');
   await q(`update public.game_params set num = 0 where key in ('demand_noise_sd', 'event_fuel_prob_day', 'event_fx_prob_day',
-    'event_engine_prob_day', 'ground_prob_day', 'event_duty_prob_day', 'pilot_quit_year', 'rm_date_sd', 'rm_city_prob')`);
+    'event_engine_prob_day', 'ground_prob_day', 'event_duty_prob_day', 'pilot_quit_year', 'rm_date_sd', 'rm_city_prob', 'rm_noshow_sd')`);
   const W = await one(`with w as (insert into public.worlds (name, demand_scale, max_airlines, pilots, rm) values ('Test 8', 0.5, 25, false, true) returning id)
     insert into public.world_secrets (world_id, invite_code) select id, 'test8000' from w returning world_id`);
   const P = await one(`select public.found_airline('test8000', 'Sell Air', 'SA', 'DEL')`);
