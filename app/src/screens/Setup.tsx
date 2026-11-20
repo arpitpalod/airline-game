@@ -1,13 +1,19 @@
 // Found an airline: name, code, first base and colour. Comes with a wet-leased aircraft that flies from day 1.
 import { useMemo, useState } from 'react';
 import { call, INVITE_KEY, supabase } from '../lib/api';
-import { useRefData } from '../lib/data';
+import { useRefData, useWorldParams, useWorldRow } from '../lib/data';
 import { LIVERY_COLORS } from '../lib/game';
 import { inr, num } from '../lib/format';
 import { Badge, Button, Field, Icon, Logo } from '../components/ui';
 
-export function SetupScreen({ uid, email, onDone, onCancel }: { uid: string; email: string; onDone: (id: string) => void; onCancel?: () => void }) {
+export function SetupScreen({ uid, email, worldId, onDone, onCancel }: {
+  uid: string; email: string; worldId?: string; onDone: (id: string) => void; onCancel?: () => void;
+}) {
   const ref = useRefData(true).data!;
+  // Joining from the Worlds screen (or a world just founded): its own rules set the money (0027). From an invite
+  // code alone the world is not known here, so the game's usual values are shown.
+  const joining = useWorldRow(worldId).data;
+  const wp = useWorldParams(worldId).data;
   const [invite, setInvite] = useState(localStorage.getItem(INVITE_KEY) ?? '');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -27,7 +33,7 @@ export function SetupScreen({ uid, email, onDone, onCancel }: { uid: string; ema
     .filter((a) => !q || `${a.city} ${a.iata}`.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (b.pax_m ?? 0) - (a.pax_m ?? 0)), [ref.airports, q]);
   const chosen = base ? ref.airport[base] : null;
-  const p = ref.param;
+  const p = { ...ref.param, ...(wp ?? {}) };
 
   async function found() {
     setBusy(true); setError(null);
@@ -50,7 +56,7 @@ export function SetupScreen({ uid, email, onDone, onCancel }: { uid: string; ema
       <div className="page-head">
         <div className="grow">
           <h1>Found your airline</h1>
-          <div className="sub">Signed in as {email}. {onCancel ? '' : 'This takes a minute.'}</div>
+          <div className="sub">{joining ? `Joining ${joining.name}. ` : ''}Signed in as {email}. {onCancel ? '' : 'This takes a minute.'}</div>
         </div>
         {onCancel ? <Button kind="secondary" size="sm" onClick={onCancel}>Cancel</Button>
           : <Button kind="ghost" size="sm" onClick={() => supabase.auth.signOut()}>Sign out</Button>}
@@ -58,7 +64,7 @@ export function SetupScreen({ uid, email, onDone, onCancel }: { uid: string; ema
       <div className="split">
         <div className="stack-lg">
           <div className="card stack">
-            <Field label="Invite code"><input className="input" value={invite} onChange={(e) => setInvite(e.target.value)} autoCapitalize="none" /></Field>
+            {!joining && <Field label="Invite code"><input className="input" value={invite} onChange={(e) => setInvite(e.target.value)} autoCapitalize="none" /></Field>}
             <Field label="Airline name" hint="3 to 30 characters. Fictional names only.">
               <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={30} placeholder="e.g. Tarang Air" />
             </Field>

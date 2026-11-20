@@ -1,12 +1,13 @@
 // Home: what changed last week and the decisions waiting, each with a one-tap fix or a link to the screen that fixes it.
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { call, supabase } from '../lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { call, rows, supabase } from '../lib/api';
 import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useDemandEvents, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutePlans, useRoutes, useStrategies } from '../lib/data';
 import { effectText, touches, upcomingEvents } from '../lib/events';
 import { byWeek, routeStat, sumDaily } from '../lib/derive';
-import { pairKey } from '../lib/game';
-import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, weekLabel, weekOf, weeks } from '../lib/format';
+import { clock, pairKey } from '../lib/game';
+import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, realTime, weekLabel, weekOf, weeks } from '../lib/format';
 import type { Route } from '../lib/types';
 import { useOpsDecisions } from './Ops';
 import { ProfitBars } from '../components/charts';
@@ -149,6 +150,7 @@ export function Home() {
       <div className="split">
         <div className="stack-lg">
 
+          {world.turn_mode === 'ready' && world.status === 'running' && world.game_day >= world.prelaunch_weeks * 7 && <ReadyCard />}
           {flyingIn > 0 && <GetReady ffd={row.first_flight_day} weeksLeft={Math.ceil(flyingIn / 7)} />}
           {!started && flyingIn <= 0 && <GettingStarted hasRoute={routes.length > 0} hasRotation={rots.length > 0} />}
 
@@ -195,6 +197,39 @@ export function Home() {
         </div>
       </div>
       {menu && <MoreMenu onClose={() => setMenu(false)} />}
+    </div>
+  );
+}
+
+/** When all are ready (0027): the next week is played as soon as every player has tapped Ready, and at the latest when
+ *  the clock runs out. */
+function ReadyCard() {
+  const { airline, world } = useGame();
+  const { run, busy } = useAction();
+  const players = useQuery({
+    queryKey: ['w', world.id, 'ready', world.game_day], refetchInterval: 20_000,
+    queryFn: () => rows<{ id: string; ready_day: number | null }>(supabase.from('airlines').select('id,ready_day')
+      .eq('world_id', world.id).eq('is_ai', false).eq('status', 'active')),
+  });
+  const all = players.data ?? [];
+  const ready = all.filter((a) => (a.ready_day ?? -1) >= world.game_day);
+  const me = ready.some((a) => a.id === airline.id);
+  const c = clock(world);
+  const set = (on: boolean) => run('ready', () => call('set_ready', { p_airline: airline.id, p_ready: on }), on ? 'Ready. The week is played once everyone is.' : 'Not ready: the week waits for you or the clock.');
+  return (
+    <div className={`card ${me ? 'good' : 'info'} stack`}>
+      <div className="row">
+        <div className="grow">
+          <h3>Week {currentWeek(world)} · {ready.length} of {all.length} ready</h3>
+          <p className="small" style={{ marginTop: 4 }}>
+            {me ? 'You are ready. ' : 'Tap Ready when your decisions for the week are made. '}
+            The week is played as soon as everyone is ready{c.nextInSec != null ? `, and at the latest in about ${realTime(c.nextInSec)}` : ''}.
+          </p>
+        </div>
+      </div>
+      <div>{me
+        ? <Button size="sm" kind="secondary" busy={busy === 'ready'} onClick={() => set(false)}>Not ready yet</Button>
+        : <Button size="sm" busy={busy === 'ready'} onClick={() => set(true)}>Ready</Button>}</div>
     </div>
   );
 }
@@ -331,8 +366,9 @@ function GettingStarted({ hasRoute, hasRotation }: { hasRoute: boolean; hasRotat
 }
 
 function MoreMenu({ onClose }: { onClose: () => void }) {
-  const { profile, myAirlines, airline, switchAirline } = useGame();
+  const { profile, myAirlines, airline, switchAirline, world, uid } = useGame();
   const nav = useNavigate();
+  const runs = profile?.is_admin || (world.founder_id != null && world.founder_id === uid);
   const go = (to: string) => { onClose(); nav(to); };
   return (
     <Sheet title="More" onClose={onClose}>
@@ -342,7 +378,8 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           <div className="list">
             <div className="item link" onClick={() => go('/market')}><Icon name="market" /><span className="grow">Get aircraft</span><Icon name="right" /></div>
             <div className="item link" onClick={() => go('/ranks')}><Icon name="trophy" /><span className="grow">Leaderboard and news</span><Icon name="right" /></div>
-            {profile?.is_admin && <div className="item link" onClick={() => go('/admin')}><Icon name="shield" /><span className="grow">Admin</span><Icon name="right" /></div>}
+            <div className="item link" onClick={() => go('/worlds')}><Icon name="globe" /><span className="grow">Worlds</span><Icon name="right" /></div>
+            {runs && <div className="item link" onClick={() => go('/admin')}><Icon name="shield" /><span className="grow">{profile?.is_admin ? 'Admin' : 'Your world'}</span><Icon name="right" /></div>}
           </div>
         </div>
         {myAirlines.length > 0 && (
@@ -350,7 +387,7 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
             <label>Airline</label>
             <select className="input" value={airline.id} onChange={(e) => { onClose(); switchAirline(e.target.value); }}>
               {myAirlines.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              <option value="new">Join another world…</option>
+              <option value="new">Join with an invite code…</option>
             </select>
           </div>
         )}

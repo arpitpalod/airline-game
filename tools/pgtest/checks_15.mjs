@@ -41,7 +41,7 @@ export async function checks15(t) {
     await q('begin');
     await q(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: PL, role: 'authenticated' })]);
     await q('set local role authenticated');
-    seen = Number(await one(`select count(*) from public.world_params`));
+    seen = Number(await one(`select count(*) from public.world_params where not public`));
   } catch (e) { seen = e.message; }
   await q('rollback');
   await as(null);
