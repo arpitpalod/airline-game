@@ -8,7 +8,7 @@ import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
-  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, RoutePlan, RouteWeek, Strategy,
+  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy,
 } from './types';
 
 export interface Ref {
@@ -377,6 +377,19 @@ export function useRoutePlans() {
     queryKey: ['a', airline.id, 'route_plans'],
     queryFn: async () => Object.fromEntries((await rows<RoutePlan>(supabase.from('route_plans').select('*').eq('airline_id', airline.id)))
       .map((p) => [p.route_id, p.strategy])) as Record<string, RoutePlan['strategy']>,
+  });
+}
+
+/** Where each international route sells its tickets (0026). */
+export function usePosOptions() {
+  return useQuery({ queryKey: ['pos_options'], staleTime: 600_000, queryFn: () => rows<PosOption>(supabase.from('pos_options').select('*').order('sort')) });
+}
+export function useSellWhere() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'route_plans', 'sell_where'],
+    queryFn: async () => Object.fromEntries((await rows<{ route_id: string; sell_where: PosKey }>(supabase.from('route_plans')
+      .select('route_id,sell_where').eq('airline_id', airline.id))).map((p) => [p.route_id, p.sell_where])) as Record<string, PosKey>,
   });
 }
 

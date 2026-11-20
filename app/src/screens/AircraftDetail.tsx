@@ -99,7 +99,8 @@ export function AircraftDetail() {
               {terms?.holding === 'owned' && <>
                 <span>Bought for</span><span>{usd(terms.price_usd)}</span>
                 {terms.loan_usd ? <><span>Loan left</span><span>{usd(terms.loan_usd)}</span><span>Repaid a week</span><span>{usd((terms.loan_pay_usd_day ?? 0) * 7)}</span></> : null}
-                {ac.status === 'delivering' && <><span>Paying with</span><span>{terms.finance_loan ? 'an aircraft loan' : terms.pay_plan === 'slb' ? 'sale and leaseback' : 'cash'}</span></>}
+                {terms.loan_inr ? <><span>Rupee loan left</span><span>{inr(terms.loan_inr)}</span><span>Repaid a week</span><span>{inr((terms.loan_pay_inr_day ?? 0) * 7)}</span></> : null}
+                {ac.status === 'delivering' && <><span>Paying with</span><span>{terms.finance_loan ? (terms.loan_ccy === 'inr' ? 'a rupee loan' : 'a dollar loan') : terms.pay_plan === 'slb' ? 'sale and leaseback' : 'cash'}</span></>}
               </>}
             </div>
           </div>
@@ -119,7 +120,7 @@ export function AircraftDetail() {
             <p className="small">
               {terms?.holding === 'lease' && 'The rent for the rest of the lease is owed, up to the deposit you paid. What is left of the deposit comes back. The aircraft goes back to the lessor pool, where a rival can lease it.'}
               {terms?.holding === 'wet' && 'The wet lease ends from this week. Nothing more is owed.'}
-              {terms?.holding === 'owned' && `It sells at ${pct(ref.param.sale_discount)} of its book value${terms.loan_usd ? ', and the rest of its loan is repaid from the proceeds' : ''}. It goes to the lessor pool.`}
+              {terms?.holding === 'owned' && `It sells at ${pct(ref.param.sale_discount)} of its book value${terms.loan_usd || terms.loan_inr ? ', and the rest of its loan is repaid from the proceeds' : ''}. It goes to the lessor pool.`}
               {' '}Its routes lose this aircraft at once.
             </p>
             <Button kind="danger-solid" block busy={busy === 'ret'} onClick={() => run('ret', () => call<{ cash_inr: number; pnl_inr: number }>('return_aircraft', { p_airline: airline.id, p_aircraft: ac.id }),

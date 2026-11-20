@@ -40,6 +40,8 @@ export interface PracticeInput {
   season: number; demandScale: number; p: Record<string, number>;
   /** fares are priced from the reference fare times this (0024: fares follow a third of fuel cost); travellers judge by the reference */
   fareIndex?: number;
+  /** 0026: where an international route sells: reach among travellers starting abroad (added to every traveller's view) */
+  posBonus?: number;
 }
 export interface PracticeWeek { n: number; fare: number; booked: number; target: number }
 export interface PracticeResult { key: StrategyKey; revenue: number; sold: number; load: number; fare: number; turned: number; empty: number; weeks: PracticeWeek[] }
@@ -94,7 +96,7 @@ export function practice(s: Strategy, x: PracticeInput): PracticeResult {
     let want = 0;
     for (const g of segs) {
       const A = 7 * g.n * x.demandScale * x.season * arr[g.k][n];
-      const xm = room > 0.5 ? Math.exp((g.a - g.pr * (fare / ref) + g.fq * Math.log(1 + x.tripsDay)) / lam) : 0;
+      const xm = room > 0.5 ? Math.exp((g.a - g.pr * (fare / ref) + g.fq * Math.log(1 + x.tripsDay) + (x.posBonus ?? 0)) / lam) : 0;
       const xr = x.rivalSeats > 0 ? Math.exp((g.a - g.pr * ((x.rivalFare ?? ref) / ref) + g.fq * Math.log(1 + x.rivalTripsDay)) / lam) : 0;
       const S = xm + xr;
       const k = S > 0 ? Math.pow(S, lam - 1) / (1 + Math.pow(S, lam)) : 0;

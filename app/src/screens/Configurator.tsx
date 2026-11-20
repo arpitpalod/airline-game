@@ -118,7 +118,7 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
   const q = market.data?.find((x) => x.type_id === typeId);
   const okBases = (bases.data ?? []).filter((b) => (ref.airport[b.iata]?.runway_class ?? 0) >= t.runway_class);
   const [base, setBase] = useState<string | null>(null);
-  const [pay, setPay] = useState<'cash' | 'loan' | 'slb'>('loan');
+  const [pay, setPay] = useState<'cash' | 'loan' | 'loan_inr' | 'slb'>('loan');
   const [count, setCount] = useState(1);
   const { run, busy } = useAction();
   const nav = useNavigate();
@@ -127,6 +127,9 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
   const priceInr = q.order_price_usd * world.fx_inr_usd;
   const dep = priceInr * (ref.param.order_deposit_share ?? 0.15);
   const wait = q.order_delivery_day - world.game_day;
+  // a year's interest on the balance borrowed, at today's rate (0026: a rupee loan costs more, with no currency risk)
+  const borrowed = (priceInr - dep) * count;
+  const intUsd = borrowed * (ref.param.loan_rate_year ?? 0.08), intInr = borrowed * (ref.param.loan_rate_inr_year ?? 0.105);
   return (
     <div className="card stack">
       <h2>Order new</h2>
@@ -140,10 +143,11 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
       </div>
       {count > 1 && <p className="tiny muted">Each aircraft takes the next free delivery slot, so the later ones may arrive a little later. All are ordered or none is.</p>}
       <Field label="Pay the balance on delivery with">
-        <Seg block value={pay} onChange={setPay} options={[{ value: 'loan', label: 'Loan' }, { value: 'cash', label: 'Cash' }, { value: 'slb', label: 'Leaseback' }]} />
+        <Seg block value={pay} onChange={setPay} options={[{ value: 'loan', label: '$ loan' }, { value: 'loan_inr', label: '₹ loan' }, { value: 'cash', label: 'Cash' }, { value: 'slb', label: 'Leaseback' }]} />
       </Field>
       <p className="tiny muted">
-        {pay === 'loan' && `An aircraft loan in dollars at ${pct(ref.param.loan_rate_year)} a year, repaid daily over ${ref.param.loan_years} years. You own the aircraft.`}
+        {pay === 'loan' && `A dollar loan at ${pct(ref.param.loan_rate_year)} a year, repaid daily over ${ref.param.loan_years} years: about ${inr(intUsd)} interest in the first year at today's rate. Cheaper, but what you owe grows in rupees when the rupee weakens: 10% weaker adds ${inr(borrowed * 0.1)}. You own the aircraft.`}
+        {pay === 'loan_inr' && `A rupee loan at ${pct(ref.param.loan_rate_inr_year ?? 0.105)} a year, repaid daily over ${ref.param.loan_years} years: about ${inr(intInr)} interest in the first year, ${inr(intInr - intUsd)} more than the dollar loan, but no currency risk. You own the aircraft.`}
         {pay === 'cash' && 'Pay the full balance from cash on delivery. You own the aircraft and pay no interest. If cash is short that day, it becomes a sale and leaseback.'}
         {pay === 'slb' && `A lessor buys it on delivery and leases it back to you at ${pct(ref.param.slb_rent_mult)} of the usual rent. No big payment, but you never own it.`}
       </p>

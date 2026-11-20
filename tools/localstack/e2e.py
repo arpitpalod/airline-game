@@ -128,6 +128,14 @@ with sync_playwright() as p:
     shot(page, 'p05e-style')
     page.get_by_role('button', name='Fly this way').click()
     toast_ok(page, 'High utilisation from')
+    print('ops: hedge a quarter of each week\'s dollars')
+    go(page, '/ops/dollars')
+    page.get_by_text('The rupee this week').wait_for()
+    page.get_by_role('radio', name='25%').click()
+    shot(page, 'p05f-dollars')
+    page.get_by_role('button', name='Hedge this way').click()
+    toast_ok(page, 'Hedging 25%')
+    assert sql("select usd_hedge_share from airline_ops o join airlines a on a.id = o.airline_id where a.name = 'Tarang Air'") == '0.25'
 
     print('the pre-launch: 13 weeks with nothing flying')
     go(page, '/')
@@ -153,6 +161,7 @@ with sync_playwright() as p:
     shot(page, 'p06-home')
     go(page, '/ops')
     expect(page.locator('.card', has_text='Cost per seat-km')).to_contain_text('Industry median')
+    expect(page.locator('.fx-strip')).to_contain_text('of your costs')
     shot(page, 'p06b-ops')
 
     go(page, '/network'); page.wait_for_timeout(600)
@@ -169,6 +178,22 @@ with sync_playwright() as p:
     expect(page.locator('.card', has_text='Seats on sale')).to_contain_text('Seats left')
     expect(page.locator('.card', has_text='Competition')).to_contain_text('Recent moves')
     shot(page, 'p07b-selling')
+    print('currency: an international route sells mostly abroad')
+    dom_url = page.url
+    far = sql("select case when m.a = 'DEL' then m.b else m.a end from markets m where m.intl and 'DEL' in (m.a, m.b) and m.km < 2500 order by m.n_biz + m.n_lei + m.n_bud desc limit 1")
+    rid = sql(f"select public.open_route((select id from airlines where name = 'Tarang Air'), 'DEL', '{far}')")
+    go(page, f'/route/{rid}'); page.reload(); page.wait_for_load_state('networkidle')
+    page.get_by_text('Where you sell tickets').wait_for()
+    page.locator('.card', has_text='How it sells').get_by_role('tab', name='Abroad').click()
+    expect(page.locator('.card', has_text='How it sells')).to_contain_text('Sales team abroad')
+    shot(page, 'p07c-sell-abroad')
+    page.get_by_role('button', name='Sell mostly abroad').click()
+    toast_ok(page, 'Tickets sell mostly abroad')
+    assert sql(f"select sell_where from route_plans where route_id = '{rid}'") == 'abroad'
+    sql(f"select public.close_route((select id from airlines where name = 'Tarang Air'), '{rid}')")
+    page.goto(dom_url); page.wait_for_load_state('networkidle')
+    page.get_by_text('How full, last 4 weeks').wait_for()
+
     print('insights: last flights, how it compares, what works where, practice flight')
     page.get_by_text('Last flights').wait_for()
     expect(page.locator('.card', has_text='Last flights')).to_contain_text('flew of')
@@ -216,8 +241,11 @@ with sync_playwright() as p:
     page.wait_for_timeout(500)
     shot(page, 'p10-configurator')
     page.get_by_role('button', name='More aircraft to order').click()
+    page.get_by_role('tab', name='₹ loan').click()
+    expect(page.locator('.card', has_text='Order new')).to_contain_text('no currency risk')
     page.get_by_role('button', name='Order 2 for').click()
     toast_ok(page, 'aircraft ordered')
+    assert sql("select count(*) from aircraft_terms t join airlines a on a.id = t.airline_id where a.name = 'Tarang Air' and t.loan_ccy = 'inr' and t.finance_loan") == '2'
 
     print('extras: include meals, raise the bag price')
     go(page, '/extras')

@@ -33,6 +33,8 @@ export interface Terms {
   lease_end_day: number | null; deposit_inr: number; price_usd: number | null; start_day: number | null;
   wet_usd_bh: number | null; ordered_day: number | null; pay_plan: 'cash' | 'slb' | null;
   finance_loan: boolean; loan_usd: number | null; loan_pay_usd_day: number | null;
+  /** 0026: an order's loan currency, and a rupee loan's balance */
+  loan_ccy: 'usd' | 'inr'; loan_inr: number; loan_pay_inr_day: number | null;
 }
 
 export interface Route {
@@ -47,7 +49,10 @@ export interface Strategy {
   biz_early_mult: number; biz_late_mult: number; min_mult: number; max_mult: number; step: number; band: number;
   follow_gap: number; overbook: number;
 }
-export interface RoutePlan { route_id: string; airline_id: string; strategy: StrategyKey }
+export interface RoutePlan { route_id: string; airline_id: string; strategy: StrategyKey; sell_where: PosKey }
+/** Where an international route sells its tickets (0026, G). */
+export type PosKey = 'india' | 'both' | 'abroad';
+export interface PosOption { key: PosKey; sort: number; name: string; blurb: string; usd_share: number; sales_cost_share: number; util_bonus: number }
 /** One route's seats on sale for one flight week; figures each way for the whole week. */
 export interface RouteWeek {
   route_id: string; week: number; airline_id: string; trips: number; seats_e: number; seats_b: number;
@@ -78,6 +83,8 @@ export interface AirlineDaily {
   brand: number | null; otp: number | null; flights: number; cancelled: number; loan_repaid: number;
   refunds_inr: number;
   fuel_kg: number; hedge_inr: number; groundings: number;
+  /** 0026: dollar-linked costs in dollars and as booked, what dollar hedging saved, and the effect of the rupee against Rs 90 */
+  usd_cost_usd: number; usd_cost_inr: number; usd_hedge_inr: number; fx_effect_inr: number;
 }
 
 export interface Txn { id: number; airline_id: string; game_day: number; kind: string; amount_inr: number; pnl_inr: number; note: string }
@@ -137,7 +144,7 @@ export interface OpStyle {
 }
 export interface AirlineOps {
   airline_id: string; maint_plan: MaintPlan['key']; maint_next: MaintPlan['key'] | null; maint_next_day: number | null;
-  maint_locked_until: number; op_style: OpStyle['key']; hedge_share: number;
+  maint_locked_until: number; op_style: OpStyle['key']; hedge_share: number; usd_hedge_share: number;
 }
 export interface CostBenchmark { world_id: string; line: string; week: number; airlines: number; median_inr_ask: number }
 /** What each option would do for the airline now (public.ops_preview). */
@@ -145,6 +152,8 @@ export interface OpsPreview {
   day: number; aircraft: number; avg_age: number; plan: MaintPlan['key']; plan_next: MaintPlan['key'] | null; plan_next_day: number | null;
   locked_until: number; style: OpStyle['key']; hedge_share: number; fuel_price: number; fuel_normal: number;
   hedge_premium: number; hedge_lead_weeks: number; hedges: { week: number; share: number; price: number }[];
+  usd: { share: number; rate: number; ref: number; premium: number; step: number; max: number; week_usd: number;
+         bought: { week: number; share: number; rate: number }[] };
   plans: { key: MaintPlan['key']; cost_week: number; fixed_week: number; groundings_qtr: number; days_qtr: number; otp_delta: number;
            lock_weeks: number; setup_inr: number; setup_weeks: number }[];
   styles: { key: OpStyle['key']; fuel_kg_week: number; fuel_week: number; other_week: number; trips_week: number; trips_fit: number;
