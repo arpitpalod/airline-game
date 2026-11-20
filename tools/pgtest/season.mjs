@@ -1,7 +1,7 @@
 // Full-season simulation: the computer-run airlines plus simulated players with different strategies.
 // Used to tune Stage 2c. Usage: node season.mjs ../../supabase/migrations [--days 2366] [--scale auto] [--seed snapshot.tgz]
 // Players act once a game week through the public action functions, like a person checking the app.
-// --selling off runs the daily fares of section 4 instead of selling 26 weeks ahead. --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
+// --params '{"key": value}' sets game values; --wparams the world's own. --selling off runs the daily fares of section 4 instead of selling 26 weeks ahead. --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 
@@ -48,6 +48,8 @@ const code = await one(`select invite_code from public.world_secrets where world
 const PLACES = +arg('--places', players.length);
 await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4, prelaunch_weeks = 0, selling = $5 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off', arg('--selling', 'on') !== 'off']);
 await q(`update public.airlines set first_flight_day = 1 where world_id = $1`, [W]);
+// --wparams '{"key": value}': the world's own values (world_params), e.g. to switch off the banks' debt limit
+for (const [k, v] of Object.entries(JSON.parse(arg('--wparams', '{}')))) await q(`insert into public.world_params (world_id, key, num) values ($1, $2, $3) on conflict (world_id, key) do update set num = excluded.num`, [W, k, v]);
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
 await q(`update public.game_params set num = 0 where key = 'start_first_week'`);   // the season loop plays every week itself
 await q(`select public.admin_start_world($1)`, [W]);
