@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call, supabase } from '../lib/api';
-import { useAirlineDaily, useAirlineRow, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes } from '../lib/data';
+import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes } from '../lib/data';
 import { byWeek, routeStat, sumDaily } from '../lib/derive';
 import { pairKey } from '../lib/game';
 import { arrivalWeek, currentWeek, dateLabel, inr, num, pct, weekLabel, weekOf, weeks } from '../lib/format';
@@ -21,6 +21,8 @@ export function Home() {
   const net = useRoutes();
   const bases = useBases();
   const daily = useAirlineDaily(84);
+  const aw = useAirlineWeeks();
+  const advance = [...(aw.data ?? [])].sort((a, b) => b.week - a.week)[0]?.advance_inr ?? null;
   const rd = useRouteDaily();
   const news = useNews(12);
   const pilots = usePilots();
@@ -44,7 +46,7 @@ export function Home() {
   const f = fin.data;
   if (f && f.insolvent_days > 0) {
     alerts.push({ key: 'insolvent', tone: 'bad', title: `Out of cash for ${f.insolvent_days} days`, to: '/money',
-      body: `Cash is below zero and the credit line is used up. After ${weeks(ref.param.insolvency_days)} the airline goes into administration. Cut costs, return aircraft or raise fares.` });
+      body: `Cash is below zero and the credit line is used up. After ${weeks(ref.param.insolvency_days)} the airline goes into administration. Cut costs, return aircraft or sell differently.` });
   }
   if (world.pilots && pilots.data) {
     for (const fm of pilots.data.families) {
@@ -88,18 +90,18 @@ export function Home() {
     if (s.lf != null && s.lf >= 0.95 && s.days >= 2) {
       const fare = Math.round((r.fare_econ * 1.05) / 50) * 50;
       alerts.push({ key: `f${r.id}`, tone: 'warn', to: `/route/${r.id}`, title: `${name} is full`,
-        body: `${pct(s.lf)} of seats sold this week and ${num(s.spill)} travellers turned away. A higher fare would earn more from the same seats.`,
-        action: { label: `Raise fare 5% to ${inr(fare)}`, busy: busy === `f${r.id}`,
-          run: () => run(`f${r.id}`, () => call('set_fares', { p_airline: airline.id, p_route: r.id, p_fare_econ: fare, p_fare_biz: r.fare_biz }), `Fare on ${name} is now ${inr(fare)} from tomorrow`) } });
+        body: `${pct(s.lf)} of seats sold last week and ${num(s.spill)} travellers turned away. ${world.selling ? 'Top fares would earn more from the same seats.' : 'A higher fare would earn more from the same seats.'}`,
+        action: world.selling ? undefined : { label: `Raise fare 5% to ${inr(fare)}`, busy: busy === `f${r.id}`,
+          run: () => run(`f${r.id}`, () => call('set_fares', { p_airline: airline.id, p_route: r.id, p_fare_econ: fare, p_fare_biz: r.fare_biz }), `Fare on ${name} is now ${inr(fare)} from this week`) } });
     } else if (s.lf != null && s.lf < 0.6 && s.days >= 3) {
       alerts.push({ key: `e${r.id}`, tone: 'warn', to: `/route/${r.id}`, title: `${name} is ${pct(s.lf)} full`,
-        body: 'Empty seats cost almost as much as full ones. Try a lower fare, fewer flights, or a smaller aircraft.' });
+        body: `Empty seats cost almost as much as full ones. Try ${world.selling ? 'Fill every seat' : 'a lower fare'}, fewer flights, or a smaller aircraft.` });
     }
     const theirs = (rivals.data?.[pairKey(r.origin, r.dest)] ?? []).filter((x) => x.route.airline_id !== airline.id && x.weekly > 0);
     const cheapest = theirs.sort((a, b) => a.route.fare_econ - b.route.fare_econ)[0];
     if (cheapest && cheapest.route.fare_econ < r.fare_econ * 0.9 && (s.lf ?? 1) < 0.8) {
       alerts.push({ key: `u${r.id}`, tone: 'info', to: `/route/${r.id}`, title: `${cheapest.airline?.name ?? 'A rival'} is cheaper on ${name}`,
-        body: `${inr(cheapest.route.fare_econ)} against your ${inr(r.fare_econ)}. Match it, or hold if your flights are full enough.` });
+        body: `${inr(cheapest.route.fare_econ)} against your ${inr(r.fare_econ)}. ${world.selling ? 'Follow the market matches rivals' : 'Match it'}, or hold if your flights are full enough.` });
     }
   }
   const wet = fl.filter((a) => a.terms?.holding === 'wet' && a.status === 'active');
@@ -123,7 +125,8 @@ export function Home() {
       </div>
 
       <div className="grid4-d">
-        <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} note={f && f.debt_inr > 0 ? `${inr(f.debt_inr)} borrowed` : 'No borrowing'} />
+        <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} note={[f && f.debt_inr > 0 ? `${inr(f.debt_inr)} borrowed` : 'No borrowing',
+          world.selling && advance != null ? `advance sales ${inr(advance)}` : null].filter(Boolean).join(' · ')} />
         <Kpi label="Last week's profit" value={week.days ? inr(week.netProfit, { sign: true }) : '–'} tone={week.days ? (week.netProfit >= 0 ? 'good' : 'bad') : undefined}
           note={week.days ? `${num(week.pax)} passengers` : flyingIn > 0 ? `First flights in ${weeks(Math.ceil(flyingIn / 7) * 7)}` : 'No flights yet'} />
         <Kpi label="Seats sold, last week" value={week.ask > 0 ? pct(week.rpk / week.ask) : '–'} note="Healthy is 80 to 88%" />
@@ -145,7 +148,7 @@ export function Home() {
           <section className="stack">
             <h2>Needs your attention {alerts.length > 0 && <Badge tone="warn">{alerts.length}</Badge>}</h2>
             {loading ? <Loading h={90} /> : alerts.length === 0 ? (
-              <div className="card small muted row"><Icon name="check" size={18} /> Nothing urgent. Check your routes for fares worth testing.</div>
+              <div className="card small muted row"><Icon name="check" size={18} /> Nothing urgent. Check how your routes are selling.</div>
             ) : alerts.map((a) => (
               <div key={a.key} className={`card ${a.tone}`}>
                 <div className="row" style={{ alignItems: 'flex-start' }}>
@@ -193,7 +196,7 @@ function GettingStarted({ hasRoute, hasRotation }: { hasRoute: boolean; hasRotat
   const steps = [
     { done: hasRoute, t: 'Open your first route from your base', to: '/network' },
     { done: hasRotation, t: 'Put your aircraft on it: choose how many round trips a week', to: '/fleet' },
-    { done: false, t: 'Come back after your first week of flying to see how full the flights were, then adjust the fare', to: '/network' },
+    { done: false, t: 'Come back after your first week of flying to see how full the flights were, then adjust how the route sells', to: '/network' },
   ];
   const next = steps.find((s) => !s.done)!;
   return (

@@ -8,6 +8,7 @@ import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from 
 import { inr, num, pct, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
+import { MarketMoves, SeatsOnSale, StrategyCard } from '../components/Selling';
 import { useAction } from '../components/toast';
 import { Badge, Button, Empty, Kpi, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -57,7 +58,7 @@ export function RouteDetail() {
       <PageHeader back="/network" title={`${A.city} – ${B.city}`}
         sub={`${route.origin}–${route.dest} · ${m ? `${num(m.km)} km` : ''}${m?.intl ? ' · international' : ''} · opened week ${weekOf(route.opened_day)}`} />
       <div className="grid4-d">
-        <Kpi label="Seats sold, last week" value={s7.lf != null ? pct(s7.lf) : '–'} note={s7.lf == null ? 'No flights yet' : s7.lf >= 0.95 ? 'Full: room to raise the fare' : s7.lf < 0.6 ? 'Many empty seats' : 'Healthy is 80 to 88%'} />
+        <Kpi label="Seats sold, last week" value={s7.lf != null ? pct(s7.lf) : '–'} note={s7.lf == null ? 'No flights yet' : s7.lf >= 0.95 ? (world.selling ? 'Full: try Top fares' : 'Full: room to raise the fare') : s7.lf < 0.6 ? 'Many empty seats' : 'Healthy is 80 to 88%'} />
         <Kpi label="Passengers a week" value={num(perWeek(s7.pax))} note={`${num(perWeek(s7.spill))} turned away`} />
         <Kpi label="Revenue a week" value={inr(perWeek(s7.revenue))} />
         <Kpi label="Flight profit a week" value={inr(perWeek(s7.revenue - s7.varCost), { sign: true })} tone={s7.revenue - s7.varCost >= 0 ? 'good' : 'bad'}
@@ -79,12 +80,14 @@ export function RouteDetail() {
 
       <div className="split">
         <div className="stack-lg">
+          {world.selling && <SeatsOnSale route={route} />}
           <div className="card">
             <div className="card-title"><h2>How full, last 4 weeks</h2></div>
             <LoadChart points={series} />
           </div>
           <div className="card flush">
             <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Competition</h2><span className="small muted">public fares and schedules</span></div>
+            {world.selling && <MarketMoves route={route} airlines={comp.filter((x) => x.weekly > 0).length} />}
             <div className="scroll-x">
               <table className="table">
                 <thead><tr><th>Airline</th><th className="r">Economy</th><th className="r">Trips a week</th><th className="r">Seat share</th></tr></thead>
@@ -107,6 +110,7 @@ export function RouteDetail() {
         </div>
 
         <div className="stack-lg">
+          {world.selling ? <StrategyCard route={route} /> : (
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}><h2>Fares</h2></div>
             <div className="field">
@@ -124,7 +128,7 @@ export function RouteDetail() {
               p_airline: airline.id, p_route: route.id, p_fare_econ: fe, p_fare_biz: route.fare_biz != null ? fb : null,
             }), 'Fares saved. They count from this week.').then(() => { setFareE(null); setFareB(null); })}>Save fares</Button>
           </div>
-
+          )}
           <div className="card flush">
             <div className="card-title" style={{ padding: '14px 16px 0' }}>
               <h2>Aircraft on this route</h2>

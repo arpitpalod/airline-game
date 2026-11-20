@@ -1,15 +1,16 @@
 // Money: cash and the credit line, marketing spend, profit and loss, and one-off payments.
 import { useState } from 'react';
 import { call } from '../lib/api';
-import { useAirlineDaily, useAirlineRow, useFinance, useGame, useQuarterlies, useTxns } from '../lib/data';
+import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useFinance, useFleet, useGame, useQuarterlies, useTxns } from '../lib/data';
 import { byWeek, COST_LINES, sumDaily } from '../lib/derive';
 import { inr, num, pct, weekOf, weeks } from '../lib/format';
-import type { AirlineDaily } from '../lib/types';
+import type { AirlineDaily, AirlineWeek, Txn } from '../lib/types';
 import { ProfitBars } from '../components/charts';
 import { useAction } from '../components/toast';
 import { Button, Field, Kpi, Loading, PageHeader, Seg, Stepper } from '../components/ui';
 
 type Period = '7' | '28' | '91';
+type Tab = 'profit' | 'cash' | 'balance';
 
 export function Money() {
   const { ref, airline, world } = useGame();
@@ -20,6 +21,7 @@ export function Money() {
   const q = useQuarterlies();
   const { run, busy } = useAction();
   const [period, setPeriod] = useState<Period>('7');
+  const [tab, setTab] = useState<Tab>('profit');
   const [amount, setAmount] = useState('10');
   const [mkt, setMkt] = useState<number | null>(null);
   const f = fin.data;
@@ -41,8 +43,12 @@ export function Money() {
         <Kpi label="Seats sold" value={s.ask ? pct(s.rpk / s.ask) : '–'} note={period === '7' ? 'last week' : `last ${weeks(Number(period))}`} />
       </div>
 
+      {world.selling && <Seg value={tab} onChange={setTab} block options={[{ value: 'profit', label: 'Profit' }, { value: 'cash', label: 'Cash flow' }, { value: 'balance', label: 'Balance sheet' }]} />}
       <div className="split">
         <div className="stack-lg">
+          {tab === 'cash' && <CashFlow days={days} txns={txns.data ?? []} />}
+          {tab === 'balance' && <BalanceSheet />}
+          {tab === 'profit' && <>
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}>
               <h2>Profit and loss</h2>
@@ -73,6 +79,7 @@ export function Money() {
             <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest</span></div>
             <ProfitBars points={byWeek(days).map((w) => ({ day: w.week, v: w.netProfit }))} />
           </div>
+          </>}
         </div>
 
         <div className="stack-lg">
@@ -119,6 +126,92 @@ export function Money() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Cash flow by week (selling worlds): tickets are paid for when sold, so cash and profit part ways.
+const CASH_COSTS: (keyof AirlineDaily)[] = ['c_fuel', 'c_crew', 'c_maint', 'c_airport', 'c_rent', 'c_slots', 'c_dist', 'c_marketing', 'c_overhead', 'c_interest', 'loan_repaid'];
+function CashFlow({ days, txns }: { days: AirlineDaily[]; txns: Txn[] }) {
+  const { world } = useGame();
+  const aw = useAirlineWeeks();
+  const last = Math.floor(world.game_day / 7);
+  const cols = [last - 2, last - 1, last].filter((w) => w >= 1);
+  if (aw.isLoading) return <div className="card"><Loading /></div>;
+  const wk = (w: number) => {
+    const a: AirlineWeek | undefined = (aw.data ?? []).find((x) => x.week === w);
+    const ds = days.filter((d) => weekOf(d.game_day) === w);
+    const sum = (k: keyof AirlineDaily) => ds.reduce((s, d) => s + Number(d[k] ?? 0), 0);
+    const sales = a?.sales_inr ?? 0;
+    const extras = sum('rev_anc');
+    const refunds = (a?.refunds_inr ?? 0) + (a?.comp_inr ?? 0) + sum('refunds_inr');
+    const costs = CASH_COSTS.reduce((s, k) => s + sum(k), 0);
+    const other = txns.filter((x) => weekOf(Math.max(1, x.game_day)) === w && x.kind !== 'denied_boarding').reduce((s, x) => s + Number(x.amount_inr), 0);
+    return { sales, extras, refunds, costs, other, net: sales + extras - refunds - costs + other, advance: a?.advance_inr ?? null };
+  };
+  const data = cols.map((w) => ({ w, ...wk(w) }));
+  const row = (label: string, k: keyof ReturnType<typeof wk>, neg = false, strong = false) => (
+    <tr className={strong ? 'strong' : ''}><td className={strong ? '' : 'muted'}>{label}</td>
+      {data.map((d) => { const v = Number(d[k] ?? 0); return <td key={d.w} style={{ whiteSpace: 'nowrap' }} className={`r ${strong ? (v >= 0 ? 'good' : 'bad') : 'muted'}`}>{neg && v ? '−' : ''}{inr(Math.abs(v), { sign: strong })}</td>; })}</tr>
+  );
+  return (
+    <div className="card flush">
+      <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Cash flow</h2><span className="small muted">by week</span></div>
+      {data.length === 0 ? <p className="small muted" style={{ padding: '0 16px 14px' }}>Cash flow appears after the first week.</p> : (
+        <div className="scroll-x">
+          <table className="table">
+            <thead><tr><th /> {data.map((d) => <th key={d.w} className="r">Wk {d.w}</th>)}</tr></thead>
+            <tbody>
+              {row('Tickets sold', 'sales')}
+              {row('Extras', 'extras')}
+              {row('Refunds and compensation', 'refunds', true)}
+              {row('Running costs and interest', 'costs', true)}
+              {row('Aircraft, deposits and other', 'other')}
+              {row('Net cash', 'net', false, true)}
+              <tr><td className="muted">Advance sales at the end</td>{data.map((d) => <td key={d.w} style={{ whiteSpace: 'nowrap' }} className="r muted">{d.advance != null ? inr(d.advance) : '–'}</td>)}</tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="tiny muted" style={{ padding: '0 16px 14px' }}>Tickets are paid for when they are sold, up to 26 weeks before the flight. Revenue counts when the flight flies, so a week's profit and its cash differ. Advance sales are tickets sold for flights still to come.</p>
+    </div>
+  );
+}
+
+// What the airline owns and owes, now. Net worth here is the one the quarterly ranking uses.
+function BalanceSheet() {
+  const { ref, world } = useGame();
+  const fin = useFinance();
+  const fleet = useFleet();
+  const aw = useAirlineWeeks();
+  if (!fin.data || fleet.isLoading || aw.isLoading) return <div className="card"><Loading /></div>;
+  const f = fin.data;
+  const terms = (fleet.data ?? []).map((a) => a.terms).filter((t): t is NonNullable<typeof t> => !!t);
+  const book = terms.filter((t) => t.holding === 'owned' && t.ordered_day == null && t.price_usd)
+    .reduce((s, t) => s + t.price_usd! * world.fx_inr_usd * Math.max(ref.param.book_value_floor, 1 - ref.param.depreciation_year * Math.max(0, world.game_day - (t.start_day ?? world.game_day)) / 364), 0);
+  const deposits = terms.reduce((s, t) => s + Number(t.deposit_inr ?? 0), 0);
+  const loans = terms.reduce((s, t) => s + Number(t.loan_usd ?? 0) * world.fx_inr_usd, 0);
+  const latest = [...(aw.data ?? [])].sort((a, b) => b.week - a.week)[0];
+  const advance = latest?.advance_inr ?? 0;
+  const assets = f.cash_inr + book + deposits;
+  const owed = advance + f.debt_inr + loans;
+  return (
+    <div className="card flush">
+      <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Balance sheet</h2><span className="small muted">now</span></div>
+      <table className="table">
+        <tbody>
+          <tr><td className="muted">Cash</td><td className="r">{inr(f.cash_inr)}</td></tr>
+          <tr><td className="muted">Aircraft you own (book value)</td><td className="r">{inr(book)}</td></tr>
+          <tr><td className="muted">Deposits with lessors and makers</td><td className="r">{inr(deposits)}</td></tr>
+          <tr className="strong"><td>What you own</td><td className="r">{inr(assets)}</td></tr>
+          <tr><td className="muted">Advance sales (flights still to fly)</td><td className="r">{inr(advance)}</td></tr>
+          <tr><td className="muted">Credit line used</td><td className="r">{inr(f.debt_inr)}</td></tr>
+          <tr><td className="muted">Aircraft loans</td><td className="r">{inr(loans)}</td></tr>
+          <tr className="strong"><td>What you owe</td><td className="r">{inr(owed)}</td></tr>
+          <tr className="strong"><td>Net worth</td><td className={`r ${assets - owed >= 0 ? 'good' : 'bad'}`}>{inr(assets - owed, { sign: true })}</td></tr>
+        </tbody>
+      </table>
+      <p className="tiny muted" style={{ padding: '0 16px 14px' }}>Net worth is what the quarterly ranking counts, with five times the last four quarters' profit.</p>
     </div>
   );
 }

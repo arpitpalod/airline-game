@@ -7,6 +7,7 @@ import { pairKey } from './game';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
+  AirlineWeek, MarketMove, MarketWatch, RoutePlan, RouteWeek, Strategy,
 } from './types';
 
 export interface Ref {
@@ -315,5 +316,56 @@ export function useAircraftDaily() {
     queryKey: ['a', airline.id, 'aircraft_daily', world.game_day],
     queryFn: () => rows<AircraftDaily>(supabase.from('aircraft_daily').select('*').eq('airline_id', airline.id)
       .gte('game_day', Math.max(0, world.game_day - 6)).order('game_day')),
+  });
+}
+
+// ---------- Selling ahead (migration 0019) ----------
+
+export function useStrategies() {
+  return useQuery({
+    queryKey: ['strategies'], staleTime: 60_000,
+    queryFn: () => rows<Strategy>(supabase.from('rm_strategies').select('*').order('sort')),
+  });
+}
+
+export function useRoutePlans() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'route_plans'],
+    queryFn: async () => Object.fromEntries((await rows<RoutePlan>(supabase.from('route_plans').select('*').eq('airline_id', airline.id)))
+      .map((p) => [p.route_id, p.strategy])) as Record<string, RoutePlan['strategy']>,
+  });
+}
+
+/** A route's flight weeks: the last 13 flown and the 26 on sale. */
+export function useRouteWeeks(routeId: string | undefined) {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'route_weeks', routeId, world.game_day], enabled: !!routeId,
+    queryFn: () => rows<RouteWeek>(supabase.from('route_weeks').select('*').eq('route_id', routeId!).order('week')),
+  });
+}
+
+/** Ticket money week by week (last 13 weeks). */
+export function useAirlineWeeks() {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'airline_weeks', world.game_day],
+    queryFn: () => rows<AirlineWeek>(supabase.from('airline_weeks').select('*').eq('airline_id', airline.id)
+      .gte('week', Math.max(1, Math.floor(world.game_day / 7) - 12)).order('week')),
+  });
+}
+
+/** What every airline offers on one market, and what changed lately. */
+export function useMarketWatch(a: string | undefined, b: string | undefined) {
+  const { world } = useGame();
+  const [x, y] = [a ?? '', b ?? ''].sort();
+  return useQuery({
+    queryKey: ['w', world.id, 'watch', x, y, world.game_day], enabled: !!a && !!b,
+    queryFn: async () => ({
+      watch: await rows<MarketWatch>(supabase.from('market_watch').select('*').eq('world_id', world.id).eq('a', x).eq('b', y)),
+      moves: await rows<MarketMove>(supabase.from('market_moves').select('*').eq('world_id', world.id).eq('a', x).eq('b', y)
+        .order('week', { ascending: false }).limit(20)),
+    }),
   });
 }

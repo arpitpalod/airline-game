@@ -2,7 +2,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { call } from '../lib/api';
-import { useGame, useWorldAirlines } from '../lib/data';
+import { useGame, useStrategies, useWorldAirlines } from '../lib/data';
+import type { Strategy } from '../lib/types';
 import { clock, inPrelaunch } from '../lib/game';
 import { currentWeek, num, realTime, weekHours, weekLabel } from '../lib/format';
 import { useToast } from '../components/toast';
@@ -70,6 +71,7 @@ export function Admin() {
           {world.status !== 'ended' && <PlacesControl />}
         </div>
       </div>
+      <StrategiesAdmin />
       {confirm && (
         <Sheet title={confirm === 'start' ? 'Start the world?' : confirm === 'pause' ? 'Pause the world?' : 'Resume the world?'} onClose={() => setConfirm(null)}>
           <div className="stack">
@@ -148,6 +150,60 @@ function PlacesControl() {
           await qc.invalidateQueries({ queryKey: ['world', world.id] });
         } catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
       }}>Change places</Button>
+    </div>
+  );
+}
+
+// The four selling strategies (all worlds). Fares are multiples of the reference fare (business: of the business
+// reference); the engine moves them by "step" a week when sales run more than "band" ahead of or behind the target load.
+const STRAT_FIELDS: { k: keyof Strategy; label: string }[] = [
+  { k: 'target_lf', label: 'Target load' }, { k: 'early_mult', label: 'Fare 26 wk out' }, { k: 'late_mult', label: 'Fare in the week' },
+  { k: 'biz_early_mult', label: 'Business 26 wk out' }, { k: 'biz_late_mult', label: 'Business in the week' },
+  { k: 'min_mult', label: 'Lowest' }, { k: 'max_mult', label: 'Highest' }, { k: 'step', label: 'Step a week' },
+  { k: 'band', label: 'Band' }, { k: 'follow_gap', label: 'Follow gap' }, { k: 'overbook', label: 'Overbooking' },
+];
+function StrategiesAdmin() {
+  const st = useStrategies();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [edit, setEdit] = useState<Record<string, Record<string, string>>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!st.data) return null;
+  return (
+    <div className="card flush">
+      <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Selling strategies</h2><span className="small muted">all worlds</span></div>
+      <p className="tiny muted" style={{ padding: '0 16px' }}>Fares are multiples of the reference fare. Each week the engine moves a flight week's fares by the step when sales run more than the band ahead of or behind the target load. Changes count from the next week of selling.</p>
+      <div className="scroll-x">
+        <table className="table">
+          <thead><tr><th>Strategy</th>{STRAT_FIELDS.map((f) => <th key={f.k} className="r">{f.label}</th>)}<th /></tr></thead>
+          <tbody>
+            {st.data.map((x) => {
+              const e = edit[x.key] ?? {};
+              const dirty = Object.keys(e).length > 0;
+              return (
+                <tr key={x.key}>
+                  <td className="strong">{x.name}</td>
+                  {STRAT_FIELDS.map((f) => (
+                    <td key={f.k} className="r">
+                      <input className="input num" style={{ width: 72, height: 32 }} inputMode="decimal" aria-label={`${x.name} ${f.label}`}
+                        value={e[f.k] ?? String(x[f.k])} onChange={(ev) => setEdit({ ...edit, [x.key]: { ...e, [f.k]: ev.target.value } })} />
+                    </td>
+                  ))}
+                  <td><Button size="sm" kind="secondary" disabled={!dirty} busy={busy === x.key} onClick={async () => {
+                    setBusy(x.key);
+                    try {
+                      await call('admin_set_strategy', { p_key: x.key, p_values: Object.fromEntries(Object.entries(e).map(([k, v]) => [k, Number(v)])) });
+                      toast(`${x.name} saved`);
+                      setEdit({ ...edit, [x.key]: {} });
+                      await qc.invalidateQueries({ queryKey: ['strategies'] });
+                    } catch (er) { toast((er as Error).message, 'error'); } finally { setBusy(null); }
+                  }}>Save</Button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

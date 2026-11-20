@@ -5,7 +5,7 @@ export interface World {
   speed: number; started_at: string | null; paused_at: string | null; paused_seconds: number;
   game_day: number; season: number; season_days: number; demand_scale: number;
   fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number; pilots: boolean;
-  prelaunch_weeks: number; prelaunch_minutes: number; start_date: string;
+  prelaunch_weeks: number; prelaunch_minutes: number; start_date: string; selling: boolean;
 }
 
 export interface Airline {
@@ -37,8 +37,27 @@ export interface Terms {
 
 export interface Route {
   id: string; world_id: string; airline_id: string; origin: string; dest: string; fare_econ: number;
-  fare_biz: number | null; opened_day: number; status: 'open' | 'closed';
+  fare_biz: number | null; opened_day: number; status: 'open' | 'closed'; first_flight_day: number;
 }
+
+// ---------- Selling ahead (migration 0019) ----------
+export type StrategyKey = 'fill' | 'balanced' | 'top' | 'follow';
+export interface Strategy {
+  key: StrategyKey; name: string; blurb: string; sort: number; target_lf: number; early_mult: number; late_mult: number;
+  biz_early_mult: number; biz_late_mult: number; min_mult: number; max_mult: number; step: number; band: number;
+  follow_gap: number; overbook: number;
+}
+export interface RoutePlan { route_id: string; airline_id: string; strategy: StrategyKey }
+/** One route's seats on sale for one flight week; figures each way for the whole week. */
+export interface RouteWeek {
+  route_id: string; week: number; airline_id: string; trips: number; seats_e: number; seats_b: number;
+  price_e: number | null; price_b: number | null; bk_be: number; bk_l: number; bk_u: number; bk_b: number;
+  rev_e: number; rev_b: number; sold_wk: number; spill: number;
+  noshow: number | null; denied: number | null; comp: number | null; flown_e: number | null; flown_b: number | null;
+}
+export interface AirlineWeek { airline_id: string; week: number; sales_inr: number; refunds_inr: number; comp_inr: number; advance_inr: number }
+export interface MarketWatch { route_id: string; airline_id: string; a: string; b: string; week: number; fare_e: number | null; fare_b: number | null; trips: number; seats: number }
+export interface MarketMove { id: number; a: string; b: string; week: number; airline_id: string; kind: 'enter' | 'leave' | 'fare_up' | 'fare_down' | 'more_flights' | 'fewer_flights'; old_value: number | null; new_value: number | null }
 
 export interface Rotation { aircraft_id: string; route_id: string; weekly_trips: number }
 
@@ -56,6 +75,7 @@ export interface AirlineDaily {
   c_fuel: number; c_crew: number; c_maint: number; c_airport: number; c_rent: number; c_slots: number; c_dist: number;
   c_marketing: number; c_overhead: number; c_interest: number; c_other: number; c_depr: number; cash_end: number;
   brand: number | null; otp: number | null; flights: number; cancelled: number; loan_repaid: number;
+  refunds_inr: number;
 }
 
 export interface Txn { id: number; airline_id: string; game_day: number; kind: string; amount_inr: number; pnl_inr: number; note: string }

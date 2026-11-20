@@ -2,11 +2,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useGame, useMarketsFrom, useRouteDaily, useRoutes } from '../lib/data';
+import { useBases, useGame, useMarketsFrom, useRouteDaily, useRoutes, useStrategies } from '../lib/data';
 import { lfTone, routeStat } from '../lib/derive';
 import { marketTotal, pairKey } from '../lib/game';
-import { inr, num, pct, weekOf } from '../lib/format';
-import type { Market } from '../lib/types';
+import { currentWeek, inr, num, pct, weekOf } from '../lib/format';
+import type { Market, StrategyKey } from '../lib/types';
 import { WorldMap } from '../components/WorldMap';
 import { useAction } from '../components/toast';
 import { Badge, Bar, Button, Empty, Field, Icon, Loading, PageHeader, Seg, Sheet } from '../components/ui';
@@ -140,7 +140,11 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
 function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }: {
   initial: { base?: string; dest?: string }; bases: string[]; markets?: Record<string, Market>; onClose: () => void; flying: Set<string>; airlineId: string;
 }) {
-  const { ref, world } = useGame();
+  const { ref, world, airline } = useGame();
+  const strategies = useStrategies();
+  const [strat, setStrat] = useState<StrategyKey>('balanced');
+  // selling worlds: on sale at once, first flight two weeks on (and not before the airline's first flights)
+  const firstWeek = Math.max(currentWeek(world) + Math.round((ref.param.route_lead_days ?? 14) / 7), weekOf(airline.first_flight_day));
   const [base, setBase] = useState(initial.base ?? bases[0]);
   const [dest, setDest] = useState<string | null>(initial.dest ?? null);
   const [q, setQ] = useState('');
@@ -174,17 +178,33 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
           {ref.airport[dest].runway_class === 1 && <div className="card warn small">{ref.airport[dest].city} takes turboprops only: only an ATR 72 can fly this route.</div>}
           {flying.has(pairKey(base, dest)) && <div className="card warn small">You already fly this route.</div>}
           <StudyCard a={base} b={dest} />
-          <Field label="Economy fare" hint="Start near the reference fare. You can change it any time; it counts for the week being played.">
-            <div className="row">
-              <input className="input num" type="number" inputMode="numeric" step={100} value={fareVal} onChange={(e) => setFare(Number(e.target.value))} style={{ maxWidth: 180 }} />
-              <span className="small muted">{m.ref_fare ? `${(fareVal / m.ref_fare).toFixed(2)}× reference` : ''}</span>
-            </div>
-          </Field>
+          {world.selling ? (
+            <Field label="How it sells" hint={`It goes on sale now, 26 weeks ahead; the first flight is in week ${firstWeek}. You can change this any time.`}>
+              <div className="choices">
+                {(strategies.data ?? []).map((x) => (
+                  <button key={x.key} type="button" className={`choice${strat === x.key ? ' on' : ''}`} onClick={() => setStrat(x.key)}>
+                    <div className="t">{x.name}</div><div className="d">{x.blurb}</div>
+                  </button>
+                ))}
+              </div>
+            </Field>
+          ) : (
+            <Field label="Economy fare" hint="Start near the reference fare. You can change it any time; it counts for the week being played.">
+              <div className="row">
+                <input className="input num" type="number" inputMode="numeric" step={100} value={fareVal} onChange={(e) => setFare(Number(e.target.value))} style={{ maxWidth: 180 }} />
+                <span className="small muted">{m.ref_fare ? `${(fareVal / m.ref_fare).toFixed(2)}× reference` : ''}</span>
+              </div>
+            </Field>
+          )}
           <div className="row">
             <Button kind="secondary" onClick={() => setDest(null)}>Back</Button>
             <div className="grow" />
             <Button busy={busy === 'open'} onClick={async () => {
-              const id = await run('open', () => call<string>('open_route', { p_airline: airlineId, p_origin: base, p_dest: dest, p_fare_econ: Math.round(fareVal), p_fare_biz: null }), 'Route opened. Now put an aircraft on it.');
+              const id = await run('open', async () => {
+                const rid = await call<string>('open_route', { p_airline: airlineId, p_origin: base, p_dest: dest, p_fare_econ: Math.round(fareVal), p_fare_biz: null });
+                if (world.selling && strat !== 'balanced') await call('set_strategy', { p_airline: airlineId, p_route: rid, p_strategy: strat });
+                return rid;
+              }, 'Route opened. Now put an aircraft on it: its flights go on sale this week.');
               if (id) { onClose(); nav(`/route/${id}?assign=1`); }
             }}>Open route</Button>
           </div>

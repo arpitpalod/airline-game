@@ -12,6 +12,7 @@ import { checks5 } from './checks_5.mjs';
 import { checks6 } from './checks_6.mjs';
 import { checks7 } from './checks_7.mjs';
 import { checks8 } from './checks_8.mjs';
+import { checks9 } from './checks_9.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -44,6 +45,8 @@ const weekParams = (await db.query(`select key, num::float from public.game_para
 await db.exec(`update public.game_params set num = case key when 'wet_lead_days' then 13 when 'season_start_month' then 4 else 30 end
   where key in ('wet_lead_days', 'season_start_month', 'tick_max_days');
   alter table public.airlines disable trigger airlines_first_flight; alter table public.aircraft disable trigger aircraft_week_start;`);
+// The checks written before migration 0019 run in worlds with daily fares (no selling ahead); checks_9 makes its own.
+await db.exec(`update public.worlds set selling = false; alter table public.worlds alter column selling set default false;`);
 
 let failed = 0;
 const t = {
@@ -69,5 +72,6 @@ await checks5(t);
 await checks6(t);
 await checks7(t);
 await checks8(t);
+await checks9(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);
