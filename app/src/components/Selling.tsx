@@ -2,7 +2,8 @@
 // rivals did on its market. The engine sets every fare from the strategy; players choose the strategy only.
 import { useState } from 'react';
 import { call } from '../lib/api';
-import { useGame, useMarketWatch, useRoutePlans, useRouteWeeks, useStrategies, useWorldAirlines } from '../lib/data';
+import { useGame, useMarketWatch, useRoutePlans, useRouteWeeks, useSectorInsights, useStrategies, useWorldAirlines } from '../lib/data';
+import { BAND_LABEL, bandOf, routeIndex, SHAPE_LABEL, shapeOf, verdict } from '../lib/insights';
 import { currentWeek, inr, num, pct, weekLabel } from '../lib/format';
 import type { MarketMove, Route, RouteWeek, StrategyKey } from '../lib/types';
 import { useAction } from './toast';
@@ -112,12 +113,12 @@ export function SeatsOnSale({ route }: { route: Route }) {
 
 const moveText = (m: MarketMove) => {
   switch (m.kind) {
-    case 'enter': return 'starts flying here';
-    case 'leave': return 'stops flying here';
+    case 'enter': return 'started flying here';
+    case 'leave': return 'stopped flying here';
     case 'fare_up': return `raised fares, ${inr(m.old_value ?? 0)} → ${inr(m.new_value ?? 0)}`;
     case 'fare_down': return `cut fares, ${inr(m.old_value ?? 0)} → ${inr(m.new_value ?? 0)}`;
-    case 'more_flights': return `adds flights, ${num(m.old_value ?? 0)} → ${num(m.new_value ?? 0)} a week`;
-    case 'fewer_flights': return `cuts flights, ${num(m.old_value ?? 0)} → ${num(m.new_value ?? 0)} a week`;
+    case 'more_flights': return `added flights, ${num(m.old_value ?? 0)} → ${num(m.new_value ?? 0)} a week`;
+    case 'fewer_flights': return `cut flights, ${num(m.old_value ?? 0)} → ${num(m.new_value ?? 0)} a week`;
   }
 };
 
@@ -142,6 +143,84 @@ export function MarketMoves({ route, airlines }: { route: Route; airlines: numbe
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The last flown weeks in plain words: too full, too empty or about right. */
+export function LastFlights({ route }: { route: Route }) {
+  const weeks = useRouteWeeks(route.id);
+  const flown = (weeks.data ?? []).filter((w) => w.flown_e != null).sort((a, b) => b.week - a.week).slice(0, 6);
+  if (!flown.length) return null;
+  const v0 = verdict(flown[0]);
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Last flights</h2><span className="small muted">each way, by week</span></div>
+      <div className="legend"><span><i style={{ background: 'var(--accent)' }} />flew</span><span><i style={{ background: 'var(--line-strong)' }} />seats empty</span><span><i style={{ background: 'var(--warn-ink)' }} />wanted a seat, none left</span></div>
+      {flown.map((w) => {
+        const v = verdict(w);
+        const tot = Math.max(1, v.seats + v.turned);
+        return (
+          <div key={w.week} className="stack" style={{ gap: 4 }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <span className="small"><span className="faint num">Wk {w.week}</span> · {num(Math.round(v.flown))} flew of {num(v.seats)} seats</span>
+              <Badge tone={v.kind === 'full' ? 'warn' : v.kind === 'empty' ? 'bad' : 'good'}>{v.kind === 'full' ? 'Too full' : v.kind === 'empty' ? 'Too empty' : 'About right'}</Badge>
+            </div>
+            <div className="fbar" aria-label={`${num(Math.round(v.flown))} flew, ${num(Math.round(v.empty))} seats empty, ${num(Math.round(v.turned))} turned away`}>
+              <div className="f" style={{ width: `${(100 * v.flown) / tot}%` }} />
+              <div className="e" style={{ width: `${(100 * v.empty) / tot}%` }} />
+              <div className="t" style={{ width: `${(100 * v.turned) / tot}%` }} />
+            </div>
+          </div>
+        );
+      })}
+      <p className="tiny muted">
+        {v0.kind === 'full' ? `Week ${flown[0].week} sold out early: ${num(Math.round(v0.turned))} travellers wanted a seat after the last one went. Higher fares, such as Top fares, would have earned more from the same seats.`
+          : v0.kind === 'empty' ? `Week ${flown[0].week} flew ${num(Math.round(v0.empty))} seats empty. Empty seats cost almost as much as full ones: try Fill every seat, fewer flights or a smaller aircraft.`
+          : `Week ${flown[0].week} was about right: few empty seats and few travellers turned away.`}
+      </p>
+    </div>
+  );
+}
+
+/** How this route compares with routes like it in the world (What works where), by strategy. */
+export function RouteAudit({ route, km, intl, refFare, airlines }: { route: Route; km: number; intl: boolean; refFare: number; airlines: number }) {
+  const ins = useSectorInsights();
+  const weeks = useRouteWeeks(route.id);
+  const plans = useRoutePlans();
+  const strategies = useStrategies();
+  const band = bandOf({ km, intl });
+  const shape = shapeOf(airlines);
+  const cells = (ins.data ?? []).filter((x) => x.band === band && x.shape === shape).sort((a, b) => b.rev_index - a.rev_index);
+  const mine = routeIndex((weeks.data ?? []).filter((w) => w.flown_e != null), refFare);
+  const myStrat = plans.data?.[route.id] ?? 'balanced';
+  const name = (k: string) => strategies.data?.find((s) => s.key === k)?.name ?? k;
+  const best = cells[0];
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>How it compares</h2><span className="small muted">last 13 weeks</span></div>
+      <p className="small muted">{BAND_LABEL[band]} routes where {shape === 'alone' ? 'one airline flies' : SHAPE_LABEL[shape].toLowerCase() + ' fly'}, across the world, by how they sell. Revenue per seat at this route's reference fare.</p>
+      {cells.length === 0 ? <p className="small">Not enough routes like this yet: a way of selling shows once three routes use it.</p> : (
+        <table className="table">
+          <tbody>
+            {cells.map((c) => (
+              <tr key={c.strategy}>
+                <td className={c === best ? 'cell-best' : ''}>{name(c.strategy)}<div className="tiny muted">{c.routes} routes</div></td>
+                <td className="r">{inr(c.rev_index * refFare)} a seat</td>
+                <td className="r muted">{pct(c.load)} full</td>
+              </tr>
+            ))}
+            {mine && (
+              <tr className="me"><td><strong>This route</strong><div className="tiny muted">{name(myStrat)}</div></td>
+                <td className="r">{inr(mine.rev_index * refFare)} a seat</td><td className="r muted">{pct(mine.load)} full</td></tr>
+            )}
+          </tbody>
+        </table>
+      )}
+      {best && mine && best.strategy !== myStrat && best.rev_index > mine.rev_index * 1.05 && (
+        <p className="small">Routes like this earned {pct(best.rev_index / mine.rev_index - 1)} more per seat with {name(best.strategy)}. Worth a try.</p>
+      )}
+      <div className="row"><a className="small" href="#/insights">What works where</a><span className="faint">·</span><a className="small" href="#/practice">Practice flight</a></div>
     </div>
   );
 }

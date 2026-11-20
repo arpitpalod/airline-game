@@ -13,6 +13,7 @@ import { checks6 } from './checks_6.mjs';
 import { checks7 } from './checks_7.mjs';
 import { checks8 } from './checks_8.mjs';
 import { checks9 } from './checks_9.mjs';
+import { checks10 } from './checks_10.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -73,5 +74,6 @@ await checks6(t);
 await checks7(t);
 await checks8(t);
 await checks9(t);
+await checks10(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);
