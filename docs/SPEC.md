@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.15, 20 Nov 2026 (Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.16, 20 Nov 2026 (year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -178,7 +178,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 
 | Cost | Driver | Currency |
 |---|---|---|
-| Fuel | Sector fuel x fuel price (starts Rs 100 / kg, moves with a random walk and shocks); part of it bought 13 weeks ahead if the player hedges (14.17) | Dollar-linked |
+| Fuel | Sector fuel x fuel price (starts Rs 100 / kg, moves with a random walk and shocks); part of it bought 13 weeks ahead if the player hedges (14.17). Fares follow a third of a change in fuel cost (14.18) | Dollar-linked |
 | Aircraft rent or ownership | Per month per aircraft | Dollars |
 | Maintenance | Per flight hour and per flight, rising with age; scaled by the maintenance strategy (14.17) | Dollar-linked |
 | Crew | Pilot salaries by fleet family and flying pay per block hour (14.8); cabin crew by the seat rule, per block hour plus fixed | Rupees |
@@ -207,7 +207,7 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 - **MVP events:** fuel shock, currency swing, engine grounding, new airport opening.
 - **Later:** rival collapse, fare caps, demand shocks. (Stricter pilot duty-time rules: 14.8.)
-- **Computer-run airlines:** six fictional carriers with fixed starting networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up, and from migration 0009 they also start flying routes where players earn well (14.5). As built: section 14.3.
+- **Computer-run airlines:** six fictional carriers with fixed starting networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up, and from migration 0009 they also start flying routes where players earn well (14.5). As built: section 14.3; from 14.18 they plan each route's flights, share aircraft between routes and review routes on profit every quarter.
 
 ## 13. Scope
 
@@ -599,6 +599,41 @@ Owner's rule (principle 8): every input links to a cost or revenue the player se
 
 **Tested.** 23 local checks (`checks_13`): hedge purchases and price, the hedged fuel bill, maintenance cost by strategy, the 52-week lock, hangar setup and opening, groundings by strategy, each style's fuel, turns and on-time, schedules that no longer fit, the preview and the benchmarks. The app test sets a 50% hedge, a flight-hour contract and High utilisation, and checks the industry median after the first week of flights.
 
+### 14.18 Year-one fixes (migration 0024)
+
+Owner's target (20 Nov 2026): losses in the first years are normal and drive players and computer-run airlines to optimise, but they must come from decisions, not dice. Measured first (season simulation, year 1): the computer-run airlines lost money even in a world with no players (about −6% over three runs), from causes nobody could control. Every fix is a real-world mechanism; every number is (G).
+
+| Target | Year 1 | Year 2 | Year 3 on |
+|---|---|---|---|
+| Computer-run airlines | −5% to 0% | 0 to +5% | +5% to +10% |
+| Typical player | −15% to −30% | −5% to 0% | small profit |
+| Best players | about −5% | 0 to +5% | +10% or more |
+
+No sensibly run player should go into administration in years 1 and 2; reckless growth can.
+
+| Fix | Rule |
+|---|---|
+| A. Groundings at real rates | `ground_prob_day` 0.0015 (was 0.004). Computer-run airlines cancelled 3 to 5% of flights; the DGCA reports 1.0 to 1.3% for all domestic airlines in normal 2025 months. Seasons now run at about 1.2 to 1.4% |
+| B. Fuel shocks and engine events about once in three years | `event_fuel_prob_day` 0.001 (was 0.004: about 1.5 shocks a year), `event_engine_prob_day` 0.001 (was 0.002) |
+| C. Routes reviewed from the first quarter | `bot_drop_min_days` 91 (was 364) |
+| D. Networks sized to the world, aircraft shared | Table `game.bot_plan`: each computer-run route's round trips a week and the type and cabin that fly it. Starting networks: each route's flights scaled to the world (`demand_scale x bot_scale`), at least 3 a week (`bot_min_weekly`); thinner routes are left out. Each base gets whole aircraft per type and cabin for its flights (at least one; where that is fewer than the flights need, every route there flies proportionally fewer), and `game.bot_pack` puts the flights onto as few aircraft as they need, routes sharing aircraft. Before, every scaled-down route got its own part-used aircraft paying full rent: at World 1's size 105 aircraft flew what 83 now fly |
+| E. Capacity follows profit | Each quarter end (`game.bot_quarter`), after routes given up and routes contested: a route whose result over 28 days, after flying costs and its share of aircraft costs, is below −5% of revenue (`bot_cut_margin`) loses a quarter of its flights (`bot_cut_share`), down to 3 a week; one above +5% (`bot_grow_margin`) and 80% full (`bot_grow_lf`) gains a quarter (`bot_grow_share`): profits attract capacity. Routes new to the plan wait 8 weeks. Then `game.bot_balance` fits the plan to the aircraft: idle aircraft of the same type and cabin move to bases that need them, up to 3 new aircraft a quarter for routes that grew (`bot_grow_adds`, within twice the starting fleet), what still does not fit is trimmed (worst-earning route first, new routes last), one idle aircraft stays as a spare at a base with 8 or more of its kind (`bot_spare_min`; it covers groundings), and the rest go back to the lessors, at most 10% of the fleet a quarter (`bot_return_share`). Aircraft handed back leave the world (principle 6). A cheap-selling route can be full and still lose money, which a load-factor rule missed |
+| F. Fights match the market, never below cost | When a player enters, a fighting computer-run airline switches that route to Follow the market (`bot_fight_follow`; was Fill every seat). And computer-run airlines never sell economy below the fare that covers the route's flying and aircraft costs at 80% full over the last 28 days (`bot_sell_floor_lf`, extras counted at `bot_floor_anc`), within the strategy's highest fare. Under daily fares they had such a floor (14.3); selling ahead (0019) lost it |
+| G. Fares follow fuel, partly | `worlds.fuel_avg` moves a quarter of the way to the current fuel price each week (`fuel_fare_smooth`, a lag of about four weeks); `worlds.fare_index = 1 + 0.33 x 0.38 x (fuel_avg / 100 − 1)` (`fuel_pass`, `fuel_fare_share`): fares follow a third of the change in fuel cost per passenger, which is what IndiGo's 2026 fuel charges passed on. Selling prices every fare from the reference fare times the index; travellers still judge fares against the reference, so a fuel charge costs some travellers. Fuel 30% dearer for weeks: fares about 3.8% higher. Hedging protects the rest |
+
+**Results** (season simulation; single runs vary, so read the direction).
+
+| | World 1's realistic case: 4 simulated players (2 low-cost trunk, 2 niche), 25 places, two runs | A full world: 18 simulated players, 18 places, two runs (before the growth values were raised; computer-run airlines there rarely reach 80% full) |
+|---|---|---|
+| Computer-run airlines | year 1 about +4%; year 2 +1.5% and +8.5% | year 1 −3% to −5%; year 2 about −2% |
+| Players | year 1 −10% to −15% (low-cost trunk near break-even by the fourth quarter, niche −10% to −20%); year 2 −2% and +7% | year 1 −25% to −30%; year 2 typical −17%, best +1% to +2%; year 3 best +8% to +9% |
+
+In a full world the smaller computer-run airlines recede as players take their markets: Koel Air from about 30 aircraft to 10, Bulbul Air, Hornbill Airways and Flamingo Air to 1 to 5, while Sarus Airways grows to 46 to 49 and earns 7 to 11%. That matches section 12 (they keep markets contested while a world fills up); open item 24.
+
+**App.** The practice flight and How it sells price from the same index; the fuel page shows the fuel charge on fares; Home's profit tile says whether last week was up or down on the four weeks before, so a loss that is shrinking reads as progress.
+
+**Tested.** 10 local checks (`checks_14`); the older checks run with the old disruption rates and the old computer-run airlines (`bot_plan` 0, no cost floor, fights that fill every seat, fares that ignore fuel: `run.mjs`). The old functions stay as `bot_seed_v1`, `bot_quarter_v1`, `bot_enter_v1` and `bot_exit_v1` for them. Running worlds: each open computer-run route keeps its flights as its plan; the new rules apply from the next quarter end.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -646,6 +681,8 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 22. Second currency (owner asked whether to copy Airlines Manager's). Recommendation: no. Airlines Manager's premium currency exists to sell subscriptions and packs that speed things up; here it would either buy nothing or buy speed, which breaks principle 6 and the teaching aim. Rupees stay the only currency; the second scarce resource is pilots (18.4). Owner to confirm.
 
 23. Pilots and the season (two pairs of full-season runs, with and without pilots, 18 players and 18 places; single runs vary a lot). Players' revenue-weighted operating margin, years 3 to 6: with pilots −3.4/−4.1, −2.5/−3.4, +6.7/−2.2, +0.9/−1.0%; without −3.3/+3.3, −5.0/+7.4, +2.2/+9.2, +4.5/+8.6%. Computer-run airlines in year 6: +7.2/+10.6% with, +13.8/+15.5% without. So pilots cost about 4 to 6 points of margin late in the season, for players and computer-run airlines alike: crew cost per seat-km about 10% higher (buffers, crews hired ahead of aircraft, more pilots at high utilisation), cancellations of 1 to 3% in thin years against under 0.5%, and the A350 market running dry once long-haul players grow (market pay 1.4 to 1.6 for that family). Three strategies still lead (low-cost trunk, full service, long haul or a second low-cost trunk). The owner chose to trim pilot pay 10% (migration 0015). The runs also took about twice as long a game day (pilot step), well inside the 2-second target on the live database.
+
+24. Computer-run airlines in a full world (14.18): with 18 simulated players they shrink to a few aircraft each, except Sarus Airways, and keep losing money at that size (head office: item 16). Section 12 wants them to keep markets contested while a world fills up, so receding is intended; whether they should hold more ground in a full world is for the owner to decide after a real playtest.
 
 **Sources for (V) figures**
 

@@ -114,7 +114,7 @@ function Practice() {
   const results = useMemo(() => {
     if (!route || !m || !strategies.data) return null;
     const input = practiceInput(m, rivals.data?.[pairKey(route.origin, route.dest)] ?? [], airline.id, world.demand_scale, world.game_day + 1, ref.param,
-      season === 'busy' ? 1.2 : season === 'quiet' ? 0.85 : 1);
+      season === 'busy' ? 1.2 : season === 'quiet' ? 0.85 : 1, world.fare_index ?? 1);
     return { input, out: strategies.data.map((s) => practice(s, input)).sort((a, b) => b.revenue - a.revenue) };
   }, [route, m, strategies.data, rivals.data, season, airline.id, world.demand_scale, world.game_day, ref.param]);
 

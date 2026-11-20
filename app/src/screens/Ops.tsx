@@ -284,6 +284,7 @@ export function OpsFuel() {
               <Badge tone={shock >= 0.1 ? 'warn' : shock <= -0.1 ? 'good' : 'neutral'}>{Math.abs(shock) < 0.02 ? 'normal' : `${pct(Math.abs(shock))} ${shock > 0 ? 'above' : 'below'} normal`}</Badge>
             </div>
             <div className="kv small">
+              <span>Fuel charge in fares</span><span>{Math.abs((world.fare_index ?? 1) - 1) < 0.001 ? 'none' : `${(world.fare_index ?? 1) > 1 ? '+' : '−'}${pct(Math.abs((world.fare_index ?? 1) - 1), 1)} on every fare`}</span>
               <span>Already bought</span><span>{booked.length ? `weeks ${booked[0].week} to ${booked[booked.length - 1].week}` : 'nothing yet'}</span>
               {booked.length > 0 && <><span>at an average of</span><span>₹{(booked.reduce((s, h) => s + h.price, 0) / booked.length).toFixed(0)} a kg</span></>}
               <span>Hedge result last week</span><span className={sum(week, (d) => d.hedge_inr) >= 0 ? 'good' : 'bad-ink'}>{signed(sum(week, (d) => d.hedge_inr))}</span>
@@ -308,7 +309,8 @@ export function OpsFuel() {
           </div>
           <Button block disabled={share === p.hedge_share} busy={busy === 'hedge'} onClick={() => run('hedge', () => call('set_hedge', { p_airline: airline.id, p_share: share }),
             share === 0 ? 'No new hedges from next week. Hedges already bought run off.' : `Hedging ${pct(share)} from next week's purchase: fuel for week ${wNow + p.hedge_lead_weeks} on.`).then(() => setPick(null))}>Hedge this way</Button>
-          <p className="tiny muted" style={{ textAlign: 'center' }}>Hedges already bought run off over {p.hedge_lead_weeks} weeks, so a change shows fully after {p.hedge_lead_weeks} weeks.</p>
+          <p className="tiny muted" style={{ textAlign: 'center' }}>Hedges already bought run off over {p.hedge_lead_weeks} weeks, so a change shows fully after {p.hedge_lead_weeks} weeks.
+            Fares follow about a third of a change in fuel cost, a few weeks late: hedging protects the rest.</p>
         </div>
       </div>
     </div>
