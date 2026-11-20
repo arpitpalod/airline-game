@@ -41,9 +41,7 @@ export async function checks10(t) {
   ok('What works where: the last 13 weeks by kind of sector, market shape and strategy', ins.length >= 4
     && ins.every((x) => x.routes >= 3 && x.load > 0 && x.load < 1.2 && x.rev_index > 0 && x.weeks <= 13 * x.routes),
     `${ins.length} cells, e.g. ${ins.slice(0, 2).map((x) => `${x.band}/${x.shape}/${x.strategy} ${x.routes} routes, load ${x.load.toFixed(2)}`).join('; ')}`);
-  ok('the computer-run airlines sell their own ways: Sarus Top fares, Koel Fill every seat, Bulbul Follow the market',
-    JSON.stringify((await q(`select a.code, min(p.strategy) s, max(p.strategy) s2 from public.route_plans p join public.airlines a on a.id = p.airline_id
-      where a.world_id = $1 and a.code in ('SRW', 'KOL', 'BLB') group by a.code order by a.code`, [W])).map((x) => `${x.code}:${x.s}:${x.s2}`))
-      === JSON.stringify(['BLB:follow:follow', 'KOL:fill:fill', 'SRW:top:top']));
+  ok('the computer-run airlines sell in several ways, so What works where has more than one to compare',
+    (await one(`select count(distinct p.strategy)::int from public.route_plans p join public.airlines a on a.id = p.airline_id where a.world_id = $1 and a.is_ai`, [W])) >= 3);
   await q(`delete from public.worlds where id = $1`, [W]);
 }

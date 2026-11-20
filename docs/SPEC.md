@@ -552,6 +552,17 @@ Step 3 of section 19.
 - **Practice flight** (Insights screen, in the app, nothing saved). One of your routes, a quiet, normal or busy week: one flight week on sale for 26 weeks under each strategy, against rivals holding their current fares, with the same booking curves, fare rise and pace rule as the engine (economy only, no no-shows). Ranked by revenue, with the selected strategy's seats sold and fare week by week.
 - **Tested.** 6 local checks (`checks_10`), the app test.
 
+### 14.15 Computer-run airlines sell like rivals (migration 0021)
+
+Owner's ask (20 Nov 2026): make the computer-run airlines' selling more random, aggressive, competitive and smart.
+
+- **Random start.** Each new route of a computer-run airline draws its way of selling from its airline's mix (G, `bot_strategy_mix`): Sarus Top 50%, Balanced 30%, Follow 20%; Koel Fill 60%, Follow 20%, Balanced 20%; Bulbul Follow 50%, Fill 30%, Balanced 20%; Myna Balanced 60%, Top 40%; Hornbill Balanced 50%, Follow 30%, Top 20%; Flamingo Balanced 40%, Top 30%, Fill 30%.
+- **Smart.** Every 4 weeks (G `bot_review_weeks`, staggered by route) each route looks at What works where for routes like it and moves to the way that earned 8% more per seat (G `bot_switch_gain`) than its own way there; otherwise, with a 15% chance (G `bot_explore_prob`), it tries another way at random. So the computer-run airlines keep testing and learning, and What works where keeps changing.
+- **Aggressive and competitive.** When a player starts flying one of its markets, each computer-run airline there may fight: that route switches to Fill every seat for 8 weeks (G `bot_fight_weeks`), then goes back. When a player cuts fares there by 10% or more (G `bot_follow_cut`), it may switch to Follow the market. How likely it fights is its aggression (G): Koel 0.9, Bulbul 0.7, Hornbill and Flamingo 0.5, Sarus 0.4, Myna 0.3. Their fare cuts reach the player as rival news.
+- **Admin.** `admin_set_bot(code, aggression, mix)` and `admin_set_param(key, value)` (any game value by name); the Admin screen has a Computer-run airlines card for aggression, mixes and these values. Mixes are readable by admins only.
+- **Effect.** In bots-only fourth-quarter runs the computer-run airlines' total operating profit ranged from about Rs 440 to 1,260 crore with learning on, against Rs 780 crore with fixed ways: within the run-to-run spread.
+- **Tested.** 9 local checks (`checks_11`); the older checks give each computer-run airline one fixed way and switch fights and exploring off.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.

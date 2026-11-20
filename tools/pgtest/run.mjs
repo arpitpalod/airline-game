@@ -14,6 +14,7 @@ import { checks7 } from './checks_7.mjs';
 import { checks8 } from './checks_8.mjs';
 import { checks9 } from './checks_9.mjs';
 import { checks10 } from './checks_10.mjs';
+import { checks11 } from './checks_11.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -48,6 +49,12 @@ await db.exec(`update public.game_params set num = case key when 'wet_lead_days'
   alter table public.airlines disable trigger airlines_first_flight; alter table public.aircraft disable trigger aircraft_week_start;`);
 // The checks written before migration 0019 run in worlds with daily fares (no selling ahead); checks_9 makes its own.
 await db.exec(`update public.worlds set selling = false; alter table public.worlds alter column selling set default false;`);
+// ... and with computer-run airlines that neither fight nor explore (0021); checks_11 switches them on
+await db.exec(`update public.bot_airlines set aggression = 0; update public.game_params set num = 0 where key = 'bot_explore_prob';
+  create table public.bot_strategy_mix_0021 as select * from public.bot_strategy_mix;
+  delete from public.bot_strategy_mix;
+  insert into public.bot_strategy_mix select code, case code when 'SRW' then 'top' when 'KOL' then 'fill' when 'BLB' then 'follow' else 'balanced' end, 1
+    from public.bot_airlines;`);   // one way each, as in 0020
 
 let failed = 0;
 const t = {
@@ -75,5 +82,6 @@ await checks7(t);
 await checks8(t);
 await checks9(t);
 await checks10(t);
+await checks11(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

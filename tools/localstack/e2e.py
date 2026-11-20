@@ -286,7 +286,12 @@ with sync_playwright() as p:
     if page.locator('.list .item.link').count():
         page.locator('.list .item.link').first.click(); page.get_by_text('How full, last 4 weeks').wait_for()
         shot(page, 'd03-route')
-    go(page, '/admin'); page.get_by_text('Selling strategies').wait_for(); shot(page, 'd10-admin')
+    go(page, '/admin'); page.get_by_text('Selling strategies').wait_for()
+    page.get_by_role('heading', name='Computer-run airlines').wait_for()
+    page.get_by_label('Koel Air aggression').fill('0.8')
+    page.locator('tr', has_text='Koel Air').get_by_role('button', name='Save').click()
+    toast_ok(page, 'Koel Air saved')
+    shot(page, 'd10-admin')
     ctx.close()
 
     print('an existing player joins a second world from its invite link')
