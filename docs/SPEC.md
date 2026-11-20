@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.14, 20 Nov 2026 (first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.15, 20 Nov 2026 (Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -15,6 +15,7 @@ A persistent multiplayer airline business game for office colleagues, built to t
 5. **Five minutes a day** is enough to play well.
 6. **Aircraft never become plentiful** (owner's rule, 19 Nov 2026). Nothing may create an easy supply of aircraft: no trading of aircraft or delivery slots between players, ever. Aircraft come only from the manufacturer queue, the lessor pool and wet leases, each limited or expensive. This is why the owner left Airlines Manager.
 7. **Everything scarce scales with players** (owner's rule, 19 Nov 2026). A world has a number of places (`max_airlines`), and demand is set from it (`demand_scale = places / 50`). Every scarce supply is sized per place, so a world of 10 players is as tight as one of 100: travellers, the lessor pool, manufacturer delivery slots, the pilot market, airport slot caps and the computer-run fleets (at the start). Any new scarce resource (cargo capacity, loyalty partners) must be sized per place too. When more colleagues join than a world has places, raise its places (`admin_set_places`, only upwards once running) or open another world.
+8. **Every input links to cost or revenue** (owner's rule, 20 Nov 2026). Every choice a player makes must show what it changes in rupees, in cost or revenue, before it is made and within weeks after. A setting with no visible trade-off is never used, so it is made automatic or removed. Choices are made for the whole airline as strategies (three or more options), never aircraft by aircraft.
 
 ## 2. Decisions locked
 
@@ -177,9 +178,9 @@ Three ways to get an aircraft, always available, priced by shortage.
 
 | Cost | Driver | Currency |
 |---|---|---|
-| Fuel | Sector fuel x fuel price (starts Rs 100 / kg, moves with a random walk and shocks) | Dollar-linked |
+| Fuel | Sector fuel x fuel price (starts Rs 100 / kg, moves with a random walk and shocks); part of it bought 13 weeks ahead if the player hedges (14.17) | Dollar-linked |
 | Aircraft rent or ownership | Per month per aircraft | Dollars |
-| Maintenance | Per flight hour and per flight, rising with age | Dollar-linked |
+| Maintenance | Per flight hour and per flight, rising with age; scaled by the maintenance strategy (14.17) | Dollar-linked |
 | Crew | Pilot salaries by fleet family and flying pay per block hour (14.8); cabin crew by the seat rule, per block hour plus fixed | Rupees |
 | Airport and navigation | Landing by aircraft size, per passenger handling, per km | Rupees |
 | Slots and bases | Section 7 | Rupees |
@@ -232,7 +233,7 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 4. Sub-fleet penalties, spare aircraft strategy
 5. Crew: pilots built (14.8); cabin crew stays a cost per seat rule
 6. Hub connections, cargo, codeshares, international traffic rights
-7. Fuel hedging
+7. Fuel hedging (built: 14.17)
 
 ## 14. Architecture
 
@@ -578,6 +579,26 @@ The owner's first playtest of the Test World (20 Nov 2026). Every number is (G).
 
 **Tested.** 11 local checks (`checks_12`), including a world started by a signed-in admin; the older checks run with one growth rate, no events and a start that leaves the first week to the scheduler (`run.mjs`). The app test covers the checklist, Coming up, the room per aircraft, Expect on this route and the seat map.
 
+### 14.17 Ops: running costs and three strategies for the fleet (migration 0023)
+
+Owner's rule (principle 8): every input links to a cost or revenue the player sees. The Fleet tab becomes Ops, built as a cost controller would look at it: what flying costs per seat-km against the industry, a few decisions a week, and three strategies for the whole fleet instead of settings per aircraft. Every number is (G).
+
+| Part | Rule |
+|---|---|
+| Fuel hedging | `airline_ops.hedge_share`: none, 25, 50 or 75% (`hedge_step`, `hedge_max`). At each week start (`game.ops_week`) that share of the fuel for the week 13 weeks ahead (`hedge_lead_weeks`) is bought at this week's price plus 2% (`hedge_premium`), kept in `fuel_hedges`. A week's fuel costs the hedged share at its price plus the rest at the spot price. `airline_daily.hedge_inr` = fuel at spot minus fuel paid (positive: the hedge saved money). A change applies from next week's purchase, so it shows in full after 13 weeks |
+| Maintenance strategy | `maint_plans`, one for the fleet (`airline_ops.maint_plan`), on aircraft that are not wet-leased. Pay as you go: rate 1.00, bills +3% a year of age. Flight-hour contract: 1.12, flat with age, groundings 30% fewer, engine events hit half as many aircraft, on-time +1 point, runs 52 weeks. Own hangar: 0.75, +3% a year, Rs 6 cr a week fixed, groundings 20% fewer and 30% shorter, Rs 100 cr to set up (paid at once), opens 13 weeks later; it pays off from about 40 A320-size aircraft. Lean: 0.85, +4% a year, groundings 1.8 times, on-time −2. A switch takes effect at the next week start (the hangar when it opens); choosing the current plan cancels a pending switch |
+| Operating style | `op_styles`, one for the fleet. Fuel saver: fuel −4%, flying pay and hourly maintenance +5%, on-time −4. Standard. High utilisation: turns 10 minutes shorter (never under 15, `turn_floor_min`), Rs 2,500 crew allowance per departure, on-time −4, brand −2. Punctual: fuel +4%, turns 8 minutes longer, on-time +6, brand +3. Turn changes apply to schedule checks (`schedule_issue`) and the engine; `set_op_style` returns how many aircraft no longer fit their schedules (they fly late) |
+| Fuel shocks | `event_fuel_mult_min` 1.25: a shock is +25 to 45% (was +15 to 45%), so hedging has something to protect against |
+| Pilots | Pay and spare pilots are automatic: market pay and 10% spare for every player (`airline_finance.pilot_pay` 1, `pilot_buffer` 0.10); `set_pilot_policy` is refused to players. They had no trade-off a player could see (principle 8) |
+| Cost benchmarks | `cost_benchmarks` (public), per world and line: fuel, aircraft (rent and depreciation), maintenance, crew, airports (airport charges and slots), sales (distribution and marketing), office (overheads). The median cost per seat-km over the active airlines that flew in the last 28 days (`benchmark_days`), once 3 airlines fly (`benchmark_min_airlines`); refreshed at each week's end (`game.ops_benchmarks`), so a week flown shows at once |
+| Groundings | A random grounding sets `aircraft.grounded_day`; `airline_daily.groundings` counts them, with `fuel_kg` and `hedge_inr` |
+
+**Functions.** New: `set_hedge`, `set_maint_plan`, `set_op_style`, `ops_preview` (for this airline at today's flying, ages and fuel price: each maintenance strategy's cost a week, fixed cost, groundings and days on the ground a quarter; each style's fuel a week, other costs, round trips flown and that fit, aircraft that would not fit, on-time), `game.ops_week`, `game.ops_benchmarks`, `game.ops_rows`. Redefined: `schedule_issue`, `day_fleet` (from 0007), `day_ops` (from 0019), `run_day` (from 0021), `set_pilot_policy`.
+
+**App.** The Ops tab (the fleet list is inside it): Decisions this week (a fuel price 10% or more above normal with room to hedge more, showing 13 weeks of fuel at the current and the next share if prices stay or rise 20%; a cheaper maintenance strategy; groundings 1.5 times what the strategy should give; aircraft whose schedules no longer fit), cost per seat-km by line against the industry median with a link to each line's lever, Your strategies, the Crew card (read-only) and an aircraft summary. The Fuel hedging, Maintenance strategy and Operating style pages show the options and what each would do for this fleet before saving; the maintenance page draws cost a week against fleet size with the hangar's break-even. Home shows Ops decisions as an alert. Wet-leased aircraft carry their crew and maintenance in the rent; the cost card and the maintenance page say so.
+
+**Tested.** 23 local checks (`checks_13`): hedge purchases and price, the hedged fuel bill, maintenance cost by strategy, the 52-week lock, hangar setup and opening, groundings by strategy, each style's fuel, turns and on-time, schedules that no longer fit, the preview and the benchmarks. The app test sets a 50% hedge, a flight-hour contract and High utilisation, and checks the industry median after the first week of flights.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -694,7 +715,7 @@ Airlines Manager (Playrion) offers real-time and fast modes, an R&D centre with 
 
 ### 18.4 Pilots
 
-Built: section 14.8.
+Built: section 14.8. Pay and spare pilots became automatic in 14.17.
 
 ## 19. Revenue management: selling and money (agreed 20 Nov 2026; built as 14.12 to 14.15)
 

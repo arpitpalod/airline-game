@@ -8,7 +8,7 @@ import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
-  AirlineWeek, DemandEvent, MarketMove, MarketWatch, RoutePlan, RouteWeek, Strategy,
+  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, RoutePlan, RouteWeek, Strategy,
 } from './types';
 
 export interface Ref {
@@ -321,6 +321,41 @@ export function useAircraftDaily() {
 }
 
 // ---------- Selling ahead (migration 0019) ----------
+
+// ---------- Ops (migration 0023) ----------
+export function useMaintPlans() {
+  return useQuery({ queryKey: ['maint_plans'], staleTime: 600_000, queryFn: () => rows<MaintPlan>(supabase.from('maint_plans').select('*').order('sort')) });
+}
+export function useOpStyles() {
+  return useQuery({ queryKey: ['op_styles'], staleTime: 600_000, queryFn: () => rows<OpStyle>(supabase.from('op_styles').select('*').order('sort')) });
+}
+export function useAirlineOps() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'airline_ops'],
+    queryFn: async () => (await rows<AirlineOps>(supabase.from('airline_ops').select('*').eq('airline_id', airline.id)))[0] ?? null,
+  });
+}
+/** Minutes the airline's operating style adds to every turnaround (negative for quick turns). */
+export function useTurnDelta() {
+  const ops = useAirlineOps();
+  const styles = useOpStyles();
+  return Number(styles.data?.find((s) => s.key === ops.data?.op_style)?.turn_delta_min ?? 0);
+}
+export function useCostBenchmarks() {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'cost_benchmarks', world.game_day],
+    queryFn: () => rows<CostBenchmark>(supabase.from('cost_benchmarks').select('*').eq('world_id', world.id)),
+  });
+}
+export function useOpsPreview() {
+  const { airline, world } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'ops_preview', world.game_day],
+    queryFn: () => call<OpsPreview>('ops_preview', { p_airline: airline.id }),
+  });
+}
 
 export function useDemandEvents() {
   return useQuery({

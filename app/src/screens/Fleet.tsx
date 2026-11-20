@@ -1,12 +1,11 @@
 // Fleet: every aircraft, what it does and what it costs. Cards on a phone, a table on a laptop.
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, type FleetItem } from '../lib/data';
+import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, useTurnDelta, type FleetItem } from '../lib/data';
 import { aircraftStats, hoursByAircraft, windowShare } from '../lib/derive';
 import { holdingLabel, STATUS_LABEL } from '../lib/game';
 import { arrivalWeek, currentWeek, inr, pct, usd } from '../lib/format';
 import { Badge, Bar, Button, Empty, Icon, Loading, PageHeader } from '../components/ui';
-import { PilotsCard } from '../components/PilotsCard';
 
 type Filter = 'all' | 'flying' | 'attention' | 'arriving';
 
@@ -21,6 +20,7 @@ export function costLabel(a: FleetItem) {
 
 export function Fleet() {
   const { ref, world } = useGame();
+  const turnDelta = useTurnDelta();
   const fleet = useFleet();
   const net = useRoutes();
   const bases = useBases();
@@ -30,7 +30,7 @@ export function Fleet() {
   const fl = fleet.data ?? [];
   const rots = net.data?.rotations ?? [];
   const routes = net.data?.routes ?? [];
-  const hours = useMemo(() => (net.data ? hoursByAircraft(fl, routes, rots, markets.data, ref) : {}), [fl, routes, rots, markets.data, ref, net.data]);
+  const hours = useMemo(() => (net.data ? hoursByAircraft(fl, routes, rots, markets.data, ref, turnDelta) : {}), [fl, routes, rots, markets.data, ref, net.data, turnDelta]);
   const ad = useAircraftDaily();
   const money = useMemo(() => aircraftStats(ad.data ?? [], world.game_day - 6), [ad.data, world.game_day]);
   // last week's result: revenue less flying costs and what holding the aircraft costs
@@ -62,9 +62,8 @@ export function Fleet() {
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Fleet" sub={`${fl.length} aircraft · week ${currentWeek(world)}`}
+      <PageHeader title="Fleet" back="/ops" sub={`${fl.length} aircraft · week ${currentWeek(world)}`}
         actions={<Button size="sm" onClick={() => nav('/market')}><Icon name="plus" />Get aircraft</Button>} />
-      <PilotsCard />
       <div className="chips" role="tablist">
         {([['all', 'All'], ['flying', 'Flying'], ['attention', 'Needs attention'], ['arriving', 'Arriving']] as [Filter, string][]).map(([k, l]) => (
           <button key={k} className={`chip ${filter === k ? 'on' : ''}`} onClick={() => setFilter(k)}>{l} {groups[k].length}</button>

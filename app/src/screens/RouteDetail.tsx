@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, type FleetItem } from '../lib/data';
+import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, useTurnDelta, type FleetItem } from '../lib/data';
 import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct, plural, weekOf } from '../lib/format';
@@ -16,6 +16,7 @@ export function RouteDetail() {
   const { id } = useParams();
   const [sp, setSp] = useSearchParams();
   const { ref, world, airline } = useGame();
+  const turnDelta = useTurnDelta();
   const net = useRoutes();
   const fleet = useFleet();
   const bases = useBases();
@@ -33,8 +34,8 @@ export function RouteDetail() {
   const m = route ? markets.data?.[pairKey(route.origin, route.dest)] : undefined;
   const rots = (net.data?.rotations ?? []).filter((r) => r.route_id === id);
   const fl = fleet.data ?? [];
-  const hours = useMemo(() => (net.data && fleet.data ? hoursByAircraft(fleet.data, net.data.routes, net.data.rotations, markets.data, ref) : {}),
-    [net.data, fleet.data, markets.data, ref]);
+  const hours = useMemo(() => (net.data && fleet.data ? hoursByAircraft(fleet.data, net.data.routes, net.data.rotations, markets.data, ref, turnDelta) : {}),
+    [net.data, fleet.data, markets.data, ref, turnDelta]);
 
   if (net.isLoading || fleet.isLoading) return <Loading h={300} />;
   if (!route) return <Empty title="This route is closed" action={<Button onClick={() => nav('/network')}>Back to network</Button>} />;
@@ -174,8 +175,9 @@ export function RouteDetail() {
 
 function RotationRow({ ac, trips, km, used, routeId }: { ac: FleetItem; trips: number; km: number; used: number; routeId: string }) {
   const { ref, airline } = useGame();
+  const turnDelta = useTurnDelta();
   const t = ref.type[ac.type_id];
-  const trip = tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz));
+  const trip = tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz, turnDelta));
   const max = Math.min(84, Math.floor((weekHours(t) - (used - trips * trip) + 1e-9) / trip));
   const [v, setV] = useState(trips);
   const { run, busy } = useAction();
@@ -200,20 +202,21 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
   routeId: string; ends: string[]; km: number; fleet: FleetItem[]; hours: Record<string, number>; already: Set<string>; onClose: () => void;
 }) {
   const { ref, airline } = useGame();
+  const turnDelta = useTurnDelta();
   const { run, busy } = useAction();
   // each aircraft's room on this route: round trips a week that fit its free hours, or none if the route is beyond its range
   const outOfRange = (a: FleetItem) => {
     const tt = ref.type[a.type_id];
     return km > Math.round(tt.range_km * Math.min(1.1, 1 - (0.4 * (a.seats_econ + a.seats_biz - tt.ref_seats)) / tt.ref_seats));
   };
-  const roomOf = (a: FleetItem) => (outOfRange(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0));
+  const roomOf = (a: FleetItem) => (outOfRange(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0, turnDelta));
   const candidates = fleet.filter((a) => !already.has(a.id) && a.base_iata && ends.includes(a.base_iata) && ['active', 'delivering', 'grounded', 'refit'].includes(a.status))
     .sort((x, y) => Number(roomOf(y) > 0) - Number(roomOf(x) > 0));
   const others = fleet.filter((a) => !already.has(a.id) && !(a.base_iata && ends.includes(a.base_iata)) && a.status !== 'returned');
   const [pick, setPick] = useState<string | null>(candidates.find((a) => roomOf(a) > 0)?.id ?? null);
   const ac = candidates.find((a) => a.id === pick);
   const t = ac ? ref.type[ac.type_id] : null;
-  const max = ac && t ? maxWeekly(t, ac, km, hours[ac.id] ?? 0) : 0;
+  const max = ac && t ? maxWeekly(t, ac, km, hours[ac.id] ?? 0, turnDelta) : 0;
   const tooFar = ac && t ? km > Math.round(t.range_km * Math.min(1.1, 1 - (0.4 * (ac.seats_econ + ac.seats_biz - t.ref_seats)) / t.ref_seats)) : false;
   const [trips, setTrips] = useState<number | null>(null);
   const tv = trips ?? Math.min(max, 14);
@@ -259,7 +262,7 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                     <div className="field">
                       <label>Round trips a week (up to {max})</label>
                       <Stepper label="round trips a week" value={tv} min={1} max={max} onChange={setTrips} format={(x) => `${x} a week · ${(x / 7).toFixed(1)} a day`} />
-                      <div className="hint">One round trip takes {tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz)).toFixed(1)} hours including turnarounds. Flying an aircraft above 85% of its day costs punctuality.</div>
+                      <div className="hint">One round trip takes {tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz, turnDelta)).toFixed(1)} hours including turnarounds. Flying an aircraft above 85% of its day costs punctuality.</div>
                     </div>
                   )
             )}

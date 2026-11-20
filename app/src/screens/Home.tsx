@@ -8,6 +8,7 @@ import { byWeek, routeStat, sumDaily } from '../lib/derive';
 import { pairKey } from '../lib/game';
 import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, weekLabel, weekOf, weeks } from '../lib/format';
 import type { Route } from '../lib/types';
+import { useOpsDecisions } from './Ops';
 import { ProfitBars } from '../components/charts';
 import { WorldClock } from '../components/Shell';
 import { useAction } from '../components/toast';
@@ -36,6 +37,7 @@ export function Home() {
   const { run, busy } = useAction();
   const nav = useNavigate();
   const [menu, setMenu] = useState(false);
+  const opsDecisions = useOpsDecisions();
 
   const days = daily.data ?? [];
   const wk = byWeek(days);
@@ -57,7 +59,7 @@ export function Home() {
       const sc = c.need - c.captains, sf = c.need - c.fos;
       if (sc > 0 || sf > 0) {
         alerts.push({ key: `p${fm.id}`, tone: 'warn', to: '/fleet', title: `Short of ${fm.name} pilots`,
-          body: `${[sc > 0 ? `${sc} captain${sc === 1 ? '' : 's'}` : '', sf > 0 ? `${sf} first officer${sf === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} short. Flights with nobody to fly them are cancelled until more join. Spare pilots and pay are under Fleet.` });
+          body: `${[sc > 0 ? `${sc} captain${sc === 1 ? '' : 's'}` : '', sf > 0 ? `${sf} first officer${sf === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} short. Flights with nobody to fly them are cancelled until more join. Pilots are hired for you at market pay and join in 4 weeks.` });
       }
     }
   }
@@ -110,6 +112,11 @@ export function Home() {
   if (wet.length && world.game_day + 1 - row.first_flight_day > 28) {
     alerts.push({ key: 'wet', tone: 'info', to: '/market', title: `${wet.length === 1 ? wet[0].reg + ' is' : wet.length + ' aircraft are'} still on wet lease`,
       body: 'A wet lease costs about twice as much as an operating lease. Lease an aircraft from the pool and return the wet one when it arrives.' });
+  }
+
+  if (opsDecisions.length) {
+    alerts.push({ key: 'ops', tone: 'info', to: '/ops', title: opsDecisions.length === 1 ? opsDecisions[0].title : `${opsDecisions.length} decisions in Ops`,
+      body: opsDecisions.length === 1 ? 'A decision on how you run the airline. Open Ops to see what it changes in rupees.' : opsDecisions.map((d) => d.title).join(' · ') });
   }
 
   const started = routes.length > 0 && rots.length > 0 && days.some((d) => d.pax > 0);
@@ -237,7 +244,7 @@ function GetReady({ ffd, weeksLeft }: { ffd: number; weeksLeft: number }) {
       sc += Math.max(0, c.need - c.captains); sf += Math.max(0, c.need - c.fos);
     }
     items.push({ done: sc + sf === 0, to: '/fleet', title: 'Pilots',
-      body: sc + sf === 0 ? 'A crew for every aircraft.' : `${[sc ? plural(sc, 'captain') : '', sf ? plural(sf, 'first officer') : ''].filter(Boolean).join(' and ')} short. Hire them under Fleet before week ${fw}.` });
+      body: sc + sf === 0 ? 'A crew for every aircraft.' : `${[sc ? plural(sc, 'captain') : '', sf ? plural(sf, 'first officer') : ''].filter(Boolean).join(' and ')} short. They are hired for you at market pay and join in 4 weeks.` });
   }
   return (
     <div className="card info stack">
