@@ -2,13 +2,13 @@
 // rivals did on its market. The engine sets every fare from the strategy; players choose the strategy only.
 import { useMemo, useState } from 'react';
 import { call } from '../lib/api';
-import { useGame, useMarketsFrom, useMarketWatch, useRivals, useRoutePlans, useRoutes, useRouteWeeks, useSectorInsights, useStrategies, useWorldAirlines } from '../lib/data';
+import { useGame, useMarketsFrom, useMarketWatch, usePosOptions, useRivals, useRoutePlans, useRoutes, useRouteWeeks, useSectorInsights, useSellWhere, useStrategies, useWorldAirlines } from '../lib/data';
 import { clock, pairKey } from '../lib/game';
 import { BAND_LABEL, bandOf, practice, practiceInput, routeIndex, SHAPE_LABEL, shapeOf, verdict } from '../lib/insights';
 import { currentWeek, inr, num, pct, realTime, weekLabel } from '../lib/format';
-import type { MarketMove, Route, RouteWeek, StrategyKey } from '../lib/types';
+import type { MarketMove, PosKey, PosOption, Route, RouteWeek, StrategyKey } from '../lib/types';
 import { useAction } from './toast';
-import { Badge, Button, Loading } from './ui';
+import { Badge, Button, Loading, Seg } from './ui';
 
 const sold = (w: RouteWeek) => w.bk_be + w.bk_l + w.bk_u + w.bk_b;
 const seats = (w: RouteWeek) => w.seats_e + w.seats_b;
@@ -44,6 +44,27 @@ export function StrategyCard({ route }: { route: Route }) {
     const input = practiceInput(m, rivals.data[pairKey(route.origin, route.dest)] ?? [], airline.id, world.demand_scale, world.game_day + 1, ref.param, 1, world.fare_index ?? 1);
     return Object.fromEntries(strategies.data.map((s) => [s.key, practice(s, input)]));
   }, [m, strategies.data, rivals.data, route.origin, route.dest, airline.id, world.demand_scale, world.game_day, ref.param]);
+  // 0026: where an international route sells its tickets, for the chosen way of selling
+  const pos = usePosOptions();
+  const sellWhere = useSellWhere();
+  const [where, setWhere] = useState<PosKey | null>(null);
+  const whereNow = sellWhere.data?.[route.id] ?? 'india';
+  const whereSel = where ?? whereNow;
+  const fxRef = Number(ref.param.fx_ref_inr_usd ?? 90);
+  const posRows = useMemo(() => {
+    const s = strategies.data?.find((x) => x.key === chosen);
+    if (!m?.intl || !pos.data || !s || !rivals.data) return null;
+    const input = practiceInput(m, rivals.data[pairKey(route.origin, route.dest)] ?? [], airline.id, world.demand_scale, world.game_day + 1, ref.param, 1, world.fare_index ?? 1);
+    return pos.data.map((o: PosOption) => {
+      const r = practice(s, { ...input, posBonus: Number(o.util_bonus) });
+      const take = r.revenue * (1 + Number(o.usd_share) * (world.fx_inr_usd / fxRef - 1));
+      const team = take * Number(o.sales_cost_share);
+      return { o, load: r.load, team, net: take - team, weak: r.revenue * Number(o.usd_share) * 0.1 * world.fx_inr_usd / fxRef };
+    });
+  }, [m, pos.data, strategies.data, chosen, rivals.data, route.origin, route.dest, airline.id, world.demand_scale, world.game_day, world.fx_inr_usd, world.fare_index, ref.param, fxRef]);
+  const whereRow = posRows?.find((x) => x.o.key === whereSel);
+  const short = (o: PosOption) => ({ india: 'India', both: 'Both', abroad: 'Abroad' } as Record<string, string>)[o.key] ?? o.name;
+  const lc = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
   const others = (net.data?.routes ?? []).filter((r) => r.id !== route.id && (plans.data?.[r.id] ?? 'balanced') !== chosen);
   const chosenName = strategies.data?.find((s) => s.key === chosen)?.name ?? chosen;
   const next = clock(world).nextInSec;
@@ -87,6 +108,29 @@ export function StrategyCard({ route }: { route: Route }) {
         <Button block kind="secondary" busy={busy === 'plan-all'} onClick={() => run('plan-all', async () => {
           for (const r of [...others, route]) await call('set_strategy', { p_airline: airline.id, p_route: r.id, p_strategy: chosen });
         }, `Saved. All your routes switch to ${chosenName} when next week's selling starts${soon}.`).then(() => setPick(null))}>Use {chosenName} on all my routes</Button>
+      )}
+      {posRows && whereRow && (
+        <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}><h3>Where you sell tickets</h3><span className="tiny muted">international route</span></div>
+          <Seg block value={whereSel} onChange={setWhere} options={posRows.map((x) => ({ value: x.o.key, label: short(x.o) }))} />
+          <p className="tiny muted" style={{ margin: 0 }}>{whereRow.o.blurb}</p>
+          <table className="table expect">
+            <thead><tr><th>Where</th><th className="r">Seats sold</th><th className="r">Sales team abroad</th><th className="r">Takings after</th></tr></thead>
+            <tbody>
+              {posRows.map((x) => (
+                <tr key={x.o.key} className={whereSel === x.o.key ? 'me' : ''}>
+                  <td>{short(x.o)}</td><td className="r num">{pct(x.load)}</td><td className="r num">{x.team >= 1 ? inr(x.team) : '–'}</td><td className="r num">{inr(x.net)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="tiny muted" style={{ margin: 0 }}>For one flight week each way, selling {chosenName.toLowerCase()}, with the rupee at ₹{world.fx_inr_usd.toFixed(2)} a dollar.
+            {' '}{pct(Number(whereRow.o.usd_share))} of these tickets are priced in dollars: if the rupee weakens 10%, they bring {inr(whereRow.weak)} more a week; if it strengthens, as much less.</p>
+          <Button block kind="secondary" disabled={whereSel === whereNow} busy={busy === 'pos'} onClick={() => run('pos', () => call('set_sell_where', {
+            p_airline: airline.id, p_route: route.id, p_where: whereSel,
+          }), `Saved. Tickets sell ${lc(whereRow.o.name)} from next week's selling${soon}; the sales team's cost follows the takings.`).then(() => setWhere(null))}>
+            {whereSel === whereNow ? `Selling ${lc(whereRow.o.name)} now` : `Sell ${lc(whereRow.o.name)}`}</Button>
+        </div>
       )}
       {on.length > 0 && (
         <div className="kv small">

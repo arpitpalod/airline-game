@@ -190,7 +190,7 @@ function BalanceSheet() {
   const book = terms.filter((t) => t.holding === 'owned' && t.ordered_day == null && t.price_usd)
     .reduce((s, t) => s + t.price_usd! * world.fx_inr_usd * Math.max(ref.param.book_value_floor, 1 - ref.param.depreciation_year * Math.max(0, world.game_day - (t.start_day ?? world.game_day)) / 364), 0);
   const deposits = terms.reduce((s, t) => s + Number(t.deposit_inr ?? 0), 0);
-  const loans = terms.reduce((s, t) => s + Number(t.loan_usd ?? 0) * world.fx_inr_usd, 0);
+  const loans = terms.reduce((s, t) => s + Number(t.loan_usd ?? 0) * world.fx_inr_usd + Number(t.loan_inr ?? 0), 0);
   const latest = [...(aw.data ?? [])].sort((a, b) => b.week - a.week)[0];
   const advance = latest?.advance_inr ?? 0;
   const assets = f.cash_inr + book + deposits;

@@ -1,20 +1,21 @@
-// Ops (migration 0023): what flying costs against the industry, the decisions worth a look this week, and three strategies
-// for the whole fleet (fuel hedging, maintenance, operating style). Every choice shows its cost or revenue before and after.
+// Ops (migration 0023): what flying costs against the industry, the decisions worth a look this week, and the strategies
+// for the whole fleet (fuel hedging, dollar hedging from 0026, maintenance, operating style). Every choice shows its cost or
+// revenue before and after.
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAirlineDaily, useAirlineOps, useCostBenchmarks, useFleet, useGame, useMaintPlans, useOpStyles, useOpsPreview, useRoutes } from '../lib/data';
-import { gameDate, inr, num, pct, plural, weekOf } from '../lib/format';
+import { gameDate, inr, num, pct, plural, usd, weekOf } from '../lib/format';
 import type { AirlineDaily, OpsPreview } from '../lib/types';
 import { CrewCard } from '../components/PilotsCard';
 import { useAction } from '../components/toast';
 import { Badge, Button, Loading, PageHeader } from '../components/ui';
 
 // ---------- cost lines ----------
-const LINES: { key: string; name: string; color: string; lever: string; to?: string; of: (d: AirlineDaily) => number }[] = [
+const LINES: { key: string; name: string; color: string; lever: string; to?: string; usd?: boolean; of: (d: AirlineDaily) => number }[] = [
   { key: 'fuel', name: 'Fuel', color: '#0E7C70', lever: 'Fuel hedging · operating style', to: '/ops/fuel', of: (d) => d.c_fuel },
-  { key: 'aircraft', name: 'Aircraft', color: '#4FA59A', lever: 'Lease or buy, in Get aircraft', to: '/market', of: (d) => d.c_rent + d.c_depr },
-  { key: 'maintenance', name: 'Maintenance', color: '#9AD0C7', lever: 'Maintenance strategy', to: '/ops/maintenance', of: (d) => d.c_maint },
+  { key: 'aircraft', name: 'Aircraft', color: '#4FA59A', lever: 'Lease or buy, in Get aircraft', to: '/market', usd: true, of: (d) => d.c_rent + d.c_depr },
+  { key: 'maintenance', name: 'Maintenance', color: '#9AD0C7', lever: 'Maintenance strategy', to: '/ops/maintenance', usd: true, of: (d) => d.c_maint },
   { key: 'crew', name: 'Crew', color: '#1E5AA8', lever: 'Hired for you · operating style', to: '/ops/style', of: (d) => d.c_crew },
   { key: 'airports', name: 'Airports and slots', color: '#7FA7DD', lever: 'Set by your routes', to: '/network', of: (d) => d.c_airport + d.c_slots },
   { key: 'sales', name: 'Sales and service', color: '#F0A04B', lever: 'Extras and marketing', to: '/extras', of: (d) => d.c_dist + d.c_marketing },
@@ -23,7 +24,8 @@ const LINES: { key: string; name: string; color: string; lever: string; to?: str
 
 const sum = (xs: AirlineDaily[], f: (d: AirlineDaily) => number) => xs.reduce((s, d) => s + f(d), 0);
 
-/** The weeks' fuel bill under a hedged share h if prices move by s: the hedged part at today's price plus the premium. */
+/** 13 weeks of a bill (fuel, or dollar costs in rupees) under a hedged share h if prices move by s: the hedged part at
+ *  today's price plus the premium. */
 export const hedgeBill = (fuelWeek: number, h: number, s: number, premium: number) => 13 * fuelWeek * ((1 - h) * (1 + s) + h * (1 + premium));
 
 export interface Decision { key: string; tone: 'warn' | 'info'; tag: string; title: string; body: ReactNode; to?: string; action?: { label: string; run: () => void; busy?: boolean }; alt?: string }
@@ -61,6 +63,24 @@ export function useOpsDecisions(): Decision[] {
   const now = p.plans.find((x) => x.key === p.plan);
   const better = p.plans.filter((x) => x.key !== p.plan && x.key !== 'lean' && now && x.cost_week < now.cost_week * 0.95
     && x.groundings_qtr <= now.groundings_qtr).sort((a, b) => a.cost_week - b.cost_week)[0];
+  // 0026: the rupee well off Rs 90 and dollar costs to protect
+  const fxRef = Number(p.usd?.ref ?? 90), weak = world.fx_inr_usd / fxRef - 1;
+  const usdWeek = (p.usd?.week_usd ?? 0) * world.fx_inr_usd;
+  if (p.usd && weak >= 0.05 && p.usd.share < p.usd.max - 1e-9 && usdWeek > 0) {
+    const next = Math.min(p.usd.max, p.usd.share + p.usd.step);
+    const b = (h: number, s: number) => inr(hedgeBill(usdWeek, h, s, p.usd.premium));
+    out.push({ key: 'usd', tone: 'warn', tag: 'Currency', title: `The rupee is ${pct(weak)} weaker than ₹${fxRef}`,
+      body: <>
+        <p className="small">Your dollar costs (aircraft, maintenance, dollar loans) are about {inr(usdWeek)} a week, and you hedge {pct(p.usd.share)}. Hedging more locks today's rate for 13 weeks, starting in 13 weeks: it pays if the rupee weakens further and costs if it recovers.</p>
+        <div className="kv small" style={{ marginTop: 6 }}>
+          <span>13 weeks of dollars, if the rupee stays</span><span>{b(p.usd.share, 0)} at {pct(p.usd.share)} · {b(next, 0)} at {pct(next)}</span>
+          <span>if it weakens 5% more</span><span>{b(p.usd.share, 0.05)} · {b(next, 0.05)}</span>
+        </div>
+      </>,
+      action: { label: `Hedge ${pct(next)}`, busy: busy === 'd-usd',
+        run: () => run('d-usd', () => call('set_usd_hedge', { p_airline: airline.id, p_share: next }), `You now hedge ${pct(next)} of each week's dollars.`) },
+      alt: `Keep ${pct(p.usd.share)}` });
+  }
   if (now && better && !p.plan_next && p.day >= p.locked_until) {
     const name = plans.data.find((x) => x.key === better.key)?.name ?? better.key;
     out.push({ key: 'maint', tone: 'info', tag: 'Maintenance', title: p.aircraft >= 40 && better.key === 'hangar' ? `Your fleet passed 40 aircraft` : `${name} would cost less`,
@@ -85,7 +105,7 @@ export function useOpsDecisions(): Decision[] {
 }
 
 export function Ops() {
-  const { world, airline } = useGame();
+  const { world, airline, ref } = useGame();
   const daily = useAirlineDaily(28);
   const bench = useCostBenchmarks();
   const ops = useAirlineOps();
@@ -111,6 +131,11 @@ export function Ops() {
   const flyingIds = new Set((net.data?.rotations ?? []).map((r) => r.aircraft_id));
   const lastWeek = days.filter((d) => d.game_day > world.game_day - 7);
   const hedgeWeek = sum(lastWeek, (d) => d.hedge_inr);
+  const usdHedgeWeek = sum(lastWeek, (d) => d.usd_hedge_inr ?? 0);
+  // 0026: the share of costs paid in dollars, and what the rupee's move against the reference rate added over 4 weeks
+  const allCost = sum(days, (d) => LINES.reduce((s, l) => s + l.of(d), 0) + d.c_interest);
+  const usdCost = sum(days, (d) => d.usd_cost_inr ?? 0);
+  const fxEffect = sum(days, (d) => d.fx_effect_inr ?? 0);
   const qStart = (gameDate(world.game_day).quarter - 1) * 91 + (gameDate(world.game_day).year - 1) * 364;
   const groundQ = sum((daily.data ?? []).filter((d) => d.game_day > qStart), (d) => d.groundings);
   const o = ops.data;
@@ -165,7 +190,7 @@ export function Ops() {
                     const row = (
                       <>
                         <span className="swatch" style={{ background: l.color }} />
-                        <span className="grow"><span className="strong small">{l.name}</span><span className="tiny muted" style={{ display: 'block' }}>{l.lever}</span></span>
+                        <span className="grow"><span className="strong small">{l.name}</span>{l.usd && <span className="usd-tag" title="Paid in dollars">$</span>}<span className="tiny muted" style={{ display: 'block' }}>{l.lever}</span></span>
                         <span className="small num">₹{v.toFixed(2)}</span>
                         <span className={`tiny strong num ${d == null ? 'muted' : d > 0.005 ? 'bad-ink' : 'good'}`} style={{ minWidth: 44, textAlign: 'right' }}>
                           {d == null ? '' : `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(2)}`}</span>
@@ -174,6 +199,17 @@ export function Ops() {
                     return l.to ? <Link key={l.key} to={l.to} className="item link cost-line">{row}</Link> : <div key={l.key} className="item cost-line">{row}</div>;
                   })}
                 </div>
+                {usdCost > 0 && (
+                  <Link to="/ops/dollars" className="fx-strip" aria-label="Currency: open dollar hedging">
+                    <div className="fx-head"><span className="small strong">Currency</span><span className="small strong" style={{ color: 'var(--accent)' }}>Hedge ›</span></div>
+                    <div><div className="tiny muted">Rupee</div><div className="strong num">₹{world.fx_inr_usd.toFixed(2)}</div><div className="tiny muted">a dollar</div></div>
+                    <div><div className="tiny muted">In dollars</div><div className="strong num">{pct(usdCost / (allCost || 1))}</div><div className="tiny muted">of your costs</div></div>
+                    <div><div className="tiny muted">Against ₹{Number(ref.param.fx_ref_inr_usd ?? 90)}</div>
+                      <div className={`strong num ${fxEffect > 0.5 ? 'bad-ink' : fxEffect < -0.5 ? 'good' : ''}`}>{Math.abs(fxEffect) < 1 ? '±₹0' : `${fxEffect > 0 ? '+' : '−'}${inr(Math.abs(fxEffect))}`}</div>
+                      <div className="tiny muted">{fxEffect >= 0 ? 'added' : 'saved'} in 4 weeks</div></div>
+                    <div className="fx-foot tiny muted">Lines marked $ are paid in dollars; fares are in rupees. {o && o.usd_hedge_share > 0 ? `You hedge ${pct(o.usd_hedge_share)} of each week's dollars.` : 'No dollar hedge.'}</div>
+                  </Link>
+                )}
                 {wet > 0 && <p className="tiny" style={{ margin: 0 }}>{wet === fl.length ? 'All your aircraft are' : `${plural(wet, 'aircraft', 'aircraft')} are`} wet-leased: their crew and maintenance are in the rent, so they count under Aircraft.</p>}
                 <p className="tiny muted">Rupees per seat-km flown. {nAirlines ? `Industry: the median of ${nAirlines} airlines, refreshed weekly.` : 'The industry median shows at the end of a week once three airlines fly.'}</p>
               </>
@@ -190,6 +226,11 @@ export function Ops() {
                   <div className="grow"><div className="tiny muted">Fuel hedging</div><div className="strong">{o.hedge_share > 0 ? `${pct(o.hedge_share)} of each week's fuel` : 'No hedge'}</div></div>
                   <span className={`small ${hedgeWeek > 0 ? 'good' : hedgeWeek < 0 ? 'bad-ink' : 'muted'}`}>
                     {hedgeWeek > 0 ? `Saved ${inr(hedgeWeek)} last week` : hedgeWeek < 0 ? `Cost ${inr(-hedgeWeek)} last week` : 'No hedge result yet'}</span>
+                </Link>
+                <Link to="/ops/dollars" className="item link">
+                  <div className="grow"><div className="tiny muted">Dollar hedging</div><div className="strong">{o.usd_hedge_share > 0 ? `${pct(o.usd_hedge_share)} of each week's dollars` : 'No hedge'}</div></div>
+                  <span className={`small ${usdHedgeWeek > 0 ? 'good' : usdHedgeWeek < 0 ? 'bad-ink' : 'muted'}`}>
+                    {usdHedgeWeek > 0 ? `Saved ${inr(usdHedgeWeek)} last week` : usdHedgeWeek < 0 ? `Cost ${inr(-usdHedgeWeek)} last week` : 'No hedge result yet'}</span>
                 </Link>
                 <Link to="/ops/maintenance" className="item link">
                   <div className="grow"><div className="tiny muted">Maintenance</div>
@@ -311,6 +352,75 @@ export function OpsFuel() {
             share === 0 ? 'No new hedges from next week. Hedges already bought run off.' : `Hedging ${pct(share)} from next week's purchase: fuel for week ${wNow + p.hedge_lead_weeks} on.`).then(() => setPick(null))}>Hedge this way</Button>
           <p className="tiny muted" style={{ textAlign: 'center' }}>Hedges already bought run off over {p.hedge_lead_weeks} weeks, so a change shows fully after {p.hedge_lead_weeks} weeks.
             Fares follow about a third of a change in fuel cost, a few weeks late: hedging protects the rest.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function OpsDollar() {
+  const { world, airline } = useGame();
+  const pv = useOpsPreview();
+  const daily = useAirlineDaily(91);
+  const { run, busy } = useAction();
+  const [pick, setPick] = useState<number | null>(null);
+  const p = pv.data;
+  const u = p?.usd;
+  const options = useMemo(() => (u ? Array.from({ length: Math.round(u.max / u.step) + 1 }, (_, i) => Math.round(i * u.step * 100) / 100) : []), [u]);
+  if (!p || !u) return <div className="stack-lg"><PageHeader title="Dollar hedging" back="/ops" /><Loading /></div>;
+  const share = pick ?? u.share;
+  const fx = world.fx_inr_usd, weak = fx / u.ref - 1;
+  const usdWeek = u.week_usd * fx;
+  const days = daily.data ?? [];
+  const week = days.filter((d) => d.game_day > world.game_day - 7);
+  const qStart = (gameDate(world.game_day).quarter - 1) * 91 + (gameDate(world.game_day).year - 1) * 364;
+  const quarter = days.filter((d) => d.game_day > qStart);
+  const booked = u.bought.filter((h) => h.share > 0);
+  const wNow = weekOf(world.game_day + 1);
+  const rows = [[-0.05, 'gains 5%', '#4FA59A'], [0, 'stays', 'var(--accent)'], [0.05, 'loses 5%', '#F0A04B'], [0.1, 'loses 10%', '#D9644A']] as const;
+  const bills = rows.map(([s]) => hedgeBill(usdWeek, share, s, u.premium));
+  const top = hedgeBill(usdWeek, 0, 0.1, u.premium) || 1;
+  const blurb = (h: number) => (h === 0 ? 'Buy dollars at the going rate every week. Cheapest when the rupee strengthens; a fall hits in full.'
+    : h <= 0.25 ? 'Takes the edge off a fall.' : h <= 0.5 ? "Half of each week's dollars bought ahead: steadier costs." : 'Most of the dollar bill fixed 13 weeks ahead. Costly if the rupee recovers.');
+  const res = (xs: typeof days) => sum(xs, (d) => d.usd_hedge_inr ?? 0);
+  return (
+    <div className="stack-lg">
+      <PageHeader title="Dollar hedging" back="/ops" sub={`Aircraft rent, maintenance and dollar loans are paid in dollars; your fares are in rupees. Buy part of each week's dollars ${p.hedge_lead_weeks} weeks ahead, at that week's rate plus ${pct(u.premium)}.`} />
+      <div className="split">
+        <div className="stack-lg">
+          <div className="card stack" style={{ gap: 8 }}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <div><div className="tiny muted">The rupee this week</div><div className="kpi-s" style={{ fontSize: 22 }}>₹{fx.toFixed(2)} a dollar</div></div>
+              <Badge tone={weak >= 0.05 ? 'warn' : weak <= -0.05 ? 'good' : 'neutral'}>{Math.abs(weak) < 0.01 ? `about ₹${u.ref}` : `${pct(Math.abs(weak))} ${weak > 0 ? 'weaker' : 'stronger'} than ₹${u.ref}`}</Badge>
+            </div>
+            <div className="kv small">
+              <span>Your dollar costs</span><span>{u.week_usd > 0 ? `${usd(u.week_usd)} a week (${inr(usdWeek)})` : 'none yet'}</span>
+              <span>Already bought</span><span>{booked.length ? `weeks ${booked[0].week} to ${booked[booked.length - 1].week}` : 'nothing yet'}</span>
+              {booked.length > 0 && <><span>at an average of</span><span>₹{(booked.reduce((s0, h) => s0 + h.rate, 0) / booked.length).toFixed(2)} a dollar</span></>}
+              <span>Hedge result last week</span><span className={res(week) >= 0 ? 'good' : 'bad-ink'}>{signed(res(week))}</span>
+              <span>This quarter</span><span className={res(quarter) >= 0 ? 'good' : 'bad-ink'}>{signed(res(quarter))}</span>
+            </div>
+          </div>
+          <h2>How much to hedge</h2>
+          <Choices label="How much of the dollars to hedge" now={String(u.share)} pick={String(share)} onPick={(k) => setPick(Number(k))}
+            items={options.map((h) => ({ key: String(h), name: h === 0 ? 'None' : pct(h), blurb: blurb(h), good_for: '' }))} />
+        </div>
+        <div className="stack-lg">
+          <div className="card stack" style={{ gap: 10 }}>
+            <div className="small muted">Dollar costs for weeks {wNow + p.hedge_lead_weeks} to {wNow + p.hedge_lead_weeks + 12} (the weeks this choice buys), in rupees, with <strong style={{ color: 'var(--ink)' }}>{share === 0 ? 'no hedge' : `${pct(share)} hedged`}</strong>, if the rupee then…</div>
+            {usdWeek === 0 ? <p className="small muted">No dollar costs yet: they start with your first aircraft.</p> : rows.map(([s, label, c], i) => (
+              <div key={s} className="hedge-row">
+                <span className="small">{label}</span>
+                <div className="hedge-bar"><i style={{ width: `${(100 * bills[i]) / top}%`, background: c }} /></div>
+                <span className="small strong num">{inr(bills[i])}</span>
+              </div>
+            ))}
+            {usdWeek > 0 && <div className="tiny muted">Best to worst case: <strong>{inr(bills[3] - bills[0])}</strong>. More hedging narrows it, for the {pct(u.premium)} premium.</div>}
+          </div>
+          <Button block disabled={share === u.share} busy={busy === 'usd'} onClick={() => run('usd', () => call('set_usd_hedge', { p_airline: airline.id, p_share: share }),
+            share === 0 ? 'No new dollar hedges from next week. Hedges already bought run off.' : `Hedging ${pct(share)} from next week's purchase: dollars for week ${wNow + p.hedge_lead_weeks} on.`).then(() => setPick(null))}>Hedge this way</Button>
+          <p className="tiny muted" style={{ textAlign: 'center' }}>Hedges already bought run off over {p.hedge_lead_weeks} weeks, so a change shows fully after {p.hedge_lead_weeks} weeks.
+            International routes that sell abroad take some fares in dollars, a natural hedge: see each route's How it sells.</p>
         </div>
       </div>
     </div>

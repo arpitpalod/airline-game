@@ -21,7 +21,7 @@ import { Ranks } from './screens/Ranks';
 import { Admin } from './screens/Admin';
 import { Extras } from './screens/Extras';
 import { Insights } from './screens/Insights';
-import { Ops, OpsFuel, OpsMaint, OpsStyle } from './screens/Ops';
+import { Ops, OpsDollar, OpsFuel, OpsMaint, OpsStyle } from './screens/Ops';
 
 const PICK_KEY = 'airline-game-airline';
 
@@ -108,6 +108,7 @@ function GameProvider({ game }: { game: Game }) {
           <Route path="/route/:id" element={<RouteDetail />} />
           <Route path="/ops" element={<Ops />} />
           <Route path="/ops/fuel" element={<OpsFuel />} />
+          <Route path="/ops/dollars" element={<OpsDollar />} />
           <Route path="/ops/maintenance" element={<OpsMaint />} />
           <Route path="/ops/style" element={<OpsStyle />} />
           <Route path="/fleet" element={<Fleet />} />

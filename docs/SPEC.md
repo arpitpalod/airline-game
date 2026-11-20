@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.17, 20 Nov 2026 (disruptions set per world by the admin, fights at a random but profitable fare, 14.19; year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.18, 20 Nov 2026 (currency basics: dollar costs in the cost card, dollar hedging, where international routes sell, rupee loans, 14.20; disruptions set per world by the admin, fights at a random but profitable fare, 14.19; year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -29,7 +29,7 @@ A persistent multiplayer airline business game for office colleagues, built to t
 | Livery | Cosmetic only. Brand score moves demand, paint does not |
 | Platform | Installable web app (opens from a link, sits on the home screen). Supabase back end |
 | Aircraft configuration | First-class feature in the MVP (section 5) |
-| Currency | Rupees, with dollar-linked costs (leases, fuel, maintenance) so currency risk is real |
+| Currency | Rupees, with dollar-linked costs (leases, maintenance, dollar loans) so currency risk is real; fuel in rupees (14.20) |
 
 ## 3. World and clock
 
@@ -653,6 +653,30 @@ One shock of each kind runs at a time (engine events could overlap before), so a
 
 **Tested.** 10 local checks (`checks_15`); the older checks run with the old currency rate and 0024 fights (`run.mjs`). The app test sets a world to Rough and back to Real.
 
+### 14.20 Currency, the basics (migration 0026)
+
+Owner's decisions (20 Nov 2026): only the basics, one lever each, built into screens that exist. No fuel price per airport (fuel stays in rupees). Lease length (6 or 12 years) is for later (open item 25).
+
+**Dollar costs and the currency effect.** Aircraft rent and wet leases, maintenance, dollar-loan interest and repayments, and the depreciation of owned aircraft are in dollars; everything else is in rupees. `day_ops` writes for each airline and day `airline_daily.usd_cost_usd` and `usd_cost_inr` (those costs, repayments left out), `fx_effect_inr` (what they cost against the reference rate `fx_ref_inr_usd`, Rs 90 (G)) and `usd_hedge_inr`. The Ops cost card has a Currency strip, about a quarter of the card: the rupee, the share of costs in dollars and what the rupee's move added or saved over 4 weeks, linked to dollar hedging. The Aircraft and Maintenance lines carry a $ mark.
+
+**Dollar hedging**, like fuel hedging (14.17). `set_usd_hedge(airline, share)`: none, 25, 50 or 75% (`usd_hedge_step`, `usd_hedge_max`). At each week start `ops_week` buys that share of the dollars for the week 13 weeks ahead (`hedge_lead_weeks`) at that week's rate plus 1% (`usd_hedge_premium`), in `usd_hedges` (read own). In that week rent, maintenance, dollar-loan interest and repayments are paid at share x locked rate + (1 − share) x the week's rate; depreciation stays at the day's rate (it is not cash). `usd_hedge_inr` is those cash items at the day's rate less what was paid. Page `/ops/dollars`: the rupee against Rs 90, dollar costs a week, what is already bought, last week's and the quarter's result, and 13 weeks of dollar costs if the rupee then gains 5%, stays, loses 5% or loses 10%. Ops shows a decision when the rupee is 5% or more weaker than Rs 90 and the hedge is below the most.
+
+**Where you sell**, on each international route: the commercial lever (sales sit with the chief commercial officer, so it moves revenue, and costs a sales team abroad). `route_plans.sell_where`, set with `set_sell_where(airline, route, key)` (refused on domestic routes), from table `pos_options` (G):
+
+| | Tickets priced in dollars | Sales team abroad (share of the route's ticket revenue) | Reach (added to every traveller's view of the route) |
+|---|---|---|---|
+| Mostly in India (the default; before 0026 no ticket followed the rupee) | 20% | 0 | 0 |
+| In India and abroad | 45% | 2.5% | 0.03 |
+| Mostly abroad | 70% | 5.5% | 0.06 |
+
+`sell_week` adds the reach to the four traveller types' utilities and books ticket revenue and cash at 1 + dollar share x (rate / 90 − 1), so tickets priced in dollars bring more rupees while the rupee is weak and fewer while it is strong; refunds follow what was booked. `day_ops` charges the sales team on the route's ticket revenue, in the route's costs and in Sales and service (selling worlds). On a test route a reach of 0.06 brought about 8% more travellers at the same fares and 0.03 about 4%: selling abroad pays on a route with empty seats and loses on a full one, give or take the currency. Computer-run airlines sell mostly in India. On the route page, How it sells shows for international routes one choice (India, Both, Abroad) and a practice-run table for the route's way of selling: seats sold, the sales team's cost and takings after it, and what a 10% weaker rupee brings.
+
+**Rupee loans.** An order can be paid with `loan_inr`: on delivery the balance is borrowed in rupees at `loan_rate_inr_year` 10.5% (the dollar loan is 8%), repaid daily over 12 years (`aircraft_terms.loan_ccy`, `loan_inr`, `loan_pay_inr_day`). Interest and repayments are in rupees, with no currency risk and no hedge. Net worth (`day_quarter`) and selling the aircraft (`return_aircraft`) count it. The order screen's pay choice is $ loan, ₹ loan, Cash or Leaseback, with the first year's interest on each loan and what a 10% weaker rupee adds to a dollar loan.
+
+Redefined: `ops_week` (from 0024), `day_ops` (0023), `sell_week` (0025), `day_fleet` (0025), `order_aircraft` (0007), `day_quarter` (0019), `return_aircraft` (0007), `ops_preview` (0025; adds `usd`). New: `set_usd_hedge`, `set_sell_where`.
+
+**Tested.** 15 local checks (`checks_16`): hedging steps and limits; the purchase 13 weeks ahead at the week's rate plus 1%; dollar costs and the effect against Rs 90 with the rupee at 100; rent at the blended rate when half is hedged; where you sell refused on domestic routes; more travellers when selling abroad; revenue at x 1.0222 / 1.05 / 1.0778 with the rupee at 100; the sales team at 5.5% of ticket revenue; a rupee loan on delivery, its daily interest and repayment, and its repayment on sale. The older checks pass unchanged. The app test hedges 25% of dollars, sees the Currency strip, sells an international route mostly abroad and orders two aircraft on a rupee loan.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -702,6 +726,8 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 23. Pilots and the season (two pairs of full-season runs, with and without pilots, 18 players and 18 places; single runs vary a lot). Players' revenue-weighted operating margin, years 3 to 6: with pilots −3.4/−4.1, −2.5/−3.4, +6.7/−2.2, +0.9/−1.0%; without −3.3/+3.3, −5.0/+7.4, +2.2/+9.2, +4.5/+8.6%. Computer-run airlines in year 6: +7.2/+10.6% with, +13.8/+15.5% without. So pilots cost about 4 to 6 points of margin late in the season, for players and computer-run airlines alike: crew cost per seat-km about 10% higher (buffers, crews hired ahead of aircraft, more pilots at high utilisation), cancellations of 1 to 3% in thin years against under 0.5%, and the A350 market running dry once long-haul players grow (market pay 1.4 to 1.6 for that family). Three strategies still lead (low-cost trunk, full service, long haul or a second low-cost trunk). The owner chose to trim pilot pay 10% (migration 0015). The runs also took about twice as long a game day (pilot step), well inside the 2-second target on the live database.
 
 24. Computer-run airlines in a full world (14.18): with 18 simulated players they shrink to a few aircraft each, except Sarus Airways, and keep losing money at that size (head office: item 16). Section 12 wants them to keep markets contested while a world fills up, so receding is intended; whether they should hold more ground in a full world is for the owner to decide after a real playtest.
+
+25. Lease length (14.20): leasing for 6 or 12 years, a longer lease at a lower rent but no way out in a downturn. The owner will decide later.
 
 **Sources for (V) figures**
 
