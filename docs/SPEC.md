@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.12, 19 Nov 2026 (money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.13, 20 Nov 2026 (computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -22,7 +22,7 @@ A persistent multiplayer airline business game for office colleagues, built to t
 |---|---|
 | Players | One person, one airline. About 50 airlines per world. More players means more parallel worlds |
 | Duration | Seasons of 26 real weeks, then reset with a hall of fame |
-| Clock | 13x, set per world |
+| Clock | A game week every 4 hours after a 13-week pre-launch in one hour, set per world (section 3) |
 | Map | 162 real airports: 93 in India, 69 abroad. Demand is modelled from published airport traffic |
 | Rivals | Fictional computer-run airlines fill the world; no real airline brands |
 | Livery | Cosmetic only. Brand score moves demand, paint does not |
@@ -169,7 +169,7 @@ Three ways to get an aircraft, always available, priced by shortage.
 
 ## 8. Revenue
 
-- One fare per cabin per route in the MVP, changeable any time, effective next game day.
+- Selling worlds (all new worlds, 14.13): every flight is on sale 26 weeks ahead and the engine sets its fares each week from the route's strategy (Fill every seat, Balanced, Top fares, Follow the market); players choose the strategy, not fares. Worlds without selling keep one fare per cabin per route, changeable any time, effective next game day.
 - The route screen shows the reference fare, rivals' public fares and frequencies, and yesterday's load factor and spill.
 - Extras (ancillaries): four extras each sold at a price or included free, set once for the whole network (section 14.6). Replaced the flat 8% of ticket revenue.
 
@@ -547,7 +547,7 @@ Step 3 of section 19.
 
 - **Too full, too empty.** The route page's Last flights card shows each of the last six flown weeks as a bar: passengers flown, seats flown empty and travellers who wanted a seat after the last one sold. A week is Too full when those turned away reach 5% of the seats, Too empty when 20% of the seats fly empty, otherwise About right, with one line of advice for the latest week. From `route_weeks`, in the app.
 - **What works where (public `sector_insights`).** Each week of selling sums every route's last 13 flown weeks by kind of sector (short under 800 km, medium under 1,800 km, long domestic, international), how many airlines fly the market that week (alone, two, three or four, five or more) and the strategy each flight week sold with (`route_weeks.strategy`): routes, load, fare per passenger and revenue per seat, both over the reference fare. A cell shows only with three routes or more (G `insight_min_routes`), so no single airline's route can be read off it. The Insights screen shows the table by kind of sector and an audit of each of your routes (the best way of selling for routes like it); the route page's How it compares card puts the route beside the cells for its kind, in rupees a seat.
-- **The computer-run airlines sell their own ways (G, `bot_airlines.strategy`):** Sarus Airways Top fares, Koel Air Fill every seat, Bulbul Air Follow the market, the rest Balanced, so What works where has more than one strategy to compare. Their third-quarter revenue stays within 1% of the daily model.
+- **The computer-run airlines sell their own ways (G, `bot_airlines.strategy`):** Sarus Airways Top fares, Koel Air Fill every seat, Bulbul Air Follow the market, the rest Balanced, so What works where has more than one strategy to compare. Their third-quarter revenue stays within 1% of the daily model. Superseded by 14.15: each route now draws from its airline's mix and keeps learning.
 - **Rival moves in the news.** A rival starting or stopping a market, changing its fare four weeks out by 15% or more (G `news_fare_move`) or its flights by 25% or more (G `news_flights_move`) makes private news for every player flying that market.
 - **Practice flight** (Insights screen, in the app, nothing saved). One of your routes, a quiet, normal or busy week: one flight week on sale for 26 weeks under each strategy, against rivals holding their current fares, with the same booking curves, fare rise and pace rule as the engine (economy only, no no-shows). Ranked by revenue, with the selected strategy's seats sold and fare week by week.
 - **Tested.** 6 local checks (`checks_10`), the app test.
@@ -681,7 +681,7 @@ Airlines Manager (Playrion) offers real-time and fast modes, an R&D centre with 
 
 Built: section 14.8.
 
-## 19. Revenue management: selling and money (agreed 20 Nov 2026, to build)
+## 19. Revenue management: selling and money (agreed 20 Nov 2026; built as 14.12 to 14.15)
 
 The game's main lesson (owner): sell too many cheap seats and business travellers find the plane full; hold back too many and seats fly empty. Players choose a strategy; rule-based pricing does the rest. Mockups: the design canvas "Airline game: selling and money". Built in three steps: weeks (14.12, done), then selling and money, then insights.
 
