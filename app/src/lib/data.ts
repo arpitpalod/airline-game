@@ -7,7 +7,7 @@ import { pairKey } from './game';
 import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
-  News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
+  FounderStatus, News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World, WorldOption,
   AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy,
 } from './types';
 
@@ -36,6 +36,8 @@ export const useRefData = (enabled: boolean) =>
 export interface Game {
   uid: string; email: string; airline: Airline; world: World; ref: Ref; profile: Profile | null;
   myAirlines: Airline[]; switchAirline: (id: string) => void;
+  /** Found an airline in another world with this invite code (and the world, when known). */
+  startJoin: (code: string, worldId?: string) => void;
 }
 export const GameContext = createContext<Game | null>(null);
 export function useGame() {
@@ -64,6 +66,37 @@ export const useWorldRow = (id: string | undefined) =>
 
 export const useAllWorlds = (enabled: boolean) =>
   useQuery({ queryKey: ['worlds'], enabled, queryFn: () => rows<World>(supabase.from('worlds').select('*').order('name')) });
+
+// ---------- Worlds with their own rules (migration 0027) ----------
+
+/** A world's own game values that players may see (its money, banks and growth), to lay over the game's. */
+export const useWorldParams = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['world', id, 'params'], enabled: !!id, staleTime: 300_000,
+    queryFn: async () => Object.fromEntries((await rows<{ key: string; num: number }>(
+      supabase.from('world_params').select('key,num').eq('world_id', id!).eq('public', true))).map((p) => [p.key, Number(p.num)])),
+  });
+
+export const useWorldOptions = () =>
+  useQuery({ queryKey: ['world_options'], staleTime: 600_000,
+    queryFn: () => rows<WorldOption>(supabase.from('world_options').select('*').order('setting').order('sort')) });
+
+export const useFounderStatus = () =>
+  useQuery({ queryKey: ['founder_status'], queryFn: () => call<FounderStatus>('founder_status', {}) });
+
+/** Every world, with its players (not computer-run) counted. */
+export interface WorldEntry { world: World; players: number }
+export const useWorldList = () =>
+  useQuery({
+    queryKey: ['worlds', 'list'], refetchInterval: 60_000,
+    queryFn: async () => {
+      const ws = await rows<World>(supabase.from('worlds').select('*').order('name'));
+      const as = await rows<{ world_id: string }>(supabase.from('airlines').select('world_id').eq('is_ai', false));
+      const n: Record<string, number> = {};
+      for (const a of as) n[a.world_id] = (n[a.world_id] ?? 0) + 1;
+      return ws.map((w): WorldEntry => ({ world: w, players: n[w.id] ?? 0 }));
+    },
+  });
 
 // ---------- The player's own airline ----------
 

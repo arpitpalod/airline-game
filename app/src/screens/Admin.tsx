@@ -1,4 +1,6 @@
-// Admin: invite link, start, pause and resume. Only for profiles marked is_admin; the server checks this again.
+// Admin: invite link, start, pause and resume. For profiles marked is_admin, and for the founder of a world founded by a
+// player (0027: invite, pause, pace, turns and places; not the start, disruptions or the game-wide cards). The server
+// checks this again.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { call, rows, supabase } from '../lib/api';
@@ -8,17 +10,20 @@ import { clock, inPrelaunch } from '../lib/game';
 import { currentWeek, num, realTime, weekHours, weekLabel } from '../lib/format';
 import { useToast } from '../components/toast';
 import { Badge, Button, Empty, Field, Kpi, PageHeader, Sheet, Stepper } from '../components/ui';
+import { TurnControl } from './Worlds';
 
 export function Admin() {
-  const { profile, world } = useGame();
+  const { profile, world, uid } = useGame();
   const airlines = useWorldAirlines();
+  const admin = !!profile?.is_admin;
+  const founder = world.founder_id != null && world.founder_id === uid;
   const toast = useToast();
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState<'start' | 'pause' | 'resume' | null>(null);
   const [busy, setBusy] = useState(false);
-  const invite = useQuery({ queryKey: ['admin', world.id, 'invite'], enabled: !!profile?.is_admin, queryFn: () => call<string>('admin_world_invite', { p_world: world.id }) });
+  const invite = useQuery({ queryKey: ['admin', world.id, 'invite'], enabled: admin || founder, queryFn: () => call<string>('admin_world_invite', { p_world: world.id }) });
 
-  if (!profile?.is_admin) return <Empty title="Admins only" />;
+  if (!admin && !founder) return <Empty title="Admins only" />;
   const players = (airlines.data ?? []).filter((a) => !a.is_ai);
   const link = invite.data ? `${location.origin}${location.pathname}#/join?code=${invite.data}` : '';
   const c = clock(world);
@@ -35,7 +40,7 @@ export function Admin() {
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Admin" sub={world.name} />
+      <PageHeader title={admin ? 'Admin' : 'Your world'} sub={founder ? `${world.name} · you founded it` : world.name} />
       <div className="grid4-d">
         <Kpi label="Status" value={world.status} note={world.status === 'running' && inPrelaunch(world) ? 'pre-launch' : `a week in ${weekHours(world.speed)}`} />
         <Kpi label="Game week" value={currentWeek(world)} note={weekLabel(currentWeek(world), world.start_date).split(' · ')[1]} />
@@ -57,7 +62,10 @@ export function Admin() {
         </div>
         <div className="card stack">
           <h2>Clock</h2>
-          {world.status === 'setup' && <>
+          {world.status === 'setup' && world.min_players != null && (
+            <p className="small muted">It starts by itself once {world.min_players} players have joined ({players.length} so far){world.join_deadline ? `, or closes on ${new Date(world.join_deadline).toLocaleDateString()} if not` : ''}.</p>
+          )}
+          {world.status === 'setup' && admin && <>
             <p className="small muted">Starting fills the lessor pool, starts the clock and plays the first week at once, so the computer-run airlines and seats on sale appear straight away. First comes the pre-launch: {world.prelaunch_weeks} weeks in {realTime(world.prelaunch_minutes * 60)}, with nothing flying. First flights are in week {world.prelaunch_weeks + 1}; after that a game week takes {weekHours(world.speed)}. Check the places first: they can only go up after the start.</p>
             <Button onClick={() => setConfirm('start')}>Start the world</Button>
           </>}
@@ -68,12 +76,13 @@ export function Admin() {
           {world.status === 'paused' && <Button onClick={() => setConfirm('resume')}>Resume</Button>}
           {world.status === 'ended' && <Badge>Season over</Badge>}
           {world.status !== 'ended' && <SpeedControl />}
+          {world.status !== 'ended' && <TurnControl world={world} onDone={() => qc.invalidateQueries({ queryKey: ['world', world.id] })} />}
           {world.status !== 'ended' && <PlacesControl />}
         </div>
       </div>
-      <DisruptionsAdmin />
-      <StrategiesAdmin />
-      <BotsAdmin />
+      {admin && <DisruptionsAdmin />}
+      {admin && <StrategiesAdmin />}
+      {admin && <BotsAdmin />}
       {confirm && (
         <Sheet title={confirm === 'start' ? 'Start the world?' : confirm === 'pause' ? 'Pause the world?' : 'Resume the world?'} onClose={() => setConfirm(null)}>
           <div className="stack">

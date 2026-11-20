@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.19, 21 Nov 2026 (sign-up confirms the email with a 6-digit code, password reset by email, 14.21; currency basics: dollar costs in the cost card, dollar hedging, where international routes sell, rupee loans, 14.20; disruptions set per world by the admin, fights at a random but profitable fare, 14.19; year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.20, 21 Nov 2026 (worlds founded by players with their own rules, part 1: founding earned in play, pace, turns When all are ready, places, money, banks that cut credit lines, demand growth, shocks and computer-run airlines per world, 14.22; sign-up confirms the email with a 6-digit code, password reset by email, 14.21; currency basics: dollar costs in the cost card, dollar hedging, where international routes sell, rupee loans, 14.20; disruptions set per world by the admin, fights at a random but profitable fare, 14.19; year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -688,6 +688,38 @@ Owner's decisions (21 Nov 2026): password reset by email; sign-up checks the ema
 - **Tested.** The app test (shim: sign-up, resend, recover and verify with codes it keeps for the test) confirms an email with a wrong code and then the right one, resets a password and signs in with the new one.
 - Accounts made before 14.21 (the owner's) are confirmed already and keep working.
 
+### 14.22 Worlds founded by players, with their own rules (migration 0027, part 1)
+
+Owner's decisions (21 Nov 2026): players found their own worlds; the friction is proven play and a minimum of players, not an exam. A world's rules are fixed for its season, except pace and places (places only upwards once started). Home region is a must; only India is built. Mockups: the design canvas "Airline game – World settings and accounts", boards 1 to 4 and 7 and 8. Built in three parts: 1 (this) founding, rules, screens; 2 four new shocks (late aircraft and engine deliveries, airport closures, airspace closures, fare caps in a crisis); 3 seat limits between countries (foreign airlines on the same routes, scaled with places). Until parts 2 and 3 land, the founding screen shows them as coming.
+
+**Founding.** `create_world(name, rules)` returns the world's id and invite code. A player may found a world once one of their airlines has 4 quarterly reports (`founder_quarters`, G) with an operating profit in the last 2 (`founder_profit_quarters`, G), and only one live world at a time; admins at any time. `founder_status()` says how close a player is. The world waits in setup: the scheduler starts it once `world_min_players` (6, G) players have joined, playing the first week at once as `admin_start_world` does, or closes it (`status` ended, `closed_at`) after `world_join_days` (7, G). Admins may set another minimum. A founded world waiting for players is open: anyone signed in may take its code (`world_join_code`) from the Worlds screen; worlds without a founder (Test World, World 1), and founded worlds once started, take players by invite link.
+
+**The founder is the world's admin** (`game.require_world_admin`): invite code, pause and resume, pace (`admin_set_week_hours`), turns (`set_turn_mode`) and places (`admin_set_places`). Starting early, disruptions and the game-wide cards stay with the game's admins. The founder plays by the same rules as everyone.
+
+**The rules** (table `world_options`, G; `worlds.rules` keeps the choices). Each choice writes its game values into `world_params` (public rows: players see them), which the engine reads per world (`game.wparam`, and `game.params_for` for the day and selling engines):
+
+| Setting | Options (default in bold) | What it sets |
+|---|---|---|
+| Home region | **India**; Middle East, USA, Canada, Europe, Africa, South America, China coming | (only India's airports exist) |
+| Pace | 15 min, 1 hour, **4 hours**, 1 day a game week | `speed`; changeable later |
+| Turns | **On the clock**; When all are ready | `turn_mode`; changeable later |
+| Places | 12, **25**, 50 | `max_airlines`, `demand_scale` = places / 50; only up once started |
+| Starting money | ₹250 cr, **₹500 cr**, ₹1,000 cr | `start_cash_inr` |
+| Banks | Easy (₹300 cr line, 8%, rupee loans 8.5%, 10% deposit, no debt limit); **Normal** (₹200 cr, 11%, 10.5%, 15%, limit 6); Tight (₹100 cr, 15%, 13%, 25%, limit 4) | `credit_limit_inr`, `interest_year`, `loan_rate_inr_year`, `order_deposit_share`, `credit_debt_limit` |
+| Demand growth | Slump 2% / 6% intl; **Normal** 7% / 12%; Boom 12% / 18% | `growth_year`, `growth_year_intl` |
+| Shocks | Calm (half as often); **Real**; Rough (twice) | the four disruption chances of 14.19 (hidden, as on the Admin screen; at most 12 a year) |
+| Computer-run airlines | None; Calm (aggression x 0.5); **Normal**; Fierce (x 1.6) | `bot_scale` 0, or `bot_aggression_mult` (fights and fare following, capped at 1) |
+
+**Banks.** `game.bank_week` at each week start (`ops_week`): from an airline's fifth quarter, debt above the world's `credit_debt_limit` times the last 4 quarters' operating profit, or any debt while those quarters lost money, cuts the credit line to `credit_cut_share` (half, G) once, with private news; the full line returns once debt is back within the limit (`airline_finance.credit_cut_from`). A limit of 0 means none. The Money screen says when the line was cut, and the rule while it was not.
+
+**When all are ready.** In such a world the Home screen shows "Week N · X of Y ready" and a Ready button (`set_ready`, `airlines.ready_day`). The scheduler plays the week as soon as every active player is ready, after the pre-launch, and at the latest when the clock runs out; after an early week the clock counts the next one from that moment. The scheduler now runs every minute (was 5).
+
+**Worlds made before 0027** keep their values: their rules are recorded as India, on the clock, ₹500 cr, Normal banks, growth and shocks, and they get Normal's public values, which match the game's, plus Normal's debt limit of 6 (it bites from an airline's fifth quarter).
+
+**App.** Worlds (`/worlds`, from the sidebar and the Home menu): your worlds (tap to switch), worlds waiting for players with their rules and a Join button, Found a world, and an invite code box. Found a world (`/worlds/new`): what it takes (quarters, the last 2 quarters' operating profit, one world at a time), then two steps, the world and the market, drawn from `world_options`, then the invite link and Found my airline. Joining from the list or after founding shows the world's money on the airline screen. The Admin screen opens to a world's founder as Your world. A world's public values lie over the game's everywhere in the app (interest, deposits, credit line, starting money).
+
+**Tested.** 27 local checks (`checks_17`): the options as data; a new world's pace, places, turns and values; the engine reading them per world; unbuilt regions refused; starting money and credit line from the world; waiting, starting at the minimum with the first week played, closing after the deadline; nobody ready, one of two, all ready (the week played at once and the clock re-anchored); the licence refused, not yet with a losing last quarter, then allowed; one live world per founder; the founder's pace, turns and invite on their world and not another; places only up; the open code for founded worlds only; calm rivals; the bank cut, once, restored, and not before 4 quarters. The older disruption check now counts only hidden values. The app test earns the licence, founds a world (15 minutes, When all are ready, ₹250 cr, Tight banks, no computer-run airlines), founds an airline in it, sees it start, taps Ready and sees the week played, and switches the founder's world back to the clock.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -739,6 +771,10 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 24. Computer-run airlines in a full world (14.18): with 18 simulated players they shrink to a few aircraft each, except Sarus Airways, and keep losing money at that size (head office: item 16). Section 12 wants them to keep markets contested while a world fills up, so receding is intended; whether they should hold more ground in a full world is for the owner to decide after a real playtest.
 
 25. Lease length (14.20): leasing for 6 or 12 years, a longer lease at a lower rent but no way out in a downturn. The owner will decide later.
+
+26. Home regions other than India (14.22): each needs its airports, markets, traffic and computer-run airlines as data, and its own currency and fuel price. One region at a time, after the playtest.
+
+27. Worlds part 2 (late aircraft and engine deliveries, airport closures, airspace closures, fare caps in a crisis) and part 3 (seat limits between countries, scaled with places) are agreed (21 Nov 2026) and not yet built (14.22).
 
 **Sources for (V) figures**
 

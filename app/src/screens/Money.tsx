@@ -86,6 +86,12 @@ export function Money() {
           <div className="card stack">
             <h2>Credit line</h2>
             <p className="small muted">Actions need cash in hand, so borrow before a big payment. A shortfall is drawn from the credit line automatically. If cash stays below zero with the line used up for {weeks(ref.param.insolvency_days)}, the airline goes into administration.</p>
+            {f?.credit_cut_from != null && (
+              <div className="card warn small">The bank cut your credit line from {inr(f.credit_cut_from)} to {inr(f.credit_limit_inr)}: you owe more than {num(ref.param.credit_debt_limit)} times the last 4 quarters' operating profit{f.debt_inr > 0 ? ', or those quarters lost money' : ''}. The full line returns once you are back within that.</div>
+            )}
+            {f?.credit_cut_from == null && ref.param.credit_debt_limit > 0 && (
+              <p className="tiny muted">The banks in this world watch debt: from your fifth quarter, owing more than {num(ref.param.credit_debt_limit)} times the last 4 quarters' operating profit (or any debt while they lose money) halves the credit line until you are back within it.</p>
+            )}
             <Field label="Amount (₹ crore)">
               <input className="input num" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>

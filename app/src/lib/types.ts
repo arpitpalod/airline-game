@@ -6,17 +6,34 @@ export interface World {
   game_day: number; season: number; season_days: number; demand_scale: number;
   fuel_inr_kg: number; fx_inr_usd: number; fuel_walk: number; fx_walk: number; fuel_avg: number | null; fare_index: number; max_airlines: number; pilots: boolean;
   prelaunch_weeks: number; prelaunch_minutes: number; start_date: string; selling: boolean;
+  // worlds founded by players (migration 0027)
+  founder_id: string | null; turn_mode: 'clock' | 'ready'; min_players: number | null; join_deadline: string | null;
+  closed_at: string | null; rules: Partial<Record<WorldSetting, string>>; bot_scale: number;
+}
+
+/** The choices a founder makes for a world (migration 0027, G). `vals` are the game values the choice sets. */
+export type WorldSetting = 'region' | 'pace' | 'turn' | 'places' | 'money' | 'banks' | 'growth' | 'shocks' | 'bots';
+export interface WorldOption {
+  setting: WorldSetting; option: string; sort: number; label: string; blurb: string;
+  vals: Record<string, number>; available: boolean; is_default: boolean;
+}
+/** How close a player is to founding a world: an airline run for 4 quarters, the last 2 with an operating profit. */
+export interface FounderStatus {
+  need_quarters: number; need_profit_quarters: number; live_world: string | null; airline: string | null; world: string | null;
+  quarters: number; last: { quarter: number; op_profit: number }[]; ok: boolean; admin: boolean;
 }
 
 export interface Airline {
   id: string; world_id: string; user_id: string | null; is_ai: boolean; name: string; code: string;
   livery: { color?: string }; status: 'active' | 'administration' | 'closed'; brand: number; otp: number;
   marketing_inr_day: number; created_day: number; administrations: number; first_flight_day: number;
+  ready_day: number | null;   // When all are ready: the game day this airline was ready to play on from (0027)
 }
 
 export interface Finance {
   airline_id: string; cash_inr: number; debt_inr: number; credit_limit_inr: number; insolvent_days: number;
   pilot_pay: number; pilot_buffer: number; pilot_cadets: number; pilot_expats: boolean;
+  credit_cut_from: number | null;   // the credit line before the bank cut it (0027)
 }
 
 export interface Base { airline_id: string; iata: string; opened_day: number }

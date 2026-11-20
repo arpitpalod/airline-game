@@ -16,18 +16,20 @@ const TABS = [
 ];
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { airline, world, profile, myAirlines, switchAirline } = useGame();
+  const { airline, world, profile, myAirlines, switchAirline, uid } = useGame();
   const loc = useLocation();
+  const runs = profile?.is_admin || (world.founder_id != null && world.founder_id === uid);
   useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
   const side = [...TABS.slice(0, 3), { to: '/market', label: 'Get aircraft', icon: 'market' }, ...TABS.slice(3),
-    ...(profile?.is_admin ? [{ to: '/admin', label: 'Admin', icon: 'shield' }] : [])];
+    { to: '/worlds', label: 'Worlds', icon: 'globe' },
+    ...(runs ? [{ to: '/admin', label: profile?.is_admin ? 'Admin' : 'Your world', icon: 'shield' }] : [])];
   // Fleet, market and aircraft pages belong to the Ops tab, route pages to Network.
   const tabActive = (to: string) => {
     const p = loc.pathname;
     if (to === '/') return p === '/';
     if (to === '/ops') return p.startsWith('/ops') || p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/market') || p.startsWith('/configure');
     if (to === '/network') return p.startsWith('/network') || p.startsWith('/route') || p.startsWith('/extras');
-    if (to === '/ranks') return p.startsWith('/ranks') || p.startsWith('/admin');
+    if (to === '/ranks') return p.startsWith('/ranks') || p.startsWith('/admin') || p.startsWith('/worlds');
     return p.startsWith(to);
   };
   const sideActive = (to: string) => {
@@ -36,6 +38,7 @@ export function Shell({ children }: { children: ReactNode }) {
     if (to === '/ops') return p.startsWith('/ops') || p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/configure');
     if (to === '/ranks') return p.startsWith('/ranks');
     if (to === '/admin') return p.startsWith('/admin');
+    if (to === '/worlds') return p.startsWith('/worlds');
     return tabActive(to);
   };
   const color = airline.livery?.color;
@@ -62,7 +65,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <select className="input" style={{ height: 36, fontSize: 13, marginTop: 10 }} value={airline.id}
               onChange={(e) => switchAirline(e.target.value)} aria-label="Switch airline">
               {myAirlines.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              <option value="new">Join another world…</option>
+              <option value="new">Join with an invite code…</option>
             </select>
           )}
           <button className="btn ghost sm" style={{ marginTop: 8, paddingLeft: 0 }} onClick={() => supabase.auth.signOut()}>
