@@ -763,8 +763,8 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 
 1. A320neo certified maximum of 194 seats is from memory; confirm in Stage 2.
 2. The Indian cabin crew rule comes from an older quoted text of the Aircraft Rules; confirm the current wording.
-3. Use real aircraft type names or generic ones.
-4. The repo is public. Decide whether the game's code should stay public.
+3. Settled 21 Nov 2026 (owner): real aircraft type names (ATR 72-600, A320neo, A321neo, A321XLR, A350-900), as built.
+4. Owner, 21 Nov 2026: the repo can go private if needed (before a store launch). Note: GitHub Pages from a private repo needs a paid GitHub plan, and Actions minutes are limited there.
 5. Trunk routes between two metros come out 20 to 70% above real traffic, and metro to small-city routes below it. Tune in Stage 2c.
 6. Passenger numbers for the 44 smaller Indian airports and all international shares are estimates. Replace with published figures where available.
 7. Settled in Stage 2c (14.3): six computer-run airlines contest the trunk routes from day 1.
@@ -774,7 +774,7 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 11. Settled in Stage 2c (14.3): 100x the base at a full airport; caps scale with `demand_scale`. Re-check once a full world (50 players) is running.
 12. Settled in Stage 2c (14.3): business travellers move down to economy; an idle aircraft at the same base covers a grounded one.
 13. Settled in Stage 2c (14.3): aircraft loans; the season score counts profit after interest.
-14. Owner to confirm: the season score now uses profit after interest instead of operating profit (section 11). Without it, buying every aircraft with a loan would dominate the score.
+14. Settled 21 Nov 2026 (owner): the season score uses profit after interest (section 11).
 15. Long haul has the highest upside in small worlds: beyond London and Singapore no computer-run airline flies long haul. Consider more Sarus long-haul routes or a second long-haul carrier after the playtest.
 16. Small airlines (1 to 3 aircraft) carry the full Rs 6 lakh a day of head office, and turboprops pay the same slot price per movement as an A350: the simulated turboprop and secondary-route players never grew past a few aircraft, and Myna Regional ends the season far below break-even once Bengaluru and Hyderabad fill up (computer-run airlines keep one aircraft on every route of their network, so it cannot leave). Watch this in the playtest before changing it; a slot price per seat rather than per movement is one option. Update 19 Nov 2026: slot prices now scale with aircraft size (14.10). The head office part stands: a small airline still carries the full Rs 6 lakh a day (Rs 1 to 1.9 a seat-km for Myna Regional and the simulated regional players).
 17. The simulated players in `season.mjs` are simple rules, not people. Results for year 1 (everyone losing money) depend on how fast players add capacity; re-check with the playtest (Stage 5).
@@ -783,15 +783,15 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 19. Settled 19 Nov 2026 (14.10): Flamingo's network re-sized, computer-run airlines drop thin losing routes from their second year, slot prices scale with aircraft size. Myna still loses about 15 to 35% late in a season (turboprop costs and its head office; item 16).
 20. An AI strategist for the computer-run airlines (a model choosing once a quarter which routes to enter and how hard to price, through the same functions) was suggested by the owner. Deferred until the playtest shows whether the rules in 14.5 feel predictable. It would need an Anthropic API key held as a server secret and makes season runs non-repeatable.
 
-21. Clock for World 1. The owner found an hour per game day slow in Test World, which now runs at 15 minutes a day (96x). At that pace a season lasts about 25 real days instead of 26 weeks, a quarter passes in under a day, and an airline can go from first cash trouble to administration in about 3.5 hours, so a colleague who checks once a day can miss it. World 1 is set to 60 minutes a game day for now (season about 14 weeks, a quarter about 4 days, administration after about 14 hours of trouble); the owner will revisit it before the start.
+21. Settled 21 Nov 2026 (owner): World 1 runs a game week in 4 hours after its one-hour pre-launch (section 3).
 
-22. Second currency (owner asked whether to copy Airlines Manager's). Recommendation: no. Airlines Manager's premium currency exists to sell subscriptions and packs that speed things up; here it would either buy nothing or buy speed, which breaks principle 6 and the teaching aim. Rupees stay the only currency; the second scarce resource is pilots (18.4). Owner to confirm.
+22. Settled 21 Nov 2026 (owner): no second, premium currency; open to a good idea later. Rupees stay the only currency; the second scarce resource is pilots (18.4).
 
 23. Pilots and the season (two pairs of full-season runs, with and without pilots, 18 players and 18 places; single runs vary a lot). Players' revenue-weighted operating margin, years 3 to 6: with pilots −3.4/−4.1, −2.5/−3.4, +6.7/−2.2, +0.9/−1.0%; without −3.3/+3.3, −5.0/+7.4, +2.2/+9.2, +4.5/+8.6%. Computer-run airlines in year 6: +7.2/+10.6% with, +13.8/+15.5% without. So pilots cost about 4 to 6 points of margin late in the season, for players and computer-run airlines alike: crew cost per seat-km about 10% higher (buffers, crews hired ahead of aircraft, more pilots at high utilisation), cancellations of 1 to 3% in thin years against under 0.5%, and the A350 market running dry once long-haul players grow (market pay 1.4 to 1.6 for that family). Three strategies still lead (low-cost trunk, full service, long haul or a second low-cost trunk). The owner chose to trim pilot pay 10% (migration 0015). The runs also took about twice as long a game day (pilot step), well inside the 2-second target on the live database.
 
-24. Computer-run airlines in a full world (14.18): with 18 simulated players they shrink to a few aircraft each, except Sarus Airways, and keep losing money at that size (head office: item 16). Section 12 wants them to keep markets contested while a world fills up, so receding is intended; whether they should hold more ground in a full world is for the owner to decide after a real playtest.
+24. Computer-run airlines in a full world (14.18): with 18 simulated players they shrink to a few aircraft each, except Sarus Airways, and keep losing money at that size (head office: item 16). Owner, 21 Nov 2026: they should hold more ground in a full world. To design and tune with the season simulation.
 
-25. Lease length (14.20): leasing for 6 or 12 years, a longer lease at a lower rent but no way out in a downturn. The owner will decide later.
+25. Lease length (14.20). Owner, 21 Nov 2026: anything from 6 to 12 years, which can be random. To design: the lease term today is 2 years (728 days) and renews at the market rent.
 
 26. Home regions other than India (14.22): each needs its airports, markets, traffic and computer-run airlines as data, and its own currency and fuel price. One region at a time, after the playtest.
 
