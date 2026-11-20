@@ -11,6 +11,7 @@ import '@fontsource/space-grotesk/700.css';
 import './styles.css';
 import { App } from './App';
 import { ToastProvider } from './components/toast';
+import { UpdateBanner } from './components/UpdateBanner';
 
 const qc = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: true } },
@@ -21,6 +22,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={qc}>
       <HashRouter>
         <ToastProvider>
+          <UpdateBanner />
           <App />
         </ToastProvider>
       </HashRouter>

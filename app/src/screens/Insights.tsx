@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useGame, useMarketsFrom, useRivals, useRoutes, useSectorInsights, useStrategies } from '../lib/data';
-import { BAND_LABEL, bandOf, practice, SHAPE_LABEL, shapeOf, STRAT_SHORT, type Band, type PracticeResult, type Shape } from '../lib/insights';
+import { BAND_LABEL, bandOf, practice, practiceInput, SHAPE_LABEL, shapeOf, STRAT_SHORT, type Band, type PracticeResult, type Shape } from '../lib/insights';
 import { inr, num, pct } from '../lib/format';
 import { pairKey } from '../lib/game';
 import type { StrategyKey } from '../lib/types';
@@ -19,7 +19,7 @@ export function Insights() {
   const tab = loc.pathname === '/practice' ? 'practice' : 'where';
   return (
     <div className="stack-lg">
-      <PageHeader title="Insights" sub="What sells where, and a practice flight" back="/network" />
+      <PageHeader title="Insights" sub="What sells where, and a practice flight" back />
       <Seg value={tab} block onChange={(v) => nav(v === 'practice' ? '/practice' : '/insights')}
         options={[{ value: 'where', label: 'What works where' }, { value: 'practice', label: 'Practice flight' }]} />
       {tab === 'where' ? <WhatWorksWhere /> : <Practice />}
@@ -104,7 +104,8 @@ function Practice() {
   const ends = routes.flatMap((r) => [r.origin, r.dest]);
   const markets = useMarketsFrom(ends);
   const rivals = useRivals(ends);
-  const [rid, setRid] = useState<string>('');
+  const loc = useLocation();
+  const [rid, setRid] = useState<string>(() => new URLSearchParams(loc.search).get('route') ?? '');
   const [season, setSeason] = useState<'quiet' | 'normal' | 'busy'>('normal');
   const [show, setShow] = useState<StrategyKey>('balanced');
   const route = routes.find((r) => r.id === rid) ?? routes[0];
@@ -112,19 +113,10 @@ function Practice() {
 
   const results = useMemo(() => {
     if (!route || !m || !strategies.data) return null;
-    const all = rivals.data?.[pairKey(route.origin, route.dest)] ?? [];
-    const mine = all.find((x) => x.route.airline_id === airline.id);
-    const theirs = all.filter((x) => x.route.airline_id !== airline.id && x.weekly > 0);
-    // seats each way for the week: the route's own schedule, or one A320neo twice a day if it has no aircraft yet
-    const seats = mine && mine.seatsWeek > 0 ? mine.seatsWeek / 2 : 14 * 180;
-    const trips = mine && mine.weekly > 0 ? mine.weekly / 7 : 2;
-    const rSeats = theirs.reduce((s, x) => s + x.seatsWeek / 2, 0);
-    const rTrips = theirs.reduce((s, x) => s + x.weekly / 7, 0);
-    const rFare = theirs.length ? theirs.reduce((s, x) => s + x.route.fare_econ * x.seatsWeek, 0) / Math.max(1, theirs.reduce((s, x) => s + x.seatsWeek, 0)) : null;
-    const input = { m, seats, tripsDay: trips, rivalSeats: rSeats, rivalTripsDay: rTrips, rivalFare: rFare,
-      season: season === 'busy' ? 1.2 : season === 'quiet' ? 0.85 : 1, demandScale: world.demand_scale, p: ref.param };
+    const input = practiceInput(m, rivals.data?.[pairKey(route.origin, route.dest)] ?? [], airline.id, world.demand_scale, world.game_day + 1, ref.param,
+      season === 'busy' ? 1.2 : season === 'quiet' ? 0.85 : 1);
     return { input, out: strategies.data.map((s) => practice(s, input)).sort((a, b) => b.revenue - a.revenue) };
-  }, [route, m, strategies.data, rivals.data, season, airline.id, world.demand_scale, ref.param]);
+  }, [route, m, strategies.data, rivals.data, season, airline.id, world.demand_scale, world.game_day, ref.param]);
 
   if (net.isLoading || markets.isLoading) return <Loading />;
   if (!routes.length) return <Empty title="No routes yet">Open a route, then practise selling it here.</Empty>;

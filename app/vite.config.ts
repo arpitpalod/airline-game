@@ -2,11 +2,16 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Each build gets an id, baked into the app and written to version.json. An open app compares the two and offers to update.
+const BUILD = (process.env.GITHUB_SHA ?? '').slice(0, 12) || Date.now().toString(36);
+
 // Served from https://<owner>.github.io/airline-game/ in production.
 export default defineConfig(({ command, isPreview }) => ({
   base: command === 'build' || isPreview ? '/airline-game/' : '/',
+  define: { __BUILD__: JSON.stringify(BUILD) },
   plugins: [
     react(),
+    { name: 'version-file', generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD }) }); } },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],

@@ -15,6 +15,7 @@ import { checks8 } from './checks_8.mjs';
 import { checks9 } from './checks_9.mjs';
 import { checks10 } from './checks_10.mjs';
 import { checks11 } from './checks_11.mjs';
+import { checks12 } from './checks_12.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -55,6 +56,12 @@ await db.exec(`update public.bot_airlines set aggression = 0; update public.game
   delete from public.bot_strategy_mix;
   insert into public.bot_strategy_mix select code, case code when 'SRW' then 'top' when 'KOL' then 'fill' when 'BLB' then 'follow' else 'balanced' end, 1
     from public.bot_airlines;`);   // one way each, as in 0020
+// The checks written before migration 0022 run with one growth rate, no festivals or events, and a world start that leaves
+// the first week to the scheduler; checks_12 puts them back.
+await db.exec(`update public.game_params set num = case key when 'growth_year_intl' then (select num from public.game_params where key = 'growth_year') else 0 end
+    where key in ('growth_year_intl', 'start_first_week');
+  create table public.demand_events_0022 as select * from public.demand_events;
+  delete from public.demand_events;`);
 
 let failed = 0;
 const t = {
@@ -83,5 +90,6 @@ await checks8(t);
 await checks9(t);
 await checks10(t);
 await checks11(t);
+await checks12(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

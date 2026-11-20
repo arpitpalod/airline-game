@@ -95,8 +95,9 @@ input, select { font: inherit; color: inherit; }
 .side-foot { margin-top: auto; padding: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
 
 /* ---------- Page header ---------- */
-.page-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-.page-head .grow { flex: 1; min-width: 0; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+.page-head .grow { flex: 1 1 auto; min-width: min(100%, 170px); }
+.page-head > .row { flex-wrap: wrap; }
 .page-head .sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
 .back { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px;
   background: var(--card); border: 1px solid var(--line); flex-shrink: 0; cursor: pointer; }
@@ -293,3 +294,33 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
 .cell-best { font-weight: 700; color: var(--good-ink); }
+
+/* Pre-launch checklist and Coming up (migration 0022) */
+.checklist { display: flex; flex-direction: column; gap: 10px; }
+.check { display: flex; gap: 10px; align-items: flex-start; text-align: left; font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.check .m { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+.check.done .m { background: var(--good-bg); color: var(--good-ink); }
+.check.todo .m { background: var(--warn-bg); color: var(--warn-ink); }
+.check .t { display: block; font-weight: 600; font-size: 14px; }
+.check .d { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.datebox { width: 48px; flex-shrink: 0; text-align: center; border-radius: 10px; background: var(--accent-soft); padding: 5px 0; }
+.datebox span { display: block; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+.datebox b { display: block; font-size: 16px; }
+.table.expect th, .table.expect td { padding: 6px 4px; font-size: 13px; }
+.table.expect td.r, .table.expect th.r { white-space: nowrap; }
+/* Seat map of a typical flight (Last flights) */
+.seatmap { width: 116px; flex: none; background: var(--bg); border-radius: 48px 48px 12px 12px; padding: 20px 8px 10px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.seatmap i { height: 8px; border-radius: 2px; border: 1px solid var(--line-strong); background: var(--card); box-sizing: border-box; }
+.seatmap i.on { background: var(--accent); border-color: var(--accent); }
+.seatmap i.aisle, .seatmap i.none { border: 0; background: transparent; }
+.kpi-s { font-family: var(--display); font-weight: 600; font-size: 18px; }
+/* An aircraft with no room on a route: greyed and not pickable */
+.list > .item.off { background: var(--bg); cursor: not-allowed; }
+.list > .item.off .strong { color: var(--muted); }
+.bad-ink { color: var(--bad-ink); font-weight: 600; }
+/* A newer version is published (UpdateBanner) */
+.update-banner { position: fixed; z-index: 60; left: 12px; right: 12px; top: calc(var(--safe-t) + 10px); margin: 0 auto; max-width: 520px;
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 14px; background: var(--ink); color: #fff;
+  box-shadow: var(--shadow-lg); font-size: 14px; }
+.update-banner span { flex: 1; }
+.update-banner button { font: inherit; font-weight: 600; border: 0; border-radius: 10px; padding: 8px 14px; background: var(--accent); color: #fff; cursor: pointer; }

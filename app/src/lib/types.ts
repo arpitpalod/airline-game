@@ -116,3 +116,10 @@ export interface Layout {
 }
 
 export interface Profile { user_id: string; display_name: string; is_admin: boolean }
+
+/** A festival or event (migration 0022, G): every game year from day-of-year start_doy for `days` days, it multiplies
+ *  each traveller type's demand on the markets it touches. */
+export interface DemandEvent {
+  id: number; name: string; start_doy: number; days: number; domestic: boolean | null;
+  airports: string[] | null; regions: string[] | null; biz: number; lei: number; bud: number; note: string;
+}

@@ -61,7 +61,8 @@ with sync_playwright() as p:
     page.locator('.item', has_text='DEL').first.click()
     shot(page, 'p02-setup')
     page.get_by_role('button', name='Found Tarang Air').click()
-    page.get_by_text('Get flying').wait_for()
+    page.get_by_text('Pre-launch: 13 weeks to your first flights').wait_for()
+    expect(page.locator('.checklist')).to_contain_text('has no route yet')
     shot(page, 'p03-home-new')
 
     print('admin starts the world')
@@ -91,6 +92,7 @@ with sync_playwright() as p:
     page.locator('.sheet').get_by_role('button', name='Open route').click()
     toast_ok(page, 'Route opened')
     page.get_by_text('Put an aircraft on this route').wait_for()
+    expect(page.locator('.sheet')).to_contain_text('Room for')
     shot(page, 'p05-assign')
     page.get_by_role('button', name='Assign').click()
     toast_ok(page, 'round trips a week')
@@ -106,10 +108,13 @@ with sync_playwright() as p:
 
     print('the pre-launch: 13 weeks with nothing flying')
     go(page, '/')
-    page.get_by_text('Pre-launch: 13 weeks to your first flights').wait_for()
-    expect(page.locator('.page-head .sub')).to_contain_text('Week 1 · 1 to 7 Jan 3000')
+    # starting the world played its first week at once
+    page.get_by_text('Pre-launch: 12 weeks to your first flights').wait_for()
+    expect(page.locator('.page-head .sub')).to_contain_text('Week 2 · 8 to 14 Jan 3000')
+    expect(page.locator('.checklist')).to_contain_text('1 route on sale')
+    expect(page.locator('.card', has_text='Coming up')).to_contain_text('Holi')
     shot(page, 'p05c-prelaunch')
-    for _ in range(84):
+    for _ in range(77):
         sql(f"select game.run_day('{WORLD}')")
     page.reload(); page.wait_for_load_state('networkidle'); page.wait_for_timeout(800)
     page.get_by_text('Pre-launch: 1 week to your first flights').wait_for()
@@ -132,8 +137,8 @@ with sync_playwright() as p:
     expect(page.locator('.choice.on')).to_contain_text('Top fares')
     page.get_by_role('radio', name='Balanced', exact=True).click()
     page.get_by_role('button', name='Sell this way').click()
-    toast_ok(page, 'Fares follow it')
-    expect(page.locator('.card', has_text='Seats on sale')).to_contain_text('Advance sales on this route')
+    toast_ok(page, 'Fares switch to Balanced')
+    expect(page.locator('.card', has_text='How it sells')).to_contain_text('Expect on this route')
     page.locator('.weeks-strip .wk').nth(3).click()
     expect(page.locator('.card', has_text='Seats on sale')).to_contain_text('Seats left')
     expect(page.locator('.card', has_text='Competition')).to_contain_text('Recent moves')
@@ -141,6 +146,7 @@ with sync_playwright() as p:
     print('insights: last flights, how it compares, what works where, practice flight')
     page.get_by_text('Last flights').wait_for()
     expect(page.locator('.card', has_text='Last flights')).to_contain_text('flew of')
+    expect(page.locator('.card', has_text='Last flights')).to_contain_text('A typical flight in week')
     expect(page.locator('.card', has_text='How it compares')).to_be_visible()
     go(page, '/insights')
     page.get_by_text('Audit your routes').wait_for()
