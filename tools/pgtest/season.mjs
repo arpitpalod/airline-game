@@ -49,6 +49,7 @@ const PLACES = +arg('--places', players.length);
 await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4, prelaunch_weeks = 0, selling = $5 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off', arg('--selling', 'on') !== 'off']);
 await q(`update public.airlines set first_flight_day = 1 where world_id = $1`, [W]);
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
+await q(`update public.game_params set num = 0 where key = 'start_first_week'`);   // the season loop plays every week itself
 await q(`select public.admin_start_world($1)`, [W]);
 console.log(`${players.length} players, demand_scale ${SCALE.toFixed(2)}, ${PLACES} places, pilots ${arg('--pilots', 'on')}, ${DAYS} days`);
 

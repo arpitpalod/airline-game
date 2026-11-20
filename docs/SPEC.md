@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.13, 20 Nov 2026 (computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.14, 20 Nov 2026 (first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -287,7 +287,7 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 | Routes | One route per airline per city pair; aircraft based at either end can fly it. Fares between 0.25x and 4x the reference fare |
 | Rotations | Round trips a week per aircraft per route. Must fit the cabin's range, both runways and the weekly flying window at minimum turnaround |
 | Demand constants | `a` = -0.45 business, 1.82 leisure, 3.59 budget: 65% of potential flies when three airlines each offer four flights a day at the reference fare |
-| Season and growth | Monthly multipliers per segment; game day 1 is 1 April. Growth 7% a year. Each market swings about 10% from day to day |
+| Season and growth | Monthly multipliers per segment; game day 1 is 1 April. Growth 7% a year (from 14.16: domestic 7%, international 12%, plus festivals and events). Each market swings about 10% from day to day |
 | Spill | 60% of travellers without a seat move to other airlines with free seats in the same cabin, in proportion to free seats, in one pass |
 | Costs | Pilots: fixed per aircraft a day plus per block hour. Cabin crew: Rs 10,000 per position a day plus Rs 600 a block hour. Maintenance per flight hour and per flight, +3% per year of age. Airport: landing and navigation by type, Rs 150 handling a passenger, foreign landings 2x. Distribution: 3% of ticket revenue plus Rs 120 a passenger. Overheads: Rs 6 lakh a day, plus Rs 1.8 lakh per aircraft and Rs 1.5 lakh per base |
 | Slots | No slot holdings. Every movement at a congested airport pays `3,000 / (1 - utilisation)^2`, where utilisation is the day's movements by all airlines over the cap, priced at 95% at most |
@@ -563,6 +563,21 @@ Owner's ask (20 Nov 2026): make the computer-run airlines' selling more random, 
 - **Effect.** In bots-only fourth-quarter runs the computer-run airlines' total operating profit ranged from about Rs 440 to 1,260 crore with learning on, against Rs 780 crore with fixed ways: within the run-to-run spread.
 - **Tested.** 9 local checks (`checks_11`); the older checks give each computer-run airline one fixed way and switch fights and exploring off.
 
+### 14.16 Fixes from the first playtest (migration 0022)
+
+The owner's first playtest of the Test World (20 Nov 2026). Every number is (G).
+
+| Change | Rule |
+|---|---|
+| International growth | International markets grow 12% a game year (`growth_year_intl`), domestic 7% (`growth_year`), in selling ahead and route studies. Real FY2026 forecasts: domestic 4 to 6% after 7.6% in FY2025, international 13 to 15% (ICRA). Worlds with daily fares (selling off) keep one rate |
+| Festivals and events | Table `demand_events`, readable by players: a start day of the game year, a length, which markets it touches (domestic or international only, airports, regions) and multipliers for business, leisure and budget travellers. Each day of a flight week inside an event adds a seventh of the event's extra demand; travellers book for it on their usual curves, so festival weeks sell early. Eleven to start: Sankranti and Pongal (South), Holi (domestic), Mumbai fintech summit, Eid (Gulf), Onam (Kerala), Durga Puja (Kolkata), Diwali (domestic, business down 20%), Delhi trade fair, Bengaluru tech summit, Christmas and New Year (Goa), year-end holidays abroad (South-East Asia, Europe). Route studies and the practice flight leave them out |
+| Planning in setup | `open_route`, `close_route` and `set_rotation` work while a world is in setup; leasing, ordering and wet leases still wait for the start (the lessor pool is filled then) |
+| First week at the start | `admin_start_world` sets the clock to the end of week 1 and plays it at once (`start_first_week` 1), as the server, so the computer-run airlines, seats on sale and prices appear straight away. If the week fails it is logged and the scheduler plays it |
+
+**App.** Home has a Get ready checklist in the pre-launch (routes on sale, how they sell, aircraft ready and on routes, grounded or late aircraft, pilots) and a Coming up card (festivals and events in the next 13 weeks, with how many of the player's routes each touches). A route's How it sells card shows what each way of selling would do on that route now (a practice run against today's rivals and demand: seats sold, average fare, takings), a button to use the chosen way on all routes, and says when a change applies: when the next week's selling starts, for every flight still on sale; tickets already sold keep their price. Last flights opens with a typical flight of the latest week as a seat map, with seats filled, empty and turned away and its story. Putting an aircraft on a route shows each aircraft's room for round trips there; a full one (or one out of range) is marked Full (Too far) in red, greyed and cannot be picked. Insights moved into the route page (How it compares links to What works where and to a practice run of that route); the Network header lost its Insights button. An open app checks every five minutes, and when it comes back to the front, whether a newer version is published (`version.json`) and offers to update.
+
+**Tested.** 11 local checks (`checks_12`), including a world started by a signed-in admin; the older checks run with one growth rate, no events and a start that leaves the first week to the scheduler (`run.mjs`). The app test covers the checklist, Coming up, the room per aircraft, Expect on this route and the seat map.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -695,7 +710,7 @@ The game's main lesson (owner): sell too many cheap seats and business traveller
 - **Money.** Cash comes in when a ticket is sold; revenue counts when the flight flies. Tickets sold for future flights are shown as "Advance sales". The Money screen has three tabs: Profit, Cash flow and Balance sheet. Wording stays neutral: no warnings about money "owed".
 - World 1 restarts after step 2.
 
-**Step 3: insights** (built: section 14.14)
+**Step 3: insights** (built: section 14.14; the mockups' Get ready checklist, Coming up events, Expect on this route and seat-map story were added after the first playtest: 14.16)
 - **Too full, too empty.** Per flight: travellers turned away and seats flown empty, in plain words.
 - **What works where.** Which strategies do best on which kinds of sector, updated each quarter from every airline's results, linked to a route audit.
 - **Rival moves** in the news.

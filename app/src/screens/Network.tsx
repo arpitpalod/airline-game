@@ -33,7 +33,7 @@ export function Network() {
   return (
     <div className="stack-lg">
       <PageHeader title="Network" sub={`${routes.length} ${routes.length === 1 ? 'route' : 'routes'} from ${baseIatas.length} ${baseIatas.length === 1 ? 'base' : 'bases'}`}
-        actions={<>{world.selling && <Button size="sm" kind="secondary" onClick={() => nav('/insights')}>Insights</Button>}<Button size="sm" kind="secondary" onClick={() => nav('/extras')}>Extras</Button><Button size="sm" onClick={() => setOpening({})}><Icon name="plus" />Open route</Button></>} />
+        actions={<><Button size="sm" kind="secondary" onClick={() => nav('/extras')}>Extras</Button><Button size="sm" onClick={() => setOpening({})}><Icon name="plus" />Open route</Button></>} />
       <div className="split">
         <div className="stack">
           <div className="phone-only"><WorldMap airports={visibleAirports} bases={baseIatas} routes={mapRoutes} selected={sel} onSelect={setSel} height={300} /></div>

@@ -58,7 +58,7 @@ export function Admin() {
         <div className="card stack">
           <h2>Clock</h2>
           {world.status === 'setup' && <>
-            <p className="small muted">Starting fills the lessor pool and starts the clock. First comes the pre-launch: {world.prelaunch_weeks} weeks in {realTime(world.prelaunch_minutes * 60)}, with nothing flying. First flights are in week {world.prelaunch_weeks + 1}; after that a game week takes {weekHours(world.speed)}. The computer-run airlines are set up on day 1. Check the places first: they can only go up after the start.</p>
+            <p className="small muted">Starting fills the lessor pool, starts the clock and plays the first week at once, so the computer-run airlines and seats on sale appear straight away. First comes the pre-launch: {world.prelaunch_weeks} weeks in {realTime(world.prelaunch_minutes * 60)}, with nothing flying. First flights are in week {world.prelaunch_weeks + 1}; after that a game week takes {weekHours(world.speed)}. Check the places first: they can only go up after the start.</p>
             <Button onClick={() => setConfirm('start')}>Start the world</Button>
           </>}
           {world.status === 'running' && <>

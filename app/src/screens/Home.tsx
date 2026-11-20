@@ -2,10 +2,12 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call, supabase } from '../lib/api';
-import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes } from '../lib/data';
+import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useDemandEvents, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutePlans, useRoutes, useStrategies } from '../lib/data';
+import { effectText, touches, upcomingEvents } from '../lib/events';
 import { byWeek, routeStat, sumDaily } from '../lib/derive';
 import { pairKey } from '../lib/game';
-import { arrivalWeek, currentWeek, dateLabel, inr, num, pct, weekLabel, weekOf, weeks } from '../lib/format';
+import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, weekLabel, weekOf, weeks } from '../lib/format';
+import type { Route } from '../lib/types';
 import { ProfitBars } from '../components/charts';
 import { WorldClock } from '../components/Shell';
 import { useAction } from '../components/toast';
@@ -136,14 +138,8 @@ export function Home() {
       <div className="split">
         <div className="stack-lg">
 
-          {flyingIn > 0 && (
-            <div className="card info stack">
-              <h2>Pre-launch: {weeks(Math.ceil(flyingIn / 7) * 7)} to your first flights</h2>
-              <p className="small">Your first flights are on {dateLabel(row.first_flight_day, world.start_date, true)}, week {weekOf(row.first_flight_day)}. Until then nothing flies and
-                nothing is charged. Use the time: open routes, put aircraft on them, and lease or order more aircraft. They take weeks to arrive.</p>
-            </div>
-          )}
-          {!started && <GettingStarted hasRoute={routes.length > 0} hasRotation={rots.length > 0} />}
+          {flyingIn > 0 && <GetReady ffd={row.first_flight_day} weeksLeft={Math.ceil(flyingIn / 7)} />}
+          {!started && flyingIn <= 0 && <GettingStarted hasRoute={routes.length > 0} hasRotation={rots.length > 0} />}
 
           <section className="stack">
             <h2>Needs your attention {alerts.length > 0 && <Badge tone="warn">{alerts.length}</Badge>}</h2>
@@ -167,6 +163,7 @@ export function Home() {
         </div>
 
         <div className="stack-lg">
+          <ComingUp />
           <div className="card">
             <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest, last 12 weeks</span></div>
             {daily.isLoading ? <Loading /> : <ProfitBars points={wk.map((w) => ({ day: w.week, v: w.netProfit }))} />}
@@ -187,6 +184,110 @@ export function Home() {
         </div>
       </div>
       {menu && <MoreMenu onClose={() => setMenu(false)} />}
+    </div>
+  );
+}
+
+/** Before the first flights: what is ready and what still needs doing (the pre-launch checklist). */
+function GetReady({ ffd, weeksLeft }: { ffd: number; weeksLeft: number }) {
+  const { world, ref } = useGame();
+  const net = useRoutes();
+  const fleet = useFleet();
+  const plans = useRoutePlans();
+  const strategies = useStrategies();
+  const pilots = usePilots();
+  const nav = useNavigate();
+  const routes = net.data?.routes ?? [];
+  const rots = net.data?.rotations ?? [];
+  const fl = (fleet.data ?? []).filter((a) => ['active', 'delivering', 'grounded', 'refit'].includes(a.status));
+  const city = (i: string) => ref.airport[i]?.city ?? i;
+  const rname = (r: Route) => `${city(r.origin)}–${city(r.dest)}`;
+  const listOf = (xs: string[]) => (xs.length <= 3 ? xs.join(', ') : `${xs.slice(0, 3).join(', ')} and ${xs.length - 3} more`);
+  const fw = weekOf(ffd);
+  const items: { done: boolean; title: string; body: string; to: string }[] = [];
+
+  const withAc = new Set(rots.map((r) => r.route_id));
+  const bare = routes.filter((r) => !withAc.has(r.id));
+  if (!routes.length) items.push({ done: false, title: 'No routes yet', to: '/network', body: 'Open a route from your base. It goes on sale at once, for flights up to 26 weeks ahead.' });
+  else items.push({ done: bare.length === 0, to: '/network', title: `${plural(routes.length, 'route')} on sale`,
+    body: bare.length ? `${listOf(bare.map(rname))} ${bare.length === 1 ? 'has' : 'have'} no aircraft yet, so nothing sells there.`
+      : `${listOf(routes.map(rname))}: tickets sell for flights up to 26 weeks ahead.` });
+  if (routes.length && plans.data && strategies.data) {
+    const n: Record<string, number> = {};
+    for (const r of routes) { const k = plans.data[r.id] ?? 'balanced'; n[k] = (n[k] ?? 0) + 1; }
+    const used = strategies.data.filter((s) => n[s.key]);
+    const mix = used.length === 1 ? `All on ${used[0].name}` : used.map((s) => `${s.name} on ${plural(n[s.key], 'route')}`).join(', ');
+    items.push({ done: true, to: '/network', title: 'How they sell', body: `${mix}. Change it on each route's page.` });
+  }
+  const flying = new Set(rots.map((r) => r.aircraft_id));
+  const issues: string[] = [];
+  for (const a of fl) {
+    if (a.status === 'grounded' && a.available_day > ffd)
+      issues.push(`${a.reg} is grounded until week ${arrivalWeek(a.available_day)}: its flights before then are cancelled unless an idle aircraft of its type at ${a.base_iata} covers them.`);
+    else if (a.available_day > ffd) issues.push(`${a.reg} arrives in week ${arrivalWeek(a.available_day)}, after your first flights.`);
+    if (!flying.has(a.id)) issues.push(`${a.reg} has no route yet.`);
+  }
+  if (fl.length) items.push({ done: issues.length === 0, to: '/fleet', title: plural(fl.length, 'aircraft', 'aircraft'),
+    body: issues.length ? issues.join(' ') : `All ready for week ${fw}, each with a route.` });
+  if (world.pilots && pilots.data) {
+    let sc = 0, sf = 0;
+    for (const fm of pilots.data.families) {
+      const c = pilots.data.crews[fm.id];
+      if (!c || c.need === 0) continue;
+      sc += Math.max(0, c.need - c.captains); sf += Math.max(0, c.need - c.fos);
+    }
+    items.push({ done: sc + sf === 0, to: '/fleet', title: 'Pilots',
+      body: sc + sf === 0 ? 'A crew for every aircraft.' : `${[sc ? plural(sc, 'captain') : '', sf ? plural(sf, 'first officer') : ''].filter(Boolean).join(' and ')} short. Hire them under Fleet before week ${fw}.` });
+  }
+  return (
+    <div className="card info stack">
+      <div>
+        <h2>Pre-launch: {weeks(weeksLeft * 7)} to your first flights</h2>
+        <p className="small" style={{ marginTop: 4 }}>Your first flights are on {dateLabel(ffd, world.start_date, true)}, week {fw}. Until then nothing flies and nothing is
+          charged, but tickets already sell. Aircraft take weeks to arrive.</p>
+      </div>
+      <div className="checklist" aria-label="Get ready">
+        {items.map((it) => (
+          <button key={it.title} type="button" className={`check ${it.done ? 'done' : 'todo'}`} onClick={() => nav(it.to)}>
+            <span className="m" aria-hidden>{it.done ? '✓' : '!'}</span>
+            <span className="grow"><span className="t">{it.title}</span><span className="d">{it.body}</span></span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Festivals and events in the next 13 weeks, and how many of the player's routes each touches. */
+function ComingUp() {
+  const { world, ref } = useGame();
+  const ev = useDemandEvents();
+  const net = useRoutes();
+  if (!ev.data?.length) return null;
+  const day = world.game_day + 1;
+  const list = upcomingEvents(ev.data, day, 13 * 7).slice(0, 5);
+  const routes = net.data?.routes ?? [];
+  return (
+    <div className="card flush">
+      <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Coming up</h2><span className="small muted">next 13 weeks</span></div>
+      <div className="list">
+        {list.length === 0 && <div className="item small muted">No festivals or events in the next 13 weeks.</div>}
+        {list.map(({ e, start, end }) => {
+          const c = calDate(start, world.start_date);
+          const mine = routes.filter((r) => touches(e, r.origin, r.dest, ref.airport)).length;
+          return (
+            <div key={`${e.id}-${start}`} className="item" style={{ alignItems: 'flex-start' }}>
+              <div className="datebox"><span>{c.m}</span><b>{c.d}</b></div>
+              <div className="grow">
+                <div className="strong small">{e.name}{start <= day ? ' · now' : ''}</div>
+                <div className="tiny muted">{dateLabel(start, world.start_date)} to {dateLabel(end, world.start_date)} · week {weekOf(start)}{end > start + 6 ? ` to ${weekOf(end)}` : ''}</div>
+                <div className="small" style={{ marginTop: 2 }}>{e.note}</div>
+                <div className="tiny muted">{effectText(e)}{mine ? ` · ${mine} of your routes` : ''}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

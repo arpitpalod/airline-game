@@ -42,6 +42,22 @@ export interface PracticeInput {
 export interface PracticeWeek { n: number; fare: number; booked: number; target: number }
 export interface PracticeResult { key: StrategyKey; revenue: number; sold: number; load: number; fare: number; turned: number; empty: number; weeks: PracticeWeek[] }
 
+/** The practice run's set-up for one of the player's routes: its own seats (or one A320neo twice a day if it has no
+ *  aircraft yet), the rivals' seats, flights and average fare, and this week's demand (scale and growth, G). */
+export function practiceInput(m: Market, all: { route: { airline_id: string; fare_econ: number }; weekly: number; seatsWeek: number }[],
+                              airlineId: string, demandScale: number, day: number, p: Record<string, number>, season = 1): PracticeInput {
+  const mine = all.find((x) => x.route.airline_id === airlineId);
+  const theirs = all.filter((x) => x.route.airline_id !== airlineId && x.weekly > 0);
+  const seats = mine && mine.seatsWeek > 0 ? mine.seatsWeek / 2 : 14 * 180;
+  const trips = mine && mine.weekly > 0 ? mine.weekly / 7 : 2;
+  const rSeats = theirs.reduce((s, x) => s + x.seatsWeek / 2, 0);
+  const rTrips = theirs.reduce((s, x) => s + x.weekly / 7, 0);
+  const rFare = theirs.length ? theirs.reduce((s, x) => s + x.route.fare_econ * x.seatsWeek, 0) / Math.max(1, theirs.reduce((s, x) => s + x.seatsWeek, 0)) : null;
+  const g = m.intl ? (p.growth_year_intl ?? p.growth_year ?? 0) : (p.growth_year ?? 0);
+  return { m, seats, tripsDay: trips, rivalSeats: rSeats, rivalTripsDay: rTrips, rivalFare: rFare, season,
+           demandScale: demandScale * Math.pow(1 + g, (Math.max(day, 1) - 1) / 364), p };
+}
+
 /** One flight week on sale for 26 weeks, selling against rivals who hold their fare. Economy only, no no-shows. */
 export function practice(s: Strategy, x: PracticeInput): PracticeResult {
   const h = x.p.sale_weeks ?? 26;

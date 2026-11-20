@@ -110,7 +110,7 @@ function WorldBanner() {
   const { world } = useGame();
   if (world.status === 'running') return null;
   const text = world.status === 'setup'
-    ? `The world has not started yet. Look around and plan; actions open when it starts. Then come ${world.prelaunch_weeks} weeks of pre-launch to get ready: first flights are in week ${world.prelaunch_weeks + 1}.`
+    ? `The world has not started yet. You can open routes and put your aircraft on them now; leasing and buying open when it starts. Then come ${world.prelaunch_weeks} weeks of pre-launch to get ready: first flights are in week ${world.prelaunch_weeks + 1}.`
     : world.status === 'paused' ? 'The world is paused. Results and actions resume when it restarts.' : 'This season is over.';
   return <div className="card info small" style={{ marginBottom: 16 }}>{text}</div>;
 }

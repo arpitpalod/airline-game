@@ -8,7 +8,7 @@ import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
-  AirlineWeek, MarketMove, MarketWatch, RoutePlan, RouteWeek, Strategy,
+  AirlineWeek, DemandEvent, MarketMove, MarketWatch, RoutePlan, RouteWeek, Strategy,
 } from './types';
 
 export interface Ref {
@@ -321,6 +321,13 @@ export function useAircraftDaily() {
 }
 
 // ---------- Selling ahead (migration 0019) ----------
+
+export function useDemandEvents() {
+  return useQuery({
+    queryKey: ['demand_events'], staleTime: 600_000,
+    queryFn: () => rows<DemandEvent>(supabase.from('demand_events').select('*').order('start_doy')),
+  });
+}
 
 export function useStrategies() {
   return useQuery({

@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, type FleetItem } from '../lib/data';
 import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
-import { inr, num, pct, weekOf } from '../lib/format';
+import { inr, num, pct, plural, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
 import { LastFlights, MarketMoves, RouteAudit, SeatsOnSale, StrategyCard } from '../components/Selling';
@@ -201,9 +201,16 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
 }) {
   const { ref, airline } = useGame();
   const { run, busy } = useAction();
-  const candidates = fleet.filter((a) => !already.has(a.id) && a.base_iata && ends.includes(a.base_iata) && ['active', 'delivering', 'grounded', 'refit'].includes(a.status));
+  // each aircraft's room on this route: round trips a week that fit its free hours, or none if the route is beyond its range
+  const outOfRange = (a: FleetItem) => {
+    const tt = ref.type[a.type_id];
+    return km > Math.round(tt.range_km * Math.min(1.1, 1 - (0.4 * (a.seats_econ + a.seats_biz - tt.ref_seats)) / tt.ref_seats));
+  };
+  const roomOf = (a: FleetItem) => (outOfRange(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0));
+  const candidates = fleet.filter((a) => !already.has(a.id) && a.base_iata && ends.includes(a.base_iata) && ['active', 'delivering', 'grounded', 'refit'].includes(a.status))
+    .sort((x, y) => Number(roomOf(y) > 0) - Number(roomOf(x) > 0));
   const others = fleet.filter((a) => !already.has(a.id) && !(a.base_iata && ends.includes(a.base_iata)) && a.status !== 'returned');
-  const [pick, setPick] = useState<string | null>(candidates[0]?.id ?? null);
+  const [pick, setPick] = useState<string | null>(candidates.find((a) => roomOf(a) > 0)?.id ?? null);
   const ac = candidates.find((a) => a.id === pick);
   const t = ac ? ref.type[ac.type_id] : null;
   const max = ac && t ? maxWeekly(t, ac, km, hours[ac.id] ?? 0) : 0;
@@ -224,13 +231,22 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                 {candidates.map((a) => {
                   const tt = ref.type[a.type_id];
                   const free = Math.max(0, weekHours(tt) - (hours[a.id] ?? 0));
+                  const room = roomOf(a);
+                  const far = outOfRange(a);
                   return (
-                    <div key={a.id} className={`item link ${a.id === pick ? 'me' : ''}`} onClick={() => { setPick(a.id); setTrips(null); }}>
+                    <div key={a.id} className={`item ${room > 0 ? 'link' : 'off'} ${a.id === pick ? 'me' : ''}`} aria-disabled={room === 0}
+                      onClick={() => { if (room > 0) { setPick(a.id); setTrips(null); } }}>
                       <div className="grow">
                         <div className="strong">{a.reg} · {tt.name}</div>
                         <div className="tiny muted">{a.seats_econ + a.seats_biz} seats · {STATUS_LABEL[a.status]} · {num(free)} of {num(weekHours(tt))} hours a week free</div>
+                        <div className={`small ${room > 0 ? '' : 'bad-ink'}`} style={{ marginTop: 2 }}>
+                          {far ? 'This route is beyond its range' : room > 0 ? `Room for ${plural(room, 'round trip')} a week here` : 'No room: not enough free hours for one round trip here'}
+                        </div>
                       </div>
-                      {a.terms?.holding === 'wet' && <Badge tone="warn">Wet lease</Badge>}
+                      <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>
+                        {room === 0 && <Badge tone="bad">{far ? 'Too far' : 'Full'}</Badge>}
+                        {a.terms?.holding === 'wet' && <Badge tone="warn">Wet lease</Badge>}
+                      </div>
                     </div>
                   );
                 })}
