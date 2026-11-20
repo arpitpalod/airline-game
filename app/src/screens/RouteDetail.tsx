@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, useTurnDelta, type FleetItem } from '../lib/data';
+import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
 import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct, plural, weekOf } from '../lib/format';
@@ -132,6 +132,8 @@ export function RouteDetail() {
             }), 'Fares saved. They count from this week.').then(() => { setFareE(null); setFareB(null); })}>Save fares</Button>
           </div>
           )}
+          <RouteShocks a={route.origin} b={route.dest} intl={!!m?.intl} refFare={m?.ref_fare ?? 0} />
+          {m?.intl && <SeatsAbroad a={route.origin} b={route.dest} />}
           <div className="card flush">
             <div className="card-title" style={{ padding: '14px 16px 0' }}>
               <h2>Aircraft on this route</h2>
@@ -273,5 +275,58 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** Shocks in force on this route (0028): a closed airport, a fare cap, the airspace west of India. */
+function RouteShocks({ a, b, intl, refFare }: { a: string; b: string; intl: boolean; refFare: number }) {
+  const { world, ref } = useGame();
+  const ev = useEvents();
+  const now = world.game_day + 1;
+  const live = (ev.data ?? []).filter((e) => e.starts_day <= now && (e.ends_day ?? now) >= now);
+  const lines: string[] = [];
+  for (const e of live) {
+    const ap = e.payload?.airport as string | undefined;
+    const city = ap ? ref.airport[ap]?.city ?? ap : '';
+    const until = `until week ${weekOf(e.ends_day ?? now)}`;
+    if (e.kind === 'airport_closed' && ap && [a, b].includes(ap)) lines.push(`${city} airport is closed ${until}: every flight on this route is cancelled and its travellers refunded.`);
+    if (e.kind === 'fare_cap' && ap && [a, b].includes(ap) && !intl)
+      lines.push(`The government caps economy fares to and from ${city} at ${inr(Math.floor((Number(e.payload?.mult ?? 1.5) * refFare) / 10) * 10)} ${until}: every way of selling sells at most at the cap.`);
+    if (e.kind === 'airspace_closed' && intl) {
+      const ind = [a, b].map((x) => ref.airport[x]).find((x) => x?.is_india);
+      const far = [a, b].map((x) => ref.airport[x]).find((x) => x && !x.is_india);
+      if (ind && far && ind.lat >= Number(e.payload?.lat_min ?? ref.param.airspace_lat_min ?? 23) && ['GULF', 'EUR', 'NAM', 'CIS', 'AFR'].includes(far.region))
+        lines.push(`The airspace west of India is closed ${until}: this route flies round it, longer and dearer, and aircraft that can no longer reach are cancelled.`);
+    }
+  }
+  if (!lines.length) return null;
+  return <div className="card warn stack small">{lines.map((l) => <div key={l}>{l}</div>)}</div>;
+}
+
+/** Seats between India and the country at the far end, in this world (0028). */
+function SeatsAbroad({ a, b }: { a: string; b: string }) {
+  const { ref } = useGame();
+  const room = useSeatRoom();
+  const far = [a, b].map((x) => ref.airport[x]).find((x) => x && !x.is_india);
+  const r = far ? room.data?.find((x) => x.country === far.country) : undefined;
+  if (!r) return null;
+  const others = Math.max(0, r.used - r.mine), free = Math.max(0, r.limit - r.used);
+  const w = (n: number) => `${Math.min(100, (100 * n) / Math.max(r.limit, r.used, 1))}%`;
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Seats India–{r.name.replace(/^the /, '')}</h2><span className="small muted">each way, a week</span></div>
+      <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', background: 'var(--bg)' }}
+        aria-label={`You hold ${num(r.mine)}, other airlines ${num(others)}, free ${num(free)} of ${num(r.limit)}`}>
+        <div style={{ width: w(r.mine), background: 'var(--accent)' }} />
+        <div style={{ width: w(others), background: 'var(--line-strong)' }} />
+      </div>
+      <div className="kv">
+        <span>Airlines in this world may fly</span><span>{num(r.limit)}</span>
+        <span>You fly</span><span>{num(r.mine)}</span>
+        <span>Other airlines here</span><span>{num(others)}</span>
+        <span>Free</span><span className={free === 0 ? 'bad' : ''}>{num(free)}</span>
+      </div>
+      <p className="tiny muted">India agrees a weekly limit with {r.name}; this world's share grows with its places. Foreign airlines fly their own seats on top and carry the travellers this world's airlines cannot seat. Free seats go to whoever puts an aircraft on them first; seats you stop flying go back at once.</p>
+    </div>
   );
 }

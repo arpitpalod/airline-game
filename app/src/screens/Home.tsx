@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { call, rows, supabase } from '../lib/api';
-import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useDemandEvents, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutePlans, useRoutes, useStrategies } from '../lib/data';
+import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useDemandEvents, useEvents, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutePlans, useRoutes, useStrategies } from '../lib/data';
 import { effectText, touches, upcomingEvents } from '../lib/events';
 import { byWeek, routeStat, sumDaily } from '../lib/derive';
 import { clock, pairKey } from '../lib/game';
@@ -39,6 +39,7 @@ export function Home() {
   const nav = useNavigate();
   const [menu, setMenu] = useState(false);
   const opsDecisions = useOpsDecisions();
+  const events = useEvents();
 
   const days = daily.data ?? [];
   const wk = byWeek(days);
@@ -116,6 +117,37 @@ export function Home() {
   if (wet.length && world.game_day + 1 - row.first_flight_day > 28) {
     alerts.push({ key: 'wet', tone: 'info', to: '/market', title: `${wet.length === 1 ? wet[0].reg + ' is' : wet.length + ' aircraft are'} still on wet lease`,
       body: 'A wet lease costs about twice as much as an operating lease. Lease an aircraft from the pool and return the wet one when it arrives.' });
+  }
+
+  // shocks in force on your network (0028): closed airports, fare caps, the airspace west of India; late aircraft
+  const now = world.game_day + 1;
+  const cityOf = (i: string) => ref.airport[i]?.city ?? i;
+  for (const e of (events.data ?? []).filter((x) => x.starts_day <= now && (x.ends_day ?? now) >= now)) {
+    const ap = e.payload?.airport as string | undefined;
+    const hit = routes.filter((r) => (ap && [r.origin, r.dest].includes(ap)));
+    if (e.kind === 'airport_closed' && ap && hit.length) {
+      alerts.push({ key: `ac${e.id}`, tone: 'bad', to: `/route/${hit[0].id}`, title: `${cityOf(ap)} airport is closed until week ${weekOf(e.ends_day ?? now)}`,
+        body: `Your ${plural(hit.length, 'route')} there ${hit.length === 1 ? 'is' : 'are'} cancelled and travellers refunded. Aircraft costs run on; nothing to do but wait.` });
+    }
+    const dom = hit.filter((r) => !(ref.airport[r.origin]?.is_india === false || ref.airport[r.dest]?.is_india === false));
+    if (e.kind === 'fare_cap' && ap && dom.length) {
+      alerts.push({ key: `fc${e.id}`, tone: 'info', to: `/route/${dom[0].id}`, title: `Economy fares to and from ${cityOf(ap)} are capped until week ${weekOf(e.ends_day ?? now)}`,
+        body: `At ${num(Number(e.payload?.mult ?? 1.5), 1)} times the reference fare on ${plural(dom.length, 'route')}. Top fares sells at the cap, so seats go faster and earn less: Balanced or Fill every seat may earn more there for now.` });
+    }
+    if (e.kind === 'airspace_closed') {
+      const lat = Number(e.payload?.lat_min ?? ref.param.airspace_lat_min ?? 23);
+      const longer = routes.filter((r) => {
+        const ends = [ref.airport[r.origin], ref.airport[r.dest]];
+        const ind = ends.find((x) => x?.is_india), far = ends.find((x) => x && !x.is_india);
+        return ind && far && ind.lat >= lat && ['GULF', 'EUR', 'NAM', 'CIS', 'AFR'].includes(far.region);
+      });
+      if (longer.length) alerts.push({ key: `as${e.id}`, tone: 'warn', to: `/route/${longer[0].id}`, title: `The airspace west of India is closed until week ${weekOf(e.ends_day ?? now)}`,
+        body: `${plural(longer.length, 'route')} of yours fly round it: longer, with more fuel and crew hours, and aircraft that can no longer reach are cancelled. Check their results, or fly them from Mumbai or the south.` });
+    }
+  }
+  for (const ac of fl.filter((a) => a.status === 'delivering' && (a.terms?.delay_weeks ?? 0) > 0)) {
+    alerts.push({ key: `late${ac.id}`, tone: 'warn', to: `/aircraft/${ac.id}`, title: `${ac.reg} arrives ${plural(ac.terms!.delay_weeks!, 'week')} late, in week ${arrivalWeek(ac.available_day)}`,
+      body: 'The maker is behind on deliveries. Flights planned on it before then are not sold. Keep a wet lease or another aircraft on them until it comes.' });
   }
 
   if (opsDecisions.length) {

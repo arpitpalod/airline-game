@@ -9,6 +9,7 @@ import { Badge, Loading, Logo, PageHeader, Seg } from '../components/ui';
 
 const EVENT_TEXT: Record<string, string> = {
   fuel_shock: 'Fuel price shock', fx_swing: 'Rupee weakens', engine_grounding: 'Engine problem grounds part of a fleet', airport_opening: 'New airport opens', duty_rules: 'Stricter pilot duty-time rules',
+  airport_closed: 'Airport closed', airspace_closed: 'Airspace west of India closed', fare_cap: 'Fares capped',
 };
 
 export function Ranks() {
@@ -80,7 +81,7 @@ export function Ranks() {
               <div className="list">
                 {events.data!.map((e) => (
                   <div key={e.id} className="item small">
-                    <span className="grow">{EVENT_TEXT[e.kind] ?? e.kind}{e.kind === 'airport_opening' && e.payload?.city ? `: ${e.payload.city as string}` : ''}</span>
+                    <span className="grow">{EVENT_TEXT[e.kind] ?? e.kind}{e.kind === 'airport_opening' && e.payload?.city ? `: ${e.payload.city as string}` : ''}{(e.kind === 'airport_closed' || e.kind === 'fare_cap') && e.payload?.airport ? `: ${e.payload.airport as string}` : ''}</span>
                     <span className="tiny muted">week {weekOf(e.starts_day)}{e.ends_day && weekOf(e.ends_day) !== weekOf(e.starts_day) ? `–${weekOf(e.ends_day)}` : ''}</span>
                   </div>
                 ))}

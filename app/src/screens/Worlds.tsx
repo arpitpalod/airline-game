@@ -12,7 +12,7 @@ import { Badge, Button, Field, Icon, Loading, PageHeader, Sheet, Stepper } from 
 
 const SETTING_NAME: Record<WorldSetting, string> = {
   region: 'Home region', pace: 'Pace', turn: 'Turns', places: 'Places', money: 'Starting money', banks: 'Banks',
-  growth: 'Demand growth', shocks: 'Shocks', bots: 'Computer-run airlines',
+  growth: 'Demand growth', seats: 'Seats between countries', shocks: 'Shocks', bots: 'Computer-run airlines',
 };
 
 /** A world's rules as short labels: pace, turns and places from the world itself (they can change), the rest as founded. */
@@ -26,6 +26,7 @@ export function ruleChips(w: World, options: WorldOption[]) {
     label('money') && `${label('money')} to start`,
     label('banks') && `${label('banks')} banks`,
     label('growth') && `${label('growth')} growth`,
+    label('seats') && `Seats abroad: ${label('seats')}`,
     label('shocks') && `${label('shocks')} shocks`,
     label('bots') && `Rivals: ${label('bots')}`,
   ].filter(Boolean) as string[];
@@ -151,15 +152,7 @@ function licenceLine(l: FounderStatus) {
 // ---------- Found a world ----------
 
 const STEP1: WorldSetting[] = ['region', 'pace', 'turn', 'places'];
-const STEP2: WorldSetting[] = ['money', 'banks', 'growth', 'shocks', 'bots'];
-// Part 2 and 3 of the plan (spec 14.22): shown so founders know what is coming, not yet choosable.
-const COMING = [
-  { name: 'Late aircraft and engine deliveries', blurb: 'Supply-chain trouble delays new aircraft and spare engines.' },
-  { name: 'Airport closures', blurb: 'An airport shuts for days: its flights are cancelled.' },
-  { name: 'Airspace closures', blurb: 'Routes over a closed airspace fly longer, or not at all.' },
-  { name: 'Fare caps in a crisis', blurb: 'The government caps fares on some routes for a while.' },
-  { name: 'Seat limits between countries', blurb: 'Foreign airlines fly the same routes, so fewer seats are left for the world.' },
-];
+const STEP2: WorldSetting[] = ['money', 'banks', 'growth', 'seats', 'shocks', 'bots'];
 
 export function NewWorld() {
   const { ref, startJoin } = useGame();
@@ -234,16 +227,6 @@ export function NewWorld() {
           <Button block disabled={name.trim().length < 3} onClick={() => { setStep(2); window.scrollTo(0, 0); }}>Next: the market</Button>
         </> : <>
           {STEP2.map(group)}
-          <Field label="Coming later">
-            <div className="choices">
-              {COMING.map((c) => (
-                <div key={c.name} className="choice" style={{ opacity: 0.55, cursor: 'default' }}>
-                  <div className="t">{c.name}<span className="tiny muted" style={{ fontWeight: 400 }}> · coming</span></div>
-                  <div className="d">{c.blurb}</div>
-                </div>
-              ))}
-            </div>
-          </Field>
           <div className="card tight small">
             The world starts by itself when {plural(need, 'player')} {need === 1 ? 'has' : 'have'} joined, you included. If that takes more than {plural(ref.param.world_join_days ?? 7, 'day')}, it closes and you can found another.
             {' '}Everything here is fixed for the season, except pace and places (places only upwards once started).

@@ -4,12 +4,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { call, rows, supabase } from '../lib/api';
-import { useGame, useStrategies, useWorldAirlines } from '../lib/data';
+import { useGame, useStrategies, useWorldAirlines, useWorldOptions } from '../lib/data';
 import type { Strategy } from '../lib/types';
 import { clock, inPrelaunch } from '../lib/game';
 import { currentWeek, num, realTime, weekHours, weekLabel } from '../lib/format';
 import { useToast } from '../components/toast';
-import { Badge, Button, Empty, Field, Kpi, PageHeader, Sheet, Stepper } from '../components/ui';
+import { Badge, Button, Empty, Field, Kpi, PageHeader, Seg, Sheet, Stepper } from '../components/ui';
 import { TurnControl } from './Worlds';
 
 export function Admin() {
@@ -114,8 +114,15 @@ const EVENTS: { id: string; name: string; what: string; prob: DKey; size?: { lo:
     size: { lo: 'event_fx_mult_min', hi: 'event_fx_mult_max', label: 'Rupee weaker by', pct: 'over1' }, len: { lo: 'event_fx_days_min', hi: 'event_fx_days_max', unit: 'weeks' } },
   { id: 'engine', name: 'Engine events', what: 'Inspections ground part of one aircraft type across the world.', prob: 'event_engine_prob_day',
     size: { lo: 'event_engine_share_min', hi: 'event_engine_share_max', label: 'Share of the type', pct: 'share' }, len: { lo: 'event_engine_days_min', hi: 'event_engine_days_max', unit: 'weeks' } },
+  // 0028
+  { id: 'airport', name: 'Airport closures', what: 'An Indian airport closes (bigger ones more often): its flights are cancelled and travellers refunded. A big one can bring a fare cap.',
+    prob: 'event_airport_prob_day', len: { lo: 'event_airport_days_min', hi: 'event_airport_days_max', unit: 'days' } },
+  { id: 'airspace', name: 'Airspace closures', what: 'The airspace west of India closes: flights from north India to the west fly round it; aircraft that can no longer reach are cancelled.',
+    prob: 'event_airspace_prob_day', len: { lo: 'event_airspace_days_min', hi: 'event_airspace_days_max', unit: 'weeks' } },
 ];
-const D_KEYS = EVENTS.flatMap((e) => [e.prob, e.len.lo, e.len.hi, ...(e.size ? [e.size.lo, e.size.hi] : [])]);
+const MORE_KEYS = ['late_delivery_prob', 'late_delivery_max_weeks', 'fare_cap_on', 'fare_cap_mult', 'fare_cap_weeks'];
+const OLD_PROBS = ['ground_prob_day', 'event_fuel_prob_day', 'event_fx_prob_day', 'event_engine_prob_day'];
+const D_KEYS = [...EVENTS.flatMap((e) => [e.prob, e.len.lo, e.len.hi, ...(e.size ? [e.size.lo, e.size.hi] : [])]), ...MORE_KEYS];
 const PER_YEAR = [0, 0.2, 0.5, 1, 2, 4, 6, 12];
 const often = (y: number, perAircraft: boolean) => {
   const tail = perAircraft ? ' per aircraft' : '';
@@ -128,6 +135,7 @@ const often = (y: number, perAircraft: boolean) => {
 
 function DisruptionsAdmin() {
   const { world, ref } = useGame();
+  const options = useWorldOptions();
   const toast = useToast();
   const qc = useQueryClient();
   const own = useQuery({ queryKey: ['admin', world.id, 'world_params'],
@@ -139,13 +147,16 @@ function DisruptionsAdmin() {
   const saved: Record<string, number> = Object.fromEntries(D_KEYS.map((k) => [k, Number(own.data!.find((r) => r.key === k)?.num ?? def(k))]));
   const v = draft ?? saved;
   const set = (k: string, x: number) => setDraft({ ...v, [k]: x });
-  const preset = (m: number | null) => setDraft(Object.fromEntries(D_KEYS.map((k) => {
-    const isProb = EVENTS.some((e) => e.prob === k);
-    return [k, m == null || !isProb ? def(k) : Math.min(12 / 364, def(k) * m)];
-  })));
+  // Calm, Real and Rough are the founder's Shocks choices (world_options): old shocks by prob_mult, the newer ones by value
+  const presetOf = (name: string): Record<string, number> => {
+    const pv = options.data?.find((o) => o.setting === 'shocks' && o.option === name)?.vals ?? {};
+    const m = Number(pv.prob_mult ?? 1);
+    return Object.fromEntries(D_KEYS.map((k) => [k, k in pv ? Number(pv[k]) : OLD_PROBS.includes(k) ? Math.min(12 / 364, def(k) * m) : def(k)]));
+  };
+  const preset = (name: string) => setDraft(presetOf(name));
   const changed = D_KEYS.some((k) => Math.abs(v[k] - saved[k]) > 1e-9);
-  const isPreset = (m: number) => D_KEYS.every((k) => Math.abs(v[k] - (EVENTS.some((e) => e.prob === k) ? Math.min(12 / 364, def(k) * m) : def(k))) < 1e-9);
-  const label = isPreset(1) ? 'Real' : isPreset(0.5) ? 'Calm' : isPreset(2) ? 'Rough' : 'Custom';
+  const isPreset = (name: string) => { const p = presetOf(name); return D_KEYS.every((k) => Math.abs(v[k] - p[k]) < 1e-9); };
+  const label = isPreset('real') ? 'Real' : isPreset('calm') ? 'Calm' : isPreset('rough') ? 'Rough' : 'Custom';
   const days = (k: string, unit: 'days' | 'weeks') => (unit === 'weeks' ? Math.round(v[k] / 7) : Math.round(v[k]));
   const fromUnit = (x: number, unit: 'days' | 'weeks') => (unit === 'weeks' ? x * 7 : x);
   const pctOf = (x: number, kind: 'over1' | 'share') => Math.round((kind === 'over1' ? x - 1 : x) * 100);
@@ -154,12 +165,12 @@ function DisruptionsAdmin() {
     <div className="card stack">
       <div className="card-title" style={{ marginBottom: 0 }}><h2>Disruptions</h2><span className="small muted">{world.name} only · players are not told</span></div>
       <div className="row wrap" role="group" aria-label="Disruption presets">
-        <Button size="sm" kind="secondary" onClick={() => preset(0.5)}>Calm</Button>
-        <Button size="sm" kind="secondary" onClick={() => preset(null)}>Real</Button>
-        <Button size="sm" kind="secondary" onClick={() => preset(2)}>Rough</Button>
+        <Button size="sm" kind="secondary" disabled={!options.data} onClick={() => preset('calm')}>Calm</Button>
+        <Button size="sm" kind="secondary" disabled={!options.data} onClick={() => preset('real')}>Real</Button>
+        <Button size="sm" kind="secondary" disabled={!options.data} onClick={() => preset('rough')}>Rough</Button>
         <Badge>{label}</Badge>
       </div>
-      <p className="tiny muted">Real is close to Indian airlines today: about 1% of flights cancelled, and a fuel shock, a currency swing and an engine event each about once in three years. Calm halves how often they come; Rough doubles it. At most once a month; one shock of each kind at a time.</p>
+      <p className="tiny muted">Real is close to Indian airlines today: about 1% of flights cancelled; a fuel shock, a currency swing and an engine event each about once in three years; an airport closure about twice a year; the airspace west of India closed about every 4 years; a quarter of new aircraft late. Calm and Rough are the founders' choices of the same names. At most once a month; one shock of each kind at a time.</p>
       {EVENTS.map((e) => {
         const y = v[e.prob] * 364;
         const opts = [...new Set([...PER_YEAR, Math.round(def(e.prob) * 364 * 1000) / 1000, Math.round(y * 1000) / 1000])].sort((a, b) => a - b);
@@ -196,6 +207,36 @@ function DisruptionsAdmin() {
           </div>
         );
       })}
+      <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+        <div className="strong">Late aircraft deliveries</div>
+        <div className="tiny muted">13 weeks before a new aircraft from the maker is due, it may be put back.</div>
+        <div className="grid2">
+          <Field label="New aircraft late (%)">
+            <input className="input num" inputMode="numeric" aria-label="Late deliveries: share late" value={Math.round(v.late_delivery_prob * 100)}
+              onChange={(ev) => set('late_delivery_prob', Math.max(0, Math.min(100, Number(ev.target.value))) / 100)} />
+          </Field>
+          <Field label="Up to (weeks)">
+            <input className="input num" inputMode="numeric" aria-label="Late deliveries: up to weeks" value={Math.round(v.late_delivery_max_weeks)}
+              onChange={(ev) => set('late_delivery_max_weeks', Number(ev.target.value))} />
+          </Field>
+        </div>
+      </div>
+      <div className="stack" style={{ gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+        <div className="strong">Fare caps in a crisis</div>
+        <div className="tiny muted">After a big airport closes, economy fares on domestic routes to and from it are capped.</div>
+        <Seg value={v.fare_cap_on >= 1 ? 'on' : 'off'} options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]}
+          onChange={(x) => set('fare_cap_on', x === 'on' ? 1 : 0)} />
+        <div className="grid2">
+          <Field label="Cap (times the reference fare)">
+            <input className="input num" inputMode="decimal" aria-label="Fare caps: multiple" value={v.fare_cap_mult}
+              onChange={(ev) => set('fare_cap_mult', Number(ev.target.value))} />
+          </Field>
+          <Field label="Lasts (weeks)">
+            <input className="input num" inputMode="numeric" aria-label="Fare caps: weeks" value={Math.round(v.fare_cap_weeks)}
+              onChange={(ev) => set('fare_cap_weeks', Number(ev.target.value))} />
+          </Field>
+        </div>
+      </div>
       <div className="row wrap">
         <Button disabled={!changed} busy={busy} onClick={async () => {
           setBusy(true);

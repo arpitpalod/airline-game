@@ -21,6 +21,7 @@ import { checks14 } from './checks_14.mjs';
 import { checks15 } from './checks_15.mjs';
 import { checks16 } from './checks_16.mjs';
 import { checks17 } from './checks_17.mjs';
+import { checks18 } from './checks_18.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -81,9 +82,16 @@ await db.exec(`update public.game_params set num = case key when 'ground_prob_da
   where key in ('ground_prob_day', 'event_fuel_prob_day', 'event_engine_prob_day', 'bot_drop_min_days', 'bot_plan',
                 'bot_sell_floor_lf', 'bot_fight_follow', 'fuel_pass');`);
 
+// The checks written before migration 0028 run without the newer shocks (airport and airspace closures, late deliveries)
+// and without seat limits between countries; checks_18 puts the 0028 values back.
+const w8Params = (await db.query(`select key, num::float from public.game_params where key in ('event_airport_prob_day',
+  'event_airspace_prob_day', 'late_delivery_prob', 'seat_limit_mult')`)).rows;
+await db.exec(`update public.game_params set num = 0 where key in ('event_airport_prob_day', 'event_airspace_prob_day',
+  'late_delivery_prob', 'seat_limit_mult');`);
+
 let failed = 0;
 const t = {
-  db, freshTestWorld, weekParams, y1Params, z5Params,
+  db, freshTestWorld, weekParams, y1Params, z5Params, w8Params,
   q: async (s, p) => (await db.query(s, p)).rows,
   one: async (s, p) => Object.values((await db.query(s, p)).rows[0])[0],
   ok(name, cond, detail = '') { if (!cond) failed++; console.log(cond ? '  pass' : '  FAIL', name, detail); },
@@ -114,5 +122,6 @@ await checks14(t);
 await checks15(t);
 await checks16(t);
 await checks17(t);
+await checks18(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

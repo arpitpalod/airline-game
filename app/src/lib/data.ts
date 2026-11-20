@@ -7,7 +7,7 @@ import { pairKey } from './game';
 import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
-  FounderStatus, News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World, WorldOption,
+  FounderStatus, News, Profile, SeatRoom, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World, WorldOption,
   AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy,
 } from './types';
 
@@ -80,6 +80,13 @@ export const useWorldParams = (id: string | undefined) =>
 export const useWorldOptions = () =>
   useQuery({ queryKey: ['world_options'], staleTime: 600_000,
     queryFn: () => rows<WorldOption>(supabase.from('world_options').select('*').order('setting').order('sort')) });
+
+/** Seats between countries in this world (0028), with the playing airline's own. */
+export function useSeatRoom() {
+  const { world, airline } = useGame();
+  return useQuery({ queryKey: ['w', world.id, 'seat_room', airline.id, world.game_day],
+    queryFn: () => call<SeatRoom[]>('seat_room', { p_world: world.id, p_airline: airline.id }) });
+}
 
 export const useFounderStatus = () =>
   useQuery({ queryKey: ['founder_status'], queryFn: () => call<FounderStatus>('founder_status', {}) });
