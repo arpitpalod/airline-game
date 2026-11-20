@@ -71,6 +71,7 @@ export function Admin() {
           {world.status !== 'ended' && <PlacesControl />}
         </div>
       </div>
+      <DisruptionsAdmin />
       <StrategiesAdmin />
       <BotsAdmin />
       {confirm && (
@@ -89,6 +90,120 @@ export function Admin() {
 }
 
 const WEEK_HOURS = [0.5, 1, 2, 3, 4, 6, 8, 12, 24];
+
+// ---------- Disruptions, this world only (migration 0025) ----------
+// Each event: how often (a chance a day; per aircraft for groundings), how big and how long. Values the admin has not set
+// follow the game's defaults ("Real"). Players are not told.
+type DKey = string;
+const EVENTS: { id: string; name: string; what: string; prob: DKey; size?: { lo: DKey; hi: DKey; label: string; pct: 'over1' | 'share' };
+  len: { lo: DKey; hi: DKey; unit: 'days' | 'weeks' } }[] = [
+  { id: 'ground', name: 'Aircraft groundings', what: 'A technical fault grounds one aircraft; without a spare at its base, its flights are cancelled.',
+    prob: 'ground_prob_day', len: { lo: 'ground_days_min', hi: 'ground_days_max', unit: 'days' } },
+  { id: 'fuel', name: 'Fuel shocks', what: 'Jet fuel jumps for some weeks. Hedged fuel is protected.', prob: 'event_fuel_prob_day',
+    size: { lo: 'event_fuel_mult_min', hi: 'event_fuel_mult_max', label: 'Fuel up by', pct: 'over1' }, len: { lo: 'event_fuel_days_min', hi: 'event_fuel_days_max', unit: 'weeks' } },
+  { id: 'fx', name: 'Currency swings', what: 'The rupee weakens for some months: leases, maintenance and aircraft loans cost more.', prob: 'event_fx_prob_day',
+    size: { lo: 'event_fx_mult_min', hi: 'event_fx_mult_max', label: 'Rupee weaker by', pct: 'over1' }, len: { lo: 'event_fx_days_min', hi: 'event_fx_days_max', unit: 'weeks' } },
+  { id: 'engine', name: 'Engine events', what: 'Inspections ground part of one aircraft type across the world.', prob: 'event_engine_prob_day',
+    size: { lo: 'event_engine_share_min', hi: 'event_engine_share_max', label: 'Share of the type', pct: 'share' }, len: { lo: 'event_engine_days_min', hi: 'event_engine_days_max', unit: 'weeks' } },
+];
+const D_KEYS = EVENTS.flatMap((e) => [e.prob, e.len.lo, e.len.hi, ...(e.size ? [e.size.lo, e.size.hi] : [])]);
+const PER_YEAR = [0, 0.2, 0.5, 1, 2, 4, 6, 12];
+const often = (y: number, perAircraft: boolean) => {
+  const tail = perAircraft ? ' per aircraft' : '';
+  if (y <= 0) return 'Never';
+  if (y >= 11.5) return `About once a month${tail}`;
+  if (y >= 1.5) return `About ${Math.round(y)} times a year${tail}`;
+  if (y >= 0.9) return `About once a year${tail}`;
+  return `About once in ${Math.round((1 / y) * 10) / 10} years${tail}`;
+};
+
+function DisruptionsAdmin() {
+  const { world, ref } = useGame();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const own = useQuery({ queryKey: ['admin', world.id, 'world_params'],
+    queryFn: () => rows<{ key: string; num: number }>(supabase.from('world_params').select('key,num').eq('world_id', world.id)) });
+  const [draft, setDraft] = useState<Record<string, number> | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!own.data) return null;
+  const def = (k: string) => Number(ref.param[k] ?? 0);
+  const saved: Record<string, number> = Object.fromEntries(D_KEYS.map((k) => [k, Number(own.data!.find((r) => r.key === k)?.num ?? def(k))]));
+  const v = draft ?? saved;
+  const set = (k: string, x: number) => setDraft({ ...v, [k]: x });
+  const preset = (m: number | null) => setDraft(Object.fromEntries(D_KEYS.map((k) => {
+    const isProb = EVENTS.some((e) => e.prob === k);
+    return [k, m == null || !isProb ? def(k) : Math.min(12 / 364, def(k) * m)];
+  })));
+  const changed = D_KEYS.some((k) => Math.abs(v[k] - saved[k]) > 1e-9);
+  const isPreset = (m: number) => D_KEYS.every((k) => Math.abs(v[k] - (EVENTS.some((e) => e.prob === k) ? Math.min(12 / 364, def(k) * m) : def(k))) < 1e-9);
+  const label = isPreset(1) ? 'Real' : isPreset(0.5) ? 'Calm' : isPreset(2) ? 'Rough' : 'Custom';
+  const days = (k: string, unit: 'days' | 'weeks') => (unit === 'weeks' ? Math.round(v[k] / 7) : Math.round(v[k]));
+  const fromUnit = (x: number, unit: 'days' | 'weeks') => (unit === 'weeks' ? x * 7 : x);
+  const pctOf = (x: number, kind: 'over1' | 'share') => Math.round((kind === 'over1' ? x - 1 : x) * 100);
+  const fromPct = (x: number, kind: 'over1' | 'share') => (kind === 'over1' ? 1 + x / 100 : x / 100);
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Disruptions</h2><span className="small muted">{world.name} only · players are not told</span></div>
+      <div className="row wrap" role="group" aria-label="Disruption presets">
+        <Button size="sm" kind="secondary" onClick={() => preset(0.5)}>Calm</Button>
+        <Button size="sm" kind="secondary" onClick={() => preset(null)}>Real</Button>
+        <Button size="sm" kind="secondary" onClick={() => preset(2)}>Rough</Button>
+        <Badge>{label}</Badge>
+      </div>
+      <p className="tiny muted">Real is close to Indian airlines today: about 1% of flights cancelled, and a fuel shock, a currency swing and an engine event each about once in three years. Calm halves how often they come; Rough doubles it. At most once a month; one shock of each kind at a time.</p>
+      {EVENTS.map((e) => {
+        const y = v[e.prob] * 364;
+        const opts = [...new Set([...PER_YEAR, Math.round(def(e.prob) * 364 * 1000) / 1000, Math.round(y * 1000) / 1000])].sort((a, b) => a - b);
+        return (
+          <div key={e.id} className="stack" style={{ gap: 6, borderTop: '1px solid var(--line)', paddingTop: 10 }}>
+            <div className="strong">{e.name}</div>
+            <div className="tiny muted">{e.what}</div>
+            <Field label="How often">
+              <select className="input" aria-label={`${e.name}: how often`} value={Math.round(y * 1000) / 1000}
+                onChange={(ev) => set(e.prob, Number(ev.target.value) / 364)}>
+                {opts.map((o) => <option key={o} value={o}>{often(o, e.id === 'ground')}{Math.abs(o - def(e.prob) * 364) < 0.001 ? ' · Real' : ''}</option>)}
+              </select>
+            </Field>
+            <div className="grid2">
+              {e.size && <Field label={`${e.size.label} (%)`}>
+                <div className="row" style={{ gap: 6 }}>
+                  <input className="input num" inputMode="numeric" aria-label={`${e.name}: lowest size`} value={pctOf(v[e.size.lo], e.size.pct)}
+                    onChange={(ev) => set(e.size!.lo, fromPct(Number(ev.target.value), e.size!.pct))} />
+                  <span className="small muted">to</span>
+                  <input className="input num" inputMode="numeric" aria-label={`${e.name}: highest size`} value={pctOf(v[e.size.hi], e.size.pct)}
+                    onChange={(ev) => set(e.size!.hi, fromPct(Number(ev.target.value), e.size!.pct))} />
+                </div>
+              </Field>}
+              <Field label={`Lasts (${e.len.unit})`}>
+                <div className="row" style={{ gap: 6 }}>
+                  <input className="input num" inputMode="numeric" aria-label={`${e.name}: shortest`} value={days(e.len.lo, e.len.unit)}
+                    onChange={(ev) => set(e.len.lo, fromUnit(Number(ev.target.value), e.len.unit))} />
+                  <span className="small muted">to</span>
+                  <input className="input num" inputMode="numeric" aria-label={`${e.name}: longest`} value={days(e.len.hi, e.len.unit)}
+                    onChange={(ev) => set(e.len.hi, fromUnit(Number(ev.target.value), e.len.unit))} />
+                </div>
+              </Field>
+            </div>
+          </div>
+        );
+      })}
+      <div className="row wrap">
+        <Button disabled={!changed} busy={busy} onClick={async () => {
+          setBusy(true);
+          try {
+            // values equal to the game's default are cleared, so the world follows the default if it changes
+            await call('admin_set_disruptions', { p_world: world.id,
+              p_values: Object.fromEntries(D_KEYS.map((k) => [k, Math.abs(v[k] - def(k)) < 1e-9 ? null : v[k]])) });
+            toast(`Disruptions saved for ${world.name}. They apply from the next game day.`);
+            setDraft(null);
+            await qc.invalidateQueries({ queryKey: ['admin', world.id, 'world_params'] });
+          } catch (er) { toast((er as Error).message, 'error'); } finally { setBusy(false); }
+        }}>Save disruptions</Button>
+        {changed && <Button kind="secondary" onClick={() => setDraft(null)}>Undo</Button>}
+      </div>
+    </div>
+  );
+}
 
 function SpeedControl() {
   const { world } = useGame();
@@ -216,7 +331,8 @@ interface MixRow { code: string; strategy: string; weight: number }
 const BOT_PARAMS: { k: string; label: string }[] = [
   { k: 'bot_review_weeks', label: 'Review every (weeks)' }, { k: 'bot_explore_prob', label: 'Chance to try another way' },
   { k: 'bot_switch_gain', label: 'Switch when better by' }, { k: 'bot_fight_weeks', label: 'Fight lasts (weeks)' },
-  { k: 'bot_follow_cut', label: 'Follow a player cut of' },
+  { k: 'bot_follow_cut', label: 'Follow a player cut of' }, { k: 'bot_fight_margin', label: 'Fight margin over cost' },
+  { k: 'bot_fight_skew', label: 'Fight skew (aggressive go lower)' },
 ];
 const MIX_KEYS = ['fill', 'balanced', 'top', 'follow'];
 function BotsAdmin() {
@@ -238,7 +354,7 @@ function BotsAdmin() {
   return (
     <div className="card flush">
       <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Computer-run airlines</h2><span className="small muted">all worlds</span></div>
-      <p className="tiny muted" style={{ padding: '0 16px' }}>Aggression is the chance an airline fights a player who starts flying one of its markets (Fill every seat for some weeks). New routes draw their way of selling from the mix; every few weeks each route moves to what works better on routes like it, or tries another way at random.</p>
+      <p className="tiny muted" style={{ padding: '0 16px' }}>Aggression is the chance an airline fights a player who starts flying one of its markets. A fight prices, for some weeks, at a point drawn between the airline's profitable lowest fare (its cost at 80% full plus the fight margin) and the player's fare; aggressive airlines draw lower. New routes draw their way of selling from the mix; every few weeks each route moves to what works better on routes like it, or tries another way at random.</p>
       <div className="scroll-x">
         <table className="table">
           <thead><tr><th>Airline</th><th className="r">Aggression</th>{MIX_KEYS.map((k) => <th key={k} className="r">{k === 'fill' ? 'Fill' : k === 'top' ? 'Top' : k === 'follow' ? 'Follow' : 'Balanced'}</th>)}<th /></tr></thead>

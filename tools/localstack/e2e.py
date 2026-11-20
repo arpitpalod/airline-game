@@ -78,6 +78,16 @@ with sync_playwright() as p:
     page.get_by_label('One game week takes').select_option('1')
     page.get_by_role('button', name='Change the clock').click()
     toast_ok(page, 'now takes 1 hour')
+    print('admin sets this world\'s disruptions')
+    page.get_by_role('button', name='Rough', exact=True).click()
+    expect(page.get_by_label('Currency swings: how often')).not_to_have_value('0.364')
+    page.get_by_role('button', name='Save disruptions').click()
+    toast_ok(page, 'Disruptions saved')
+    shot(page, 'p04b-disruptions')
+    assert float(sql("select num from world_params wp join worlds w on w.id = wp.world_id where w.name = 'World 1' and key = 'event_fx_prob_day'")) > 0.0019
+    page.get_by_role('button', name='Real', exact=True).click()
+    page.get_by_role('button', name='Save disruptions').click()
+    toast_ok(page, 'Disruptions saved')
 
     print('open a route and assign the aircraft')
     go(page, '/network')

@@ -1,6 +1,6 @@
 # Airline Game: Game Spec v0.1
 
-Status: v0.16, 20 Nov 2026 (year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
+Status: v0.17, 20 Nov 2026 (disruptions set per world by the admin, fights at a random but profitable fare, 14.19; year-one fixes: real disruption rates, computer-run airlines that share aircraft and plan by profit, fights that match the market, fares that follow fuel, 14.18; Ops: fuel hedging, maintenance strategies, operating styles and cost per seat-km against the industry, pilot pay automatic, 14.17; every input links to cost or revenue, principle 8; first playtest fixes: international growth, festivals and events, planning in setup, the first week at the start, 14.16; computer-run airlines that sell like rivals, 14.15; insights, 14.14; selling 26 weeks ahead with strategies, cash at booking and rival moves, 14.13; the week as the unit of time and a 13-week pre-launch, 14.12; money by aircraft and route unit economics, 14.11; computer-run airlines that pay their way and slot prices by aircraft size, 14.10; pilots, 14.8; database changes applied on merge, 14.9; everything scarce scales with places, principle 7; no aircraft trading, principle 6).
 
 Number labels used below: **(V)** verified against a public source listed in section 17. **(G)** game value: a starting number chosen for play balance, to be tuned in Stage 2. Nothing here uses internal airline data.
 
@@ -205,7 +205,7 @@ Exchange rate starts at Rs 90 per dollar (G) and moves over time.
 
 ## 12. Events and computer-run airlines
 
-- **MVP events:** fuel shock, currency swing, engine grounding, new airport opening.
+- **MVP events:** fuel shock, currency swing, engine grounding, new airport opening. From 14.19 the admin sets how often each comes, and how big and long, per world.
 - **Later:** rival collapse, fare caps, demand shocks. (Stricter pilot duty-time rules: 14.8.)
 - **Computer-run airlines:** six fictional carriers with fixed starting networks and rule-based pricing (they follow the lowest fare within a band and defend their bases). They keep markets contested while a world fills up, and from migration 0009 they also start flying routes where players earn well (14.5). As built: section 14.3; from 14.18 they plan each route's flights, share aircraft between routes and review routes on profit every quarter.
 
@@ -633,6 +633,25 @@ In a full world the smaller computer-run airlines recede as players take their m
 **App.** The practice flight and How it sells price from the same index; the fuel page shows the fuel charge on fares; Home's profit tile says whether last week was up or down on the four weeks before, so a loss that is shrinking reads as progress.
 
 **Tested.** 10 local checks (`checks_14`); the older checks run with the old disruption rates and the old computer-run airlines (`bot_plan` 0, no cost floor, fights that fill every seat, fares that ignore fuel: `run.mjs`). The old functions stay as `bot_seed_v1`, `bot_quarter_v1`, `bot_enter_v1` and `bot_exit_v1` for them. Running worlds: each open computer-run route keeps its flights as its plan; the new rules apply from the next quarter end.
+
+### 14.19 Disruptions per world, fights at a random but profitable fare (migration 0025)
+
+Owner's decisions (20 Nov 2026).
+
+**Disruptions per world.** Table `world_params` (admins only: players are not told) holds a world's own values; `game.wparam(world, key)` gives the world's value or the game's default, and the engine reads disruptions through it (`day_world`, `day_fleet`, `ops_preview`). `admin_set_disruptions(world, values)` sets them: a number sets one, null goes back to the default.
+
+| Event | Real (the default) | The admin can set |
+|---|---|---|
+| Aircraft groundings | each aircraft about once in two years (0.15% a day), 2 to 6 days | never to once a month per aircraft; 1 to 60 days |
+| Fuel shocks | about once in three years, +25 to 45% for 6 to 17 weeks | never to once a month; +0 to 100%; 1 to 52 weeks |
+| Currency swings | about once in three years (`event_fx_prob_day` 0.001; was 0.003, about once a year), rupee 4 to 10% weaker for 9 to 26 weeks | never to once a month; 0 to 50%; 1 to 52 weeks |
+| Engine events | about once in three years, 15 to 30% of one type for 3 to 8 weeks | never to once a month; 5 to 60%; 1 to 52 weeks |
+
+One shock of each kind runs at a time (engine events could overlap before), so at high settings shocks come back to back but never stack. A change applies from the next game day; events already running finish as they started. Pilot duty-time cuts stay a game-wide value. The Admin screen has a Disruptions card: presets Calm (half as often), Real and Rough (twice as often), and how often, how big and how long for each event, in plain units.
+
+**Fights.** When a computer-run airline fights a player (14.15: the chance is its aggression), it draws for the fight where it prices: `route_plans.fight_pos = random() ^ (aggression x bot_fight_skew)` (3), so aggressive airlines draw nearer 0. For each flight week, `sell_week` prices its economy fare at `lowest + fight_pos x (player's fare − lowest)`, where lowest is its profitable lowest fare: the cost floor of 14.18 (flying and aircraft costs at 80% full) plus `bot_fight_margin` (5%), or the strategy's lowest fare before it has 7 days of results. Where the player sells below that lowest, it holds there and lets the player lose money alone. The draw holds for the fight (8 weeks) and is cleared when it ends; the next fight draws again. `bot_fight_random` 0 goes back to 0024 (matching the market).
+
+**Tested.** 10 local checks (`checks_15`); the older checks run with the old currency rate and 0024 fights (`run.mjs`). The app test sets a world to Rough and back to Real.
 
 ## 15. Screens
 
