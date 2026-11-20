@@ -1,6 +1,8 @@
 // Local stand-in for the parts of Supabase the app uses, so the app can be tested end to end in a session:
 //   /auth/v1/token, /auth/v1/user, /auth/v1/logout   password sign-in with locally signed tokens
-//   /functions/v1/join                               same checks as supabase/functions/join
+//   /auth/v1/signup, /resend, /recover, /verify      sign-up and password reset with 6-digit codes (spec 14.21);
+//                                                    no email: GET /__test/code?email=... returns the last code
+//   /functions/v1/join                               same checks as supabase/functions/join (the invite code)
 //   /rest/v1/<table>                                 PostgREST-style reads: select, eq/neq/gt/gte/lt/lte/in/is, order, limit
 //   /rest/v1/rpc/<function>                          function calls with named arguments
 // Every request runs as the caller's role with request.jwt.claims set, so row-level security applies as in Supabase.
@@ -37,6 +39,11 @@ function session(user) {
   return { access_token: sign({ sub: user.id, role: 'authenticated', email: user.email, exp, aud: 'authenticated' }),
            token_type: 'bearer', expires_in: 3600, expires_at: exp, refresh_token: `rt.${user.id}`, user: u };
 }
+
+const codes = new Map();   // email -> { code, type }: what Supabase would email
+const newCode = (email, type) => { const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0'); codes.set(email, { code, type }); return code; };
+const userJson = (u, identities = true) => ({ id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email,
+  identities: identities ? [{ id: u.id, provider: 'email' }] : [], app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString() });
 
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 function claimsOf(req) {
@@ -133,7 +140,7 @@ const server = http.createServer(async (req, res) => {
   };
   res.setHeader('access-control-allow-origin', '*');
   res.setHeader('access-control-allow-headers', '*');
-  res.setHeader('access-control-allow-methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.setHeader('access-control-allow-methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
@@ -143,27 +150,58 @@ const server = http.createServer(async (req, res) => {
       const g = url.searchParams.get('grant_type');
       const u = g === 'refresh_token'
         ? (await pool.query('select id, email from auth.users where id::text = $1', [String(b.refresh_token || '').slice(3)])).rows[0]
-        : (await pool.query('select id, email from auth.users where lower(email) = lower($1) and password = $2', [b.email, b.password])).rows[0];
+        : (await pool.query('select id, email, confirmed from auth.users where lower(email) = lower($1) and password = $2', [b.email, b.password])).rows[0];
       if (!u) return send(400, { error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' });
+      if (u.confirmed === false) return send(400, { error: 'email_not_confirmed', error_code: 'email_not_confirmed', msg: 'Email not confirmed' });
       return send(200, session(u));
     }
+    if (p === '/auth/v1/signup') {
+      const b = await body(req);
+      const email = String(b.email || '').trim().toLowerCase();
+      if (String(b.password || '').length < 8) return send(422, { code: 422, error_code: 'weak_password', msg: 'Password should be at least 8 characters.' });
+      const old = (await pool.query('select id, email, confirmed from auth.users where lower(email) = $1', [email])).rows[0];
+      if (old && old.confirmed) return send(200, userJson(old, false));   // as Supabase: no email, no identities
+      const u = old || (await pool.query('insert into auth.users (email, password, confirmed) values ($1, $2, false) returning id, email', [email, b.password])).rows[0];
+      newCode(email, 'signup');
+      return send(200, userJson(u));
+    }
+    if (p === '/auth/v1/resend' || p === '/auth/v1/recover') {
+      const b = await body(req);
+      const email = String(b.email || '').trim().toLowerCase();
+      const u = (await pool.query('select confirmed from auth.users where lower(email) = $1', [email])).rows[0];
+      if (u && p === '/auth/v1/resend' && !u.confirmed) newCode(email, 'signup');
+      if (u && p === '/auth/v1/recover' && u.confirmed) newCode(email, 'recovery');
+      return send(200, {});
+    }
+    if (p === '/auth/v1/verify') {
+      const b = await body(req);
+      const email = String(b.email || '').trim().toLowerCase();
+      const want = b.type === 'recovery' ? 'recovery' : 'signup';
+      const c = codes.get(email);
+      if (!c || c.type !== want || c.code !== String(b.token)) return send(403, { code: 403, error_code: 'otp_expired', msg: 'Token has expired or is invalid' });
+      codes.delete(email);
+      const u = (await pool.query('update auth.users set confirmed = true where lower(email) = $1 returning id, email', [email])).rows[0];
+      return send(200, session(u));
+    }
+    if (p === '/__test/code') return send(200, codes.get(String(url.searchParams.get('email') || '').toLowerCase()) || {});
     if (p === '/auth/v1/user') {
       const c = claimsOf(req);
       if (!c.sub) return send(401, { msg: 'not signed in' });
+      if (req.method === 'PUT') {
+        const b = await body(req);
+        if (b.password !== undefined) {
+          if (String(b.password).length < 8) return send(422, { code: 422, error_code: 'weak_password', msg: 'Password should be at least 8 characters.' });
+          await pool.query('update auth.users set password = $2 where id = $1', [c.sub, b.password]);
+        }
+      }
       return send(200, session({ id: c.sub, email: c.email }).user);
     }
     if (p === '/auth/v1/logout') { res.writeHead(204); return res.end(); }
     if (p === '/functions/v1/join') {
       const b = await body(req);
-      const email = String(b.email || '').trim().toLowerCase();
       const ok = (await pool.query('select 1 from public.world_secrets s join public.worlds w on w.id = s.world_id where s.invite_code = lower(trim($1)) and w.status <> $2',
                                    [String(b.invite || ''), 'ended'])).rowCount;
       if (!ok) return send(400, { error: 'That invite code is not valid' });
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return send(400, { error: 'Enter a valid email address' });
-      if (String(b.password || '').length < 8 || String(b.password).length > 72) return send(400, { error: 'Password must be 8 to 72 characters' });
-      if ((await pool.query('select 1 from auth.users where lower(email) = $1', [email])).rowCount)
-        return send(400, { error: 'An account with this email already exists. Sign in instead.' });
-      await pool.query('insert into auth.users (email, password) values ($1, $2)', [email, b.password]);
       return send(200, { ok: true });
     }
     if (p.startsWith('/rest/v1/rpc/') && req.method === 'POST') {

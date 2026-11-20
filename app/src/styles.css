@@ -333,6 +333,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 .hedge-row { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; align-items: center; }
 .hedge-bar { height: 12px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .hedge-bar i { display: block; height: 100%; border-radius: 4px; }
+/* A button that reads as a link (sign-in screen, spec 14.21) */
+.link-btn { font: inherit; font-size: 14px; background: none; border: 0; padding: 0; min-height: 44px; color: var(--accent); cursor: pointer; text-align: left; }
+.link-btn:disabled { color: var(--muted); cursor: default; }
 /* Currency (migration 0026): a strip in the cost card, dollar marks on cost lines */
 .fx-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 12px; border-radius: 10px;
   background: var(--bg); text-decoration: none; color: inherit; }
