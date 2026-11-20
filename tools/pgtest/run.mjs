@@ -18,6 +18,7 @@ import { checks11 } from './checks_11.mjs';
 import { checks12 } from './checks_12.mjs';
 import { checks13 } from './checks_13.mjs';
 import { checks14 } from './checks_14.mjs';
+import { checks15 } from './checks_15.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -64,6 +65,11 @@ await db.exec(`update public.game_params set num = case key when 'growth_year_in
     where key in ('growth_year_intl', 'start_first_week');
   create table public.demand_events_0022 as select * from public.demand_events;
   delete from public.demand_events;`);
+// The checks written before migration 0025 run with currency swings as before and fights at the 0024 fares; checks_15 puts
+// the 0025 values back.
+const z5Params = (await db.query(`select key, num::float from public.game_params where key in ('event_fx_prob_day', 'bot_fight_random')`)).rows;
+await db.exec(`update public.game_params set num = case key when 'event_fx_prob_day' then 0.003 else 0 end
+  where key in ('event_fx_prob_day', 'bot_fight_random');`);
 // The checks written before migration 0024 run with the old disruption rates and the old computer-run airlines (one route per
 // aircraft, no cost floor, fights that fill every seat) and fares that ignore fuel; checks_14 puts the 0024 values back.
 const y1Params = (await db.query(`select key, num::float from public.game_params where key in ('ground_prob_day', 'event_fuel_prob_day',
@@ -75,7 +81,7 @@ await db.exec(`update public.game_params set num = case key when 'ground_prob_da
 
 let failed = 0;
 const t = {
-  db, freshTestWorld, weekParams, y1Params,
+  db, freshTestWorld, weekParams, y1Params, z5Params,
   q: async (s, p) => (await db.query(s, p)).rows,
   one: async (s, p) => Object.values((await db.query(s, p)).rows[0])[0],
   ok(name, cond, detail = '') { if (!cond) failed++; console.log(cond ? '  pass' : '  FAIL', name, detail); },
@@ -103,5 +109,6 @@ await checks11(t);
 await checks12(t);
 await checks13(t);
 await checks14(t);
+await checks15(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

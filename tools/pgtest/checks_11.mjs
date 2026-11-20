@@ -16,6 +16,7 @@ export async function checks11(t) {
     values ('Test 11', 0.5, 25, false, 0, true) returning id)
     insert into public.world_secrets (world_id, invite_code) select id, 'test1100' from w returning world_id`);
   const P = await one(`select public.found_airline('test1100', 'Fight Air', 'FA', 'DEL')`);
+  await q(`select setseed(0.5)`);   // the draws below are random: a fixed seed keeps the check from failing by chance
   await q(`select public.admin_start_world($1)`, [W]);
   const run = async (n) => { for (let i = 0; i < n; i++) await q(`select game.run_day($1)`, [W]); };
   await run(7);
