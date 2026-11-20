@@ -13,8 +13,9 @@ export function layoutRows(t: AircraftType, bizRows: number, bizPitch: number | 
   return { econRows: Math.ceil(seatsEcon / t.econ_abreast), seatsEcon, seatsBiz, seats: seatsEcon + seatsBiz };
 }
 
-export function minTurn(t: AircraftType, seats: number) {
-  return Math.max(t.base_turn_min - 5, t.base_turn_min + 0.1 * (seats - t.ref_seats));
+/** Minimum turnaround in minutes; delta is the airline's operating style (0023), never below 15 minutes. */
+export function minTurn(t: AircraftType, seats: number, delta = 0) {
+  return Math.max(15, Math.max(t.base_turn_min - 5, t.base_turn_min + 0.1 * (seats - t.ref_seats)) + delta);
 }
 
 export function cabinRange(t: AircraftType, seats: number) {
@@ -35,8 +36,8 @@ export function weekHours(t: AircraftType) {
 }
 
 /** Round trips a week this aircraft could add on a route, given hours already planned elsewhere. */
-export function maxWeekly(t: AircraftType, ac: Aircraft, km: number, usedHours: number) {
-  const trip = tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz));
+export function maxWeekly(t: AircraftType, ac: Aircraft, km: number, usedHours: number, turnDelta = 0) {
+  const trip = tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz, turnDelta));
   return Math.max(0, Math.min(84, Math.floor((weekHours(t) - usedHours + 1e-9) / trip)));
 }
 

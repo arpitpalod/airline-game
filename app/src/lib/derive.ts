@@ -45,7 +45,7 @@ export function lfTone(lf: number | null): 'good' | 'warn' | 'low' | 'none' {
 }
 
 /** Weekly hours each aircraft is planned to fly, from its rotations. */
-export function hoursByAircraft(fleet: FleetItem[], routes: Route[], rotations: Rotation[], markets: Record<string, Market> | undefined, ref: Ref) {
+export function hoursByAircraft(fleet: FleetItem[], routes: Route[], rotations: Rotation[], markets: Record<string, Market> | undefined, ref: Ref, turnDelta = 0) {
   const rById = Object.fromEntries(routes.map((r) => [r.id, r]));
   const out: Record<string, number> = {};
   for (const ac of fleet) {
@@ -54,7 +54,7 @@ export function hoursByAircraft(fleet: FleetItem[], routes: Route[], rotations: 
     for (const ro of rotations) {
       if (ro.aircraft_id !== ac.id) continue;
       const r = rById[ro.route_id]; const m = r && markets?.[pairKey(r.origin, r.dest)];
-      if (m) h += ro.weekly_trips * tripHours(t, m.km, minTurn(t, ac.seats_econ + ac.seats_biz));
+      if (m) h += ro.weekly_trips * tripHours(t, m.km, minTurn(t, ac.seats_econ + ac.seats_biz, turnDelta));
     }
     out[ac.id] = h;
   }

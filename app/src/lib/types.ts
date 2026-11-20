@@ -4,7 +4,7 @@ export interface World {
   id: string; name: string; status: 'setup' | 'running' | 'paused' | 'ended';
   speed: number; started_at: string | null; paused_at: string | null; paused_seconds: number;
   game_day: number; season: number; season_days: number; demand_scale: number;
-  fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number; pilots: boolean;
+  fuel_inr_kg: number; fx_inr_usd: number; fuel_walk: number; fx_walk: number; max_airlines: number; pilots: boolean;
   prelaunch_weeks: number; prelaunch_minutes: number; start_date: string; selling: boolean;
 }
 
@@ -77,6 +77,7 @@ export interface AirlineDaily {
   c_marketing: number; c_overhead: number; c_interest: number; c_other: number; c_depr: number; cash_end: number;
   brand: number | null; otp: number | null; flights: number; cancelled: number; loan_repaid: number;
   refunds_inr: number;
+  fuel_kg: number; hedge_inr: number; groundings: number;
 }
 
 export interface Txn { id: number; airline_id: string; game_day: number; kind: string; amount_inr: number; pnl_inr: number; note: string }
@@ -122,4 +123,30 @@ export interface Profile { user_id: string; display_name: string; is_admin: bool
 export interface DemandEvent {
   id: number; name: string; start_doy: number; days: number; domestic: boolean | null;
   airports: string[] | null; regions: string[] | null; biz: number; lei: number; bud: number; note: string;
+}
+
+/** Ops (migration 0023): the three fleet-wide strategies, as game values (G), and the airline's choices. */
+export interface MaintPlan {
+  key: 'payg' | 'contract' | 'hangar' | 'lean'; sort: number; name: string; blurb: string; good_for: string;
+  rate_mult: number; age_k: number; fixed_inr_week: number; ground_mult: number; ground_len_mult: number; engine_mult: number;
+  otp_delta: number; lock_weeks: number; setup_inr: number; setup_weeks: number;
+}
+export interface OpStyle {
+  key: 'saver' | 'standard' | 'quick' | 'punctual'; sort: number; name: string; blurb: string; good_for: string;
+  fuel_mult: number; hour_cost_mult: number; turn_delta_min: number; allowance_inr_turn: number; otp_delta: number; brand_delta: number;
+}
+export interface AirlineOps {
+  airline_id: string; maint_plan: MaintPlan['key']; maint_next: MaintPlan['key'] | null; maint_next_day: number | null;
+  maint_locked_until: number; op_style: OpStyle['key']; hedge_share: number;
+}
+export interface CostBenchmark { world_id: string; line: string; week: number; airlines: number; median_inr_ask: number }
+/** What each option would do for the airline now (public.ops_preview). */
+export interface OpsPreview {
+  day: number; aircraft: number; avg_age: number; plan: MaintPlan['key']; plan_next: MaintPlan['key'] | null; plan_next_day: number | null;
+  locked_until: number; style: OpStyle['key']; hedge_share: number; fuel_price: number; fuel_normal: number;
+  hedge_premium: number; hedge_lead_weeks: number; hedges: { week: number; share: number; price: number }[];
+  plans: { key: MaintPlan['key']; cost_week: number; fixed_week: number; groundings_qtr: number; days_qtr: number; otp_delta: number;
+           lock_weeks: number; setup_inr: number; setup_weeks: number }[];
+  styles: { key: OpStyle['key']; fuel_kg_week: number; fuel_week: number; other_week: number; trips_week: number; trips_fit: number;
+            over: number; otp: number; brand_delta: number }[];
 }

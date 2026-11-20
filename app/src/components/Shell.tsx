@@ -10,7 +10,7 @@ import { Badge, Icon, Logo } from './ui';
 const TABS = [
   { to: '/', label: 'Home', icon: 'home' },
   { to: '/network', label: 'Network', icon: 'network' },
-  { to: '/fleet', label: 'Fleet', icon: 'plane' },
+  { to: '/ops', label: 'Ops', icon: 'plane' },
   { to: '/money', label: 'Money', icon: 'money' },
   { to: '/ranks', label: 'Ranks', icon: 'trophy' },
 ];
@@ -21,11 +21,11 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
   const side = [...TABS.slice(0, 3), { to: '/market', label: 'Get aircraft', icon: 'market' }, ...TABS.slice(3),
     ...(profile?.is_admin ? [{ to: '/admin', label: 'Admin', icon: 'shield' }] : [])];
-  // Market and aircraft pages belong to the Fleet tab, route pages to Network.
+  // Fleet, market and aircraft pages belong to the Ops tab, route pages to Network.
   const tabActive = (to: string) => {
     const p = loc.pathname;
     if (to === '/') return p === '/';
-    if (to === '/fleet') return p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/market') || p.startsWith('/configure');
+    if (to === '/ops') return p.startsWith('/ops') || p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/market') || p.startsWith('/configure');
     if (to === '/network') return p.startsWith('/network') || p.startsWith('/route') || p.startsWith('/extras');
     if (to === '/ranks') return p.startsWith('/ranks') || p.startsWith('/admin');
     return p.startsWith(to);
@@ -33,7 +33,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const sideActive = (to: string) => {
     const p = loc.pathname;
     if (to === '/market') return p.startsWith('/market');
-    if (to === '/fleet') return p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/configure');
+    if (to === '/ops') return p.startsWith('/ops') || p.startsWith('/fleet') || p.startsWith('/aircraft') || p.startsWith('/configure');
     if (to === '/ranks') return p.startsWith('/ranks');
     if (to === '/admin') return p.startsWith('/admin');
     return tabActive(to);

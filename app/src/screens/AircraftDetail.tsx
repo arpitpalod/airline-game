@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes } from '../lib/data';
+import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, useTurnDelta } from '../lib/data';
 import { aircraftStats, hoursByAircraft } from '../lib/derive';
 import { ageYears, cabinRange, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
 import { arrivalWeek, inr, num, pct, usd, weekOf } from '../lib/format';
@@ -12,6 +12,7 @@ import { Badge, Bar, Button, Empty, Field, Loading, PageHeader, Sheet, Stepper }
 export function AircraftDetail() {
   const { id } = useParams();
   const { ref, world, airline } = useGame();
+  const turnDelta = useTurnDelta();
   const fleet = useFleet();
   const net = useRoutes();
   const bases = useBases();
@@ -19,8 +20,8 @@ export function AircraftDetail() {
   const { run, busy } = useAction();
   const nav = useNavigate();
   const [sheet, setSheet] = useState<'route' | 'base' | 'return' | null>(null);
-  const hours = useMemo(() => (fleet.data && net.data ? hoursByAircraft(fleet.data, net.data.routes, net.data.rotations, markets.data, ref) : {}),
-    [fleet.data, net.data, markets.data, ref]);
+  const hours = useMemo(() => (fleet.data && net.data ? hoursByAircraft(fleet.data, net.data.routes, net.data.rotations, markets.data, ref, turnDelta) : {}),
+    [fleet.data, net.data, markets.data, ref, turnDelta]);
 
   if (fleet.isLoading) return <Loading h={300} />;
   const ac = fleet.data?.find((a) => a.id === id);
@@ -134,6 +135,7 @@ export function AircraftDetail() {
 
 function AddToRoute({ acId, onClose, used, markets }: { acId: string; onClose: () => void; used: number; markets?: Record<string, import('../lib/types').Market> }) {
   const { ref, airline } = useGame();
+  const turnDelta = useTurnDelta();
   const fleet = useFleet();
   const net = useRoutes();
   const { run, busy } = useAction();
@@ -144,7 +146,7 @@ function AddToRoute({ acId, onClose, used, markets }: { acId: string; onClose: (
   const [pick, setPick] = useState<string | null>(options[0]?.id ?? null);
   const r = options.find((x) => x.id === pick);
   const km = r ? markets?.[pairKey(r.origin, r.dest)]?.km ?? 0 : 0;
-  const max = r ? maxWeekly(t, ac, km, used) : 0;
+  const max = r ? maxWeekly(t, ac, km, used, turnDelta) : 0;
   const [trips, setTrips] = useState<number | null>(null);
   const tv = trips ?? Math.min(max, 14);
   return (
