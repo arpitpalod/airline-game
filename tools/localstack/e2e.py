@@ -13,6 +13,13 @@ def sql(q):
 CODE = sql("select s.invite_code from world_secrets s join worlds w on w.id = s.world_id where w.name = 'World 1'")
 WORLD = sql("select id from worlds where name = 'World 1'")
 EMAIL, PW = 'arpit@test.in', 'flying-high-1'
+PW2 = 'flying-higher-2'   # after the password reset
+
+def email_code(email):
+    # The shim keeps the code Supabase would have emailed (spec 14.21).
+    import urllib.request
+    with urllib.request.urlopen(f'http://localhost:54321/__test/code?email={email}') as r:
+        return json.loads(r.read()).get('code')
 errors = []
 
 def watch(page):
@@ -55,6 +62,16 @@ with sync_playwright() as p:
     page.get_by_label('Email').fill(EMAIL)
     page.get_by_label('Password').fill(PW)
     page.get_by_role('button', name='Create account').click()
+    print('confirm the email with the 6-digit code')
+    page.get_by_role('heading', name='Check your email').wait_for()
+    mark = len(errors)   # a wrong code answers 403 by design
+    page.get_by_label('6-digit code').fill('000000')
+    page.get_by_role('button', name='Confirm').click()
+    expect(page.get_by_role('alert')).to_contain_text('wrong or has expired')
+    errors[mark:] = [e for e in errors[mark:] if 'status of 403' not in e]
+    shot(page, 'p01b-code')
+    page.get_by_label('6-digit code').fill(email_code(EMAIL))
+    page.get_by_role('button', name='Confirm').click()
     page.get_by_text('Found your airline').wait_for()
     page.get_by_label('Airline name').fill('Tarang Air')
     page.get_by_placeholder('Search city or code').fill('Delhi')
@@ -334,11 +351,18 @@ with sync_playwright() as p:
     ctx = b.new_context(viewport={'width': 1440, 'height': 900})
     page = ctx.new_page(); watch(page)
     go(page, '/')
+    print('forgot password: a code by email, then a new password')
     page.get_by_role('tab', name='Sign in').click()
+    page.get_by_role('button', name='Forgot password?').click()
     page.get_by_label('Email').fill(EMAIL)
-    page.get_by_label('Password').fill(PW)
-    page.get_by_role('button', name='Sign in', exact=True).click()
+    page.get_by_role('button', name='Send me a code').click()
+    page.get_by_role('heading', name='New password').wait_for()
+    page.get_by_label('6-digit code').fill(email_code(EMAIL))
+    page.get_by_label('New password').fill(PW2)
+    shot(page, 'd00-reset')
+    page.get_by_role('button', name='Save and sign in').click()
     page.get_by_text("Last week's profit").wait_for()
+    assert sql(f"select password from auth.users where email = '{EMAIL}'") == PW2
     shot(page, 'd01-home')
     for h, n in [('/extras', 'd09-extras'), ('/network', 'd02-network'), ('/ops', 'd04-ops'), ('/fleet', 'd04b-fleet'), ('/money', 'd05-money'), ('/market', 'd06-market'), ('/ranks', 'd08-ranks'), ('/configure/A21N', 'd07-configurator')]:
         go(page, h); page.wait_for_timeout(700); shot(page, n)
@@ -359,10 +383,10 @@ with sync_playwright() as p:
     sql("insert into world_secrets (world_id, invite_code) select id, 'second01' from worlds where name = 'Test World'")
     ctx = b.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     page = ctx.new_page(); watch(page)
-    mark = len(errors)   # the join function answers 400 "already exists" here by design
+    mark = len(errors)
     go(page, '/join?code=second01')
     page.get_by_label('Email').fill(EMAIL)
-    page.get_by_label('Password').fill(PW)
+    page.get_by_label('Password').fill(PW2)
     page.get_by_role('button', name='Create account').click()
     page.get_by_text('Found your airline').wait_for()
     expect(page.get_by_label('Invite code')).to_have_value('second01')

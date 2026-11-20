@@ -28,18 +28,19 @@ function cleanError(m: string) {
   return m;
 }
 
-// Creating an account goes through the join function: it checks the invite code and needs no email confirmation.
-export async function joinGame(email: string, password: string, invite: string) {
+// Joining checks the invite code with the join function first; the account is then made by Supabase Auth's sign-up,
+// which emails a 6-digit code to confirm the address (spec 14.21).
+export async function checkInvite(invite: string) {
   let res: Response;
   try {
     res = await fetch(`${SUPABASE_URL}/functions/v1/join`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', apikey: SUPABASE_KEY },
-      body: JSON.stringify({ email, password, invite }),
+      body: JSON.stringify({ invite }),
     });
   } catch {
     throw new Error('Could not reach the game server. Check your connection.');
   }
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || 'Could not create your account');
+  if (!res.ok) throw new Error(body.error || 'Could not check the invite code');
 }

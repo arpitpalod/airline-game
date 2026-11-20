@@ -27,6 +27,9 @@ const PICK_KEY = 'airline-game-airline';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  // While a password is being reset the code signs the player in before the new password is saved: stay on the
+  // sign-in screen until it is (spec 14.21).
+  const [hold, setHold] = useState(false);
   const loc = useLocation();
   const [invite, setInvite] = useState<string | null>(() => localStorage.getItem(INVITE_KEY));
 
@@ -44,7 +47,7 @@ export function App() {
   }, []);
 
   if (session === undefined) return <Splash />;
-  if (!session) return <AuthScreen />;
+  if (!session || hold) return <AuthScreen setHold={setHold} />;
   return <SignedIn session={session} invite={invite} clearInvite={clearInvite} />;
 }
 

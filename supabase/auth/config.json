@@ -1,0 +1,17 @@
+{
+  "site_url": "https://arpitpalod.github.io/airline-game/",
+  "disable_signup": false,
+  "external_email_enabled": true,
+  "mailer_autoconfirm": false,
+  "mailer_otp_length": 6,
+  "mailer_otp_exp": 3600,
+  "password_min_length": 8,
+  "rate_limit_email_sent": 60,
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": "465",
+  "smtp_user": "airlinesleaderapp@gmail.com",
+  "smtp_admin_email": "airlinesleaderapp@gmail.com",
+  "smtp_sender_name": "Airlines Leader",
+  "mailer_subjects_confirmation": "Your sign-up code",
+  "mailer_subjects_recovery": "Your password reset code"
+}
