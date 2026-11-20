@@ -38,6 +38,8 @@ export function routeIndex(weeks: RouteWeek[], ref: number) {
 export interface PracticeInput {
   m: Market; seats: number; tripsDay: number; rivalSeats: number; rivalTripsDay: number; rivalFare: number | null;
   season: number; demandScale: number; p: Record<string, number>;
+  /** fares are priced from the reference fare times this (0024: fares follow a third of fuel cost); travellers judge by the reference */
+  fareIndex?: number;
 }
 export interface PracticeWeek { n: number; fare: number; booked: number; target: number }
 export interface PracticeResult { key: StrategyKey; revenue: number; sold: number; load: number; fare: number; turned: number; empty: number; weeks: PracticeWeek[] }
@@ -45,7 +47,7 @@ export interface PracticeResult { key: StrategyKey; revenue: number; sold: numbe
 /** The practice run's set-up for one of the player's routes: its own seats (or one A320neo twice a day if it has no
  *  aircraft yet), the rivals' seats, flights and average fare, and this week's demand (scale and growth, G). */
 export function practiceInput(m: Market, all: { route: { airline_id: string; fare_econ: number }; weekly: number; seatsWeek: number }[],
-                              airlineId: string, demandScale: number, day: number, p: Record<string, number>, season = 1): PracticeInput {
+                              airlineId: string, demandScale: number, day: number, p: Record<string, number>, season = 1, fareIndex = 1): PracticeInput {
   const mine = all.find((x) => x.route.airline_id === airlineId);
   const theirs = all.filter((x) => x.route.airline_id !== airlineId && x.weekly > 0);
   const seats = mine && mine.seatsWeek > 0 ? mine.seatsWeek / 2 : 14 * 180;
@@ -54,7 +56,7 @@ export function practiceInput(m: Market, all: { route: { airline_id: string; far
   const rTrips = theirs.reduce((s, x) => s + x.weekly / 7, 0);
   const rFare = theirs.length ? theirs.reduce((s, x) => s + x.route.fare_econ * x.seatsWeek, 0) / Math.max(1, theirs.reduce((s, x) => s + x.seatsWeek, 0)) : null;
   const g = m.intl ? (p.growth_year_intl ?? p.growth_year ?? 0) : (p.growth_year ?? 0);
-  return { m, seats, tripsDay: trips, rivalSeats: rSeats, rivalTripsDay: rTrips, rivalFare: rFare, season,
+  return { m, seats, tripsDay: trips, rivalSeats: rSeats, rivalTripsDay: rTrips, rivalFare: rFare, season, fareIndex,
            demandScale: demandScale * Math.pow(1 + g, (Math.max(day, 1) - 1) / 364), p };
 }
 
@@ -70,6 +72,7 @@ export function practice(s: Strategy, x: PracticeInput): PracticeResult {
   const pre = (a: number[], n: number) => a.slice(n + 1).reduce((s0, v) => s0 + v, 0);
   const lam = x.p.nest_lambda ?? 0.6;
   const ref = x.m.ref_fare;
+  const rp = ref * (x.fareIndex ?? 1);   // what fares are priced from
   const segs = [
     { k: 'b' as const, n: x.m.n_biz, a: x.p.seg_biz_a, pr: x.p.seg_biz_price, fq: x.p.seg_biz_freq },
     { k: 'l' as const, n: x.m.n_lei, a: x.p.seg_lei_a, pr: x.p.seg_lei_price, fq: x.p.seg_lei_freq },
@@ -85,8 +88,8 @@ export function practice(s: Strategy, x: PracticeInput): PracticeResult {
     if (tgt >= 0.02 * x.seats && Math.abs(sold / tgt - 1) > s.band)
       adj *= 1 + s.step * Math.max(-3, Math.min(3, (sold / tgt - 1) / Math.max(s.band, 0.01)));
     adj = Math.min(s.max_mult / base, Math.max(s.min_mult / base, adj));
-    let fare = Math.round((ref * base * adj) / 10) * 10;
-    if (s.key === 'follow' && x.rivalFare) fare = Math.round(Math.min(s.max_mult * ref, Math.max(s.min_mult * ref, x.rivalFare * (1 + s.follow_gap))) / 10) * 10;
+    let fare = Math.round((rp * base * adj) / 10) * 10;
+    if (s.key === 'follow' && x.rivalFare) fare = Math.round(Math.min(s.max_mult * rp, Math.max(s.min_mult * rp, x.rivalFare * (1 + s.follow_gap))) / 10) * 10;
     const room = Math.max(0, x.seats - sold);
     let want = 0;
     for (const g of segs) {

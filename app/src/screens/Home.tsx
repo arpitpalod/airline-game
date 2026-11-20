@@ -43,6 +43,9 @@ export function Home() {
   const wk = byWeek(days);
   const week = sumDaily(days.filter((d) => d.game_day > world.game_day - 7));   // last week (time moves a week at a time)
   const from7 = world.game_day - 6;
+  // the direction while it is still red: last week against the average week of the four before
+  const before = sumDaily(days.filter((d) => d.game_day <= world.game_day - 7 && d.game_day > world.game_day - 35));
+  const trend = week.days >= 7 && before.days >= 14 ? week.netProfit - before.netProfit / (before.days / 7) : null;
   const flyingIn = row.first_flight_day - (world.game_day + 1);                    // days until first flights; <= 0 when flying
 
   // ---------- Alerts ----------
@@ -137,7 +140,8 @@ export function Home() {
         <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} note={[f && f.debt_inr > 0 ? `${inr(f.debt_inr)} borrowed` : 'No borrowing',
           world.selling && advance != null ? `advance sales ${inr(advance)}` : null].filter(Boolean).join(' · ')} />
         <Kpi label="Last week's profit" value={week.days ? inr(week.netProfit, { sign: true }) : '–'} tone={week.days ? (week.netProfit >= 0 ? 'good' : 'bad') : undefined}
-          note={week.days ? `${num(week.pax)} passengers` : flyingIn > 0 ? `First flights in ${weeks(Math.ceil(flyingIn / 7) * 7)}` : 'No flights yet'} />
+          note={week.days ? (trend != null && Math.abs(trend) >= 5e5
+            ? `${trend > 0 ? 'Up' : 'Down'} ${inr(Math.abs(trend))} on the 4 weeks before` : `${num(week.pax)} passengers`) : flyingIn > 0 ? `First flights in ${weeks(Math.ceil(flyingIn / 7) * 7)}` : 'No flights yet'} />
         <Kpi label="Seats sold, last week" value={week.ask > 0 ? pct(week.rpk / week.ask) : '–'} note="Healthy is 80 to 88%" />
         <Kpi label="On time · Brand" value={`${pct(row.otp)} · ${num(row.brand)}`} note="Brand drives demand" />
       </div>

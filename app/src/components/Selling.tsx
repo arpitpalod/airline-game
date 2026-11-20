@@ -41,7 +41,7 @@ export function StrategyCard({ route }: { route: Route }) {
   const m = markets.data?.[pairKey(route.origin, route.dest)];
   const expect = useMemo(() => {
     if (!m || !strategies.data || !rivals.data) return null;
-    const input = practiceInput(m, rivals.data[pairKey(route.origin, route.dest)] ?? [], airline.id, world.demand_scale, world.game_day + 1, ref.param);
+    const input = practiceInput(m, rivals.data[pairKey(route.origin, route.dest)] ?? [], airline.id, world.demand_scale, world.game_day + 1, ref.param, 1, world.fare_index ?? 1);
     return Object.fromEntries(strategies.data.map((s) => [s.key, practice(s, input)]));
   }, [m, strategies.data, rivals.data, route.origin, route.dest, airline.id, world.demand_scale, world.game_day, ref.param]);
   const others = (net.data?.routes ?? []).filter((r) => r.id !== route.id && (plans.data?.[r.id] ?? 'balanced') !== chosen);

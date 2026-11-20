@@ -4,7 +4,7 @@ export interface World {
   id: string; name: string; status: 'setup' | 'running' | 'paused' | 'ended';
   speed: number; started_at: string | null; paused_at: string | null; paused_seconds: number;
   game_day: number; season: number; season_days: number; demand_scale: number;
-  fuel_inr_kg: number; fx_inr_usd: number; fuel_walk: number; fx_walk: number; max_airlines: number; pilots: boolean;
+  fuel_inr_kg: number; fx_inr_usd: number; fuel_walk: number; fx_walk: number; fuel_avg: number | null; fare_index: number; max_airlines: number; pilots: boolean;
   prelaunch_weeks: number; prelaunch_minutes: number; start_date: string; selling: boolean;
 }
 
