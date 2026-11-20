@@ -32,17 +32,26 @@ A persistent multiplayer airline business game for office colleagues, built to t
 
 ## 3. World and clock
 
-**Clock at 13x**
+**Time moves a week at a time** (owner's rule, 20 Nov 2026). The week is the smallest unit a player sees or acts in: results, figures and changes are all by the week, and nothing moves for a day. Inside a week the engine still works through its seven days in one run, so every rule keeps its daily form and flights still fly on their real days.
 
-| Real time | Game time |
+**Pre-launch.** A world opens with 13 weeks (G) of pre-launch that pass in one hour (G) of real time. Nothing flies and nothing is charged; players open routes, put aircraft on them, hire pilots and lease or order aircraft. First flights are on day 92, the start of week 14. No quarter is reported before first flights, so the first quarter is weeks 14 to 26. An airline founded after first flights flies from the start of the week four weeks (G) later; the computer-run airlines always fly from the world's first flight day.
+
+**Clock after the pre-launch: a game week every 4 hours** (G per world; the Admin screen sets hours per week, from 15 minutes to 7 days).
+
+| Real time | Game time at 4 hours a week |
 |---|---|
-| 110.8 minutes | 1 day |
-| 1 day | 13 days |
-| 1 week | 1 quarter (91 days) |
-| 4 weeks | 1 year (364 days) |
-| 26 weeks (one season) | 6.5 years |
+| 1 hour | the whole pre-launch (13 weeks) |
+| 4 hours | 1 week |
+| 1 day | 6 weeks |
+| 52 hours | 1 quarter (13 weeks) |
+| about 8.7 days | 1 year (52 weeks) |
+| about 56 days | one season (338 weeks, 6.5 years) |
 
-`game_day = floor((now - world_start - paused_time) x speed / 86,400 s)`. A scheduled job runs every 5 minutes and processes every game day that has fallen due, so a missed run only delays results and never loses them.
+`clock_day` runs at `prelaunch_weeks x 7 / prelaunch_minutes` during the pre-launch and at `speed` game days per real day after it (`speed = 168 / hours per week`); `due_day = 7 x floor(clock_day / 7)`, so only whole weeks fall due. A scheduled job runs every 5 minutes and processes every week that has fallen due (at most 4 weeks a run, G), so a missed run only delays results and never loses them.
+
+**Calendar.** Day 1 is Wednesday 1 January 3000 (`worlds.start_date`). Week 1 is days 1 to 7. The game year is 364 days (52 weeks) and a quarter 91 days (13 weeks); the calendar date is shown for orientation and drifts a day a year against the game year. The season's demand pattern starts in January.
+
+**Changes count for the week being played.** An action taken during a week applies from that week's first day. Aircraft arrive, come back from refits and groundings, and return to the lessors' pool at the start of a week (rounded up). A wet lease arrives four weeks (G) after it is ordered.
 
 **Airports.** Each airport stores: code, city, country, region, coordinates, business index, tourism index, runway class (turboprop, narrowbody, widebody) and a daily slot cap where congested. Indian airports also store passengers handled a year and the international share; foreign airports store a weight in India's international travel. Coordinates are from public airport data (V). Passenger numbers are the published FY 2025-26 figures for the 49 busiest airports (V) and estimates for the rest (G). Indices, international shares and foreign weights are (G).
 
@@ -497,6 +506,17 @@ Owner's request, 19 Nov 2026: show each aircraft's revenue and the costs known t
 - **Route screen.** RASK (revenue per seat-km, fares and extras), CASK (flying costs and aircraft cost per seat-km) and break-even load: the load factor at which today's fares would just cover those costs (`load x cost / revenue`), against the route's actual load. Chosen as the third metric because it answers the question a route manager asks first: how full must this route be to pay?
 - **Tested.** 5 new local checks (186 in all) and the app test.
 
+### 14.12 Weeks and the pre-launch (migration 0018)
+
+Owner's decisions, 20 Nov 2026: the week is the unit of time; a game week takes 4 hours; a 13-week pre-launch in one hour; first tickets will sell 26 weeks ahead (step 2, section 19). The rules are in section 3.
+
+- **Database.** `worlds` gains `prelaunch_weeks` (13), `prelaunch_minutes` (60) and `start_date` (3000-01-01); `speed` now defaults to 42 (a week in 4 hours). `airlines.first_flight_day` is set on founding by a trigger. `game.clock_day` and `game.clock_seconds` turn real time into game days and back; `game.due_day` and `game.tick` work in whole weeks. `admin_set_week_hours(world, hours)` sets the clock; `admin_set_speed` (minutes a day) now calls it. A trigger rounds `aircraft.available_day` up to the start of a week.
+- **Engine.** `run_day` skips the computer-run airlines' pricing and the quarter close before the world's first flights. `day_ops` flies and charges only airlines past their first flight day: no flights, holding costs, overheads or cash movement before it. `day_pilots` names weeks in its news, and a change of pilot duty rules starts at the start of a week. Pilots are hired in the pre-launch but paid from first flights.
+- **Game values.** `wet_lead_days` 28 (was 13), `late_join_days` 28 (new), `tick_max_days` 28 (was 30), `season_start_month` 1 (was 4).
+- **Worlds.** The old Test World (paused at day 100) is deleted with everything in it. A fresh Test World opens in setup: a week in 1 hour, 25 places, pilots on, invite code made in the database. World 1 (setup) moves to a week in 4 hours with the pre-launch.
+- **App.** Every screen shows "Week N · dates" and, before first flights, a pre-launch chip; Home shows a countdown card. Results are by the week: last week's profit, profit by week, passengers, revenue and flight profit a week, a route's load by week, aircraft results last week. Marketing, pilot salaries and wet-lease minimums are shown a week. Arrivals, refits and groundings are shown as weeks. The Admin clock is set in hours per game week.
+- **Tested.** 17 new local checks (203 in all; the checks written before 0018 run in worlds without a pre-launch and with the game values they were written for) and the app test, which now plays the pre-launch.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -614,3 +634,23 @@ Airlines Manager (Playrion) offers real-time and fast modes, an R&D centre with 
 ### 18.4 Pilots
 
 Built: section 14.8.
+
+## 19. Revenue management: selling and money (agreed 20 Nov 2026, to build)
+
+The game's main lesson (owner): sell too many cheap seats and business travellers find the plane full; hold back too many and seats fly empty. Players choose a strategy; rule-based pricing does the rest. Mockups: the design canvas "Airline game: selling and money". Built in three steps: weeks (14.12, done), then selling and money, then insights.
+
+**Step 2: selling and money**
+- **Tickets sell 26 weeks (G) before departure.** Every flight is on sale for 26 weeks; a new route goes on sale at once and flies its first flight two weeks (G) later.
+- **Truly dynamic pricing, no fare levels.** There are no booking classes for players to set. Each route runs one of four strategies: Fill every seat, Balanced, Top fares, Follow the market. A rule-based engine prices every flight from the strategy, how it is selling against its ideal booking curve, weeks to departure, season and rivals. The engine's values are game values (G) the admin tunes. Fares stop being a player input (`set_fares` goes).
+- **Travellers.** Business, leisure, visiting friends and relatives, each booking at its own time before departure and with its own price sensitivity.
+- **Competition.** Each route shows its market: monopoly (1 airline), duopoly (2), oligopoly (3 or 4) or crowded (5 or more), and a log of rivals' moves (fares, schedules, entries and exits), week by week.
+- **Seats.** Each route shows the share sold and seats left for each of its next 26 weeks.
+- **Overbooking** is automatic, with no-show patterns by route and season that are hidden: players learn them from a small note on the route's sector information.
+- **Money.** Cash comes in when a ticket is sold; revenue counts when the flight flies. Tickets sold for future flights are shown as "Advance sales". The Money screen has three tabs: Profit, Cash flow and Balance sheet. Wording stays neutral: no warnings about money "owed".
+- World 1 restarts after step 2.
+
+**Step 3: insights**
+- **Too full, too empty.** Per flight: travellers turned away and seats flown empty, in plain words.
+- **What works where.** Which strategies do best on which kinds of sector, updated each quarter from every airline's results, linked to a route audit.
+- **Rival moves** in the news.
+- **Practice flight.** A small simulation in the app (no database writes): pick a week and a strategy and see how one flight sells.

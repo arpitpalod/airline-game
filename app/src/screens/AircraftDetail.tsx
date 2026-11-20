@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes } from '../lib/data';
 import { aircraftStats, hoursByAircraft } from '../lib/derive';
 import { ageYears, cabinRange, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
-import { inr, num, pct, usd } from '../lib/format';
+import { arrivalWeek, inr, num, pct, usd, weekOf } from '../lib/format';
 import { useAction } from '../components/toast';
 import { Badge, Bar, Button, Empty, Field, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -37,7 +37,7 @@ export function AircraftDetail() {
     <div className="stack-lg">
       <PageHeader back="/fleet" title={ac.reg} sub={`${t.name} · based at ${ref.airport[ac.base_iata ?? '']?.city ?? '—'}`} />
       <div className="row wrap">
-        <Badge tone={ac.status === 'active' ? 'good' : ac.status === 'grounded' ? 'warn' : 'info'}>{STATUS_LABEL[ac.status]}{ac.status !== 'active' ? ` until day ${ac.available_day}` : ''}</Badge>
+        <Badge tone={ac.status === 'active' ? 'good' : ac.status === 'grounded' ? 'warn' : 'info'}>{STATUS_LABEL[ac.status]}{ac.status !== 'active' ? ` until week ${arrivalWeek(ac.available_day)}` : ''}</Badge>
         <Badge tone={terms?.holding === 'wet' ? 'warn' : 'neutral'}>{holdingLabel(ac)}</Badge>
         <Badge>{num(ageYears(ac, world.game_day), 1)} years old</Badge>
       </div>
@@ -47,7 +47,7 @@ export function AircraftDetail() {
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}><h2>How busy</h2><span className="small muted">{num(used, 1)} of {num(weekHours(t))} hours a week</span></div>
             <Bar value={used / weekHours(t)} warn={used / weekHours(t) > 0.85} />
-            <p className="small muted">{used === 0 ? 'Idle aircraft still cost rent, crew and overheads every day.' : used / weekHours(t) > 0.85 ? 'Flying this much leaves little slack, so delays build up and punctuality suffers.' : `${pct(used / weekHours(t))} of its flying day is planned.`}</p>
+            <p className="small muted">{used === 0 ? 'Idle aircraft still cost rent, crew and overheads every week.' : used / weekHours(t) > 0.85 ? 'Flying this much leaves little slack, so delays build up and punctuality suffers.' : `${pct(used / weekHours(t))} of its flying day is planned.`}</p>
           </div>
           <AircraftMoney id={ac.id} holding={terms?.holding} />
           <div className="card flush">
@@ -87,7 +87,7 @@ export function AircraftDetail() {
             <div className="kv">
               {terms?.holding === 'lease' && <>
                 <span>Rent</span><span>{usd(terms.lease_usd_month)} a month</span>
-                <span>Lease ends</span><span>day {terms.lease_end_day}</span>
+                <span>Lease ends</span><span>{terms.lease_end_day != null ? `week ${weekOf(terms.lease_end_day)}` : '–'}</span>
                 <span>Deposit held</span><span>{inr(terms.deposit_inr)}</span>
               </>}
               {terms?.holding === 'wet' && <>
@@ -97,7 +97,7 @@ export function AircraftDetail() {
               </>}
               {terms?.holding === 'owned' && <>
                 <span>Bought for</span><span>{usd(terms.price_usd)}</span>
-                {terms.loan_usd ? <><span>Loan left</span><span>{usd(terms.loan_usd)}</span><span>Repaid a day</span><span>{usd(terms.loan_pay_usd_day)}</span></> : null}
+                {terms.loan_usd ? <><span>Loan left</span><span>{usd(terms.loan_usd)}</span><span>Repaid a week</span><span>{usd((terms.loan_pay_usd_day ?? 0) * 7)}</span></> : null}
                 {ac.status === 'delivering' && <><span>Paying with</span><span>{terms.finance_loan ? 'an aircraft loan' : terms.pay_plan === 'slb' ? 'sale and leaseback' : 'cash'}</span></>}
               </>}
             </div>
@@ -117,7 +117,7 @@ export function AircraftDetail() {
           <div className="stack">
             <p className="small">
               {terms?.holding === 'lease' && 'The rent for the rest of the lease is owed, up to the deposit you paid. What is left of the deposit comes back. The aircraft goes back to the lessor pool, where a rival can lease it.'}
-              {terms?.holding === 'wet' && 'The wet lease ends from the next game day. Nothing more is owed.'}
+              {terms?.holding === 'wet' && 'The wet lease ends from this week. Nothing more is owed.'}
               {terms?.holding === 'owned' && `It sells at ${pct(ref.param.sale_discount)} of its book value${terms.loan_usd ? ', and the rest of its loan is repaid from the proceeds' : ''}. It goes to the lessor pool.`}
               {' '}Its routes lose this aircraft at once.
             </p>
@@ -202,18 +202,18 @@ function MoveBase({ acId, current, hasRoutes, onClose }: { acId: string; current
   );
 }
 
-// Last 7 days, a day: the revenue an aircraft earned and the costs that belong to it. Pilot salaries, head office and
+// Last week: the revenue an aircraft earned and the costs that belong to it. Pilot salaries, head office and
 // marketing are left out: they are not split by aircraft.
 function AircraftMoney({ id, holding }: { id: string; holding?: string }) {
   const { world } = useGame();
   const ad = useAircraftDaily();
   const s = ad.data ? aircraftStats(ad.data, world.game_day - 6)[id] : undefined;
-  const per = (x: number) => (s && s.days ? x / s.days : 0);
+  const per = (x: number) => (s && s.days ? (x * 7) / s.days : 0);
   const holdLabel = holding === 'wet' ? 'Wet-lease charge' : holding === 'owned' ? 'Ownership (depreciation, loan interest)' : 'Rent';
   return (
     <div className="card stack">
-      <div className="card-title" style={{ marginBottom: 0 }}><h2>Money</h2><span className="small muted">a day, last {s?.days ?? 7} days</span></div>
-      {!s ? <p className="small muted">Figures appear after its first day in service.</p> : (
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Money</h2><span className="small muted">last week</span></div>
+      {!s ? <p className="small muted">Figures appear after its first week in service.</p> : (
         <>
           <div className="kv">
             <span>Revenue (fares and extras)</span><span>{inr(per(s.revenue))}</span>

@@ -2,21 +2,20 @@
 import { useState } from 'react';
 import { call } from '../lib/api';
 import { useAirlineDaily, useAirlineRow, useFinance, useGame, useQuarterlies, useTxns } from '../lib/data';
-import { COST_LINES, sumDaily } from '../lib/derive';
-import { inr, num, pct } from '../lib/format';
+import { byWeek, COST_LINES, sumDaily } from '../lib/derive';
+import { inr, num, pct, weekOf, weeks } from '../lib/format';
 import type { AirlineDaily } from '../lib/types';
 import { ProfitBars } from '../components/charts';
 import { useAction } from '../components/toast';
 import { Button, Field, Kpi, Loading, PageHeader, Seg, Stepper } from '../components/ui';
-import { dailyNetProfit } from '../lib/derive';
 
-type Period = '1' | '7' | '28';
+type Period = '7' | '28' | '91';
 
 export function Money() {
-  const { ref, airline } = useGame();
+  const { ref, airline, world } = useGame();
   const row = useAirlineRow().data ?? airline;
   const fin = useFinance();
-  const daily = useAirlineDaily(28);
+  const daily = useAirlineDaily(91);
   const txns = useTxns();
   const q = useQuarterlies();
   const { run, busy } = useAction();
@@ -25,10 +24,10 @@ export function Money() {
   const [mkt, setMkt] = useState<number | null>(null);
   const f = fin.data;
   const days = daily.data ?? [];
-  const sel = days.slice(-Number(period));
+  const sel = days.filter((d) => d.game_day > world.game_day - Number(period));
   const s = sumDaily(sel);
   const line = (k: keyof AirlineDaily) => sel.reduce((a, d) => a + (d[k] as number), 0);
-  const mktLakh = mkt ?? Math.round(row.marketing_inr_day / 1e5);
+  const mktLakh = mkt ?? Math.round((row.marketing_inr_day * 7) / 1e5);   // set by the day in the database, shown by the week
   const mine = (q.data ?? []).filter((x) => x.airline_id === airline.id).slice(0, 4);
   const amt = Math.round(Number(amount) * 1e7);
 
@@ -39,7 +38,7 @@ export function Money() {
         <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} tone={f && f.cash_inr < 0 ? 'bad' : undefined} />
         <Kpi label="Borrowed" value={f ? inr(f.debt_inr) : '…'} note={`at ${pct(ref.param.interest_year)} a year`} />
         <Kpi label="Credit left" value={f ? inr(f.credit_limit_inr - f.debt_inr) : '…'} note={f ? `of ${inr(f.credit_limit_inr)}` : ''} />
-        <Kpi label="Seats sold" value={s.ask ? pct(s.rpk / s.ask) : '–'} note={`last ${period === '1' ? 'day' : `${period} days`}`} />
+        <Kpi label="Seats sold" value={s.ask ? pct(s.rpk / s.ask) : '–'} note={period === '7' ? 'last week' : `last ${weeks(Number(period))}`} />
       </div>
 
       <div className="split">
@@ -47,9 +46,9 @@ export function Money() {
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}>
               <h2>Profit and loss</h2>
-              <Seg value={period} onChange={setPeriod} options={[{ value: '1', label: 'Day' }, { value: '7', label: '7 days' }, { value: '28', label: '28 days' }]} />
+              <Seg value={period} onChange={setPeriod} options={[{ value: '7', label: 'Week' }, { value: '28', label: '4 weeks' }, { value: '91', label: 'Quarter' }]} />
             </div>
-            {daily.isLoading ? <Loading /> : sel.length === 0 ? <p className="small muted">Results appear after the first game day with flights.</p> : (
+            {daily.isLoading ? <Loading /> : sel.length === 0 ? <p className="small muted">Results appear after your first week of flying.</p> : (
               <table className="table">
                 <tbody>
                   <tr><td>Tickets</td><td className="r">{inr(line('rev_ticket'))}</td></tr>
@@ -71,15 +70,15 @@ export function Money() {
             )}
           </div>
           <div className="card">
-            <div className="card-title"><h2>Profit by day</h2></div>
-            <ProfitBars points={days.map((d) => ({ day: d.game_day, v: dailyNetProfit(d) }))} />
+            <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest</span></div>
+            <ProfitBars points={byWeek(days).map((w) => ({ day: w.week, v: w.netProfit }))} />
           </div>
         </div>
 
         <div className="stack-lg">
           <div className="card stack">
             <h2>Credit line</h2>
-            <p className="small muted">Actions need cash in hand, so borrow before a big payment. A daily shortfall is drawn from the credit line automatically. If cash stays below zero with the line used up for {ref.param.insolvency_days} days, the airline goes into administration.</p>
+            <p className="small muted">Actions need cash in hand, so borrow before a big payment. A shortfall is drawn from the credit line automatically. If cash stays below zero with the line used up for {weeks(ref.param.insolvency_days)}, the airline goes into administration.</p>
             <Field label="Amount (₹ crore)">
               <input className="input num" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
@@ -90,11 +89,11 @@ export function Money() {
           </div>
           <div className="card stack">
             <h2>Marketing</h2>
-            <p className="small muted">Marketing lifts your brand, and brand brings passengers. It works best measured against how many passengers you carry: about ₹100 a day per daily passenger buys most of the effect.</p>
-            <Stepper label="marketing a day" value={mktLakh} step={1} min={0} max={Math.round(ref.param.marketing_max_inr_day / 1e5)} onChange={setMkt}
-              format={(v) => (v ? `${inr(v * 1e5)} a day` : 'None')} />
-            <Button kind="secondary" disabled={mkt == null || mkt * 1e5 === row.marketing_inr_day} busy={busy === 'mkt'}
-              onClick={() => run('mkt', () => call('set_marketing', { p_airline: airline.id, p_inr_day: mktLakh * 1e5 }), 'Marketing spend saved').then(() => setMkt(null))}>Save marketing</Button>
+            <p className="small muted">Marketing lifts your brand, and brand brings passengers. It works best measured against how many passengers you carry: about ₹100 for every passenger you carry buys most of the effect.</p>
+            <Stepper label="marketing a week" value={mktLakh} step={1} min={0} max={Math.floor((ref.param.marketing_max_inr_day * 7) / 1e5)} onChange={setMkt}
+              format={(v) => (v ? `${inr(v * 1e5)} a week` : 'None')} />
+            <Button kind="secondary" disabled={mkt == null || mkt === Math.round((row.marketing_inr_day * 7) / 1e5)} busy={busy === 'mkt'}
+              onClick={() => run('mkt', () => call('set_marketing', { p_airline: airline.id, p_inr_day: Math.round((mktLakh * 1e5) / 7) }), 'Marketing spend saved').then(() => setMkt(null))}>Save marketing</Button>
           </div>
           {mine.length > 0 && (
             <div className="card flush">
@@ -110,7 +109,7 @@ export function Money() {
             <div className="list" style={{ maxHeight: 360, overflowY: 'auto' }}>
               {(txns.data ?? []).map((x) => (
                 <div key={x.id} className="item small">
-                  <span className="faint num" style={{ width: 52 }}>Day {x.game_day}</span>
+                  <span className="faint num" style={{ width: 58 }}>Wk {weekOf(Math.max(x.game_day, 1))}</span>
                   <span className="grow">{x.note || x.kind}</span>
                   <span className={`num ${x.amount_inr >= 0 ? 'good' : ''}`}>{inr(x.amount_inr, { sign: true })}</span>
                 </div>

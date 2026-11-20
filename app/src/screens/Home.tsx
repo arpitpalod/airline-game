@@ -1,11 +1,11 @@
-// Home: what changed since yesterday and the decisions waiting, each with a one-tap fix or a link to the screen that fixes it.
+// Home: what changed last week and the decisions waiting, each with a one-tap fix or a link to the screen that fixes it.
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call, supabase } from '../lib/api';
 import { useAirlineDaily, useAirlineRow, useBases, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutes } from '../lib/data';
-import { dailyNetProfit, routeStat, sumDaily } from '../lib/derive';
+import { byWeek, routeStat, sumDaily } from '../lib/derive';
 import { pairKey } from '../lib/game';
-import { dayLabel, inr, num, pct } from '../lib/format';
+import { arrivalWeek, currentWeek, dateLabel, inr, num, pct, weekLabel, weekOf, weeks } from '../lib/format';
 import { ProfitBars } from '../components/charts';
 import { WorldClock } from '../components/Shell';
 import { useAction } from '../components/toast';
@@ -20,7 +20,7 @@ export function Home() {
   const fleet = useFleet();
   const net = useRoutes();
   const bases = useBases();
-  const daily = useAirlineDaily(28);
+  const daily = useAirlineDaily(84);
   const rd = useRouteDaily();
   const news = useNews(12);
   const pilots = usePilots();
@@ -34,17 +34,17 @@ export function Home() {
   const [menu, setMenu] = useState(false);
 
   const days = daily.data ?? [];
-  const last = days[days.length - 1];
-  const yesterday = last ? sumDaily([last]) : null;
-  const week = sumDaily(days.slice(-7));
+  const wk = byWeek(days);
+  const week = sumDaily(days.filter((d) => d.game_day > world.game_day - 7));   // last week (time moves a week at a time)
   const from7 = world.game_day - 6;
+  const flyingIn = row.first_flight_day - (world.game_day + 1);                    // days until first flights; <= 0 when flying
 
   // ---------- Alerts ----------
   const alerts: Alert[] = [];
   const f = fin.data;
   if (f && f.insolvent_days > 0) {
     alerts.push({ key: 'insolvent', tone: 'bad', title: `Out of cash for ${f.insolvent_days} days`, to: '/money',
-      body: `Cash is below zero and the credit line is used up. After ${ref.param.insolvency_days} days the airline goes into administration. Cut costs, return aircraft or raise fares.` });
+      body: `Cash is below zero and the credit line is used up. After ${weeks(ref.param.insolvency_days)} the airline goes into administration. Cut costs, return aircraft or raise fares.` });
   }
   if (world.pilots && pilots.data) {
     for (const fm of pilots.data.families) {
@@ -69,14 +69,17 @@ export function Home() {
     if (ac.status === 'grounded') {
       const spare = fl.find((s) => s.id !== ac.id && s.type_id === ac.type_id && s.base_iata === ac.base_iata && s.status === 'active' && !flying.has(s.id));
       alerts.push({ key: `g${ac.id}`, tone: spare ? 'info' : 'warn', to: `/aircraft/${ac.id}`,
-        title: `${ac.reg} is grounded until day ${ac.available_day}`,
+        title: `${ac.reg} is grounded until week ${arrivalWeek(ac.available_day)}`,
         body: spare ? `${spare.reg} is idle at ${ac.base_iata} and covers its flights.` : 'Its flights are cancelled until then, which hurts punctuality and brand. An idle aircraft of the same type at the same base would cover them.' });
     } else if (ac.status === 'active' && !flying.has(ac.id) && !covering.has(ac.id)) {
-      alerts.push({ key: `i${ac.id}`, tone: 'warn', to: `/aircraft/${ac.id}`, title: `${ac.reg} is not flying`,
-        body: `It still costs ${ac.terms?.holding === 'wet' ? 'the wet-lease minimum' : 'rent'} every day. Give it a route.` });
+      alerts.push(flyingIn > 0
+        ? { key: `i${ac.id}`, tone: 'info', to: `/aircraft/${ac.id}`, title: `${ac.reg} has no route yet`,
+            body: `Give it one before your first flights in week ${weekOf(row.first_flight_day)}. From then it costs ${ac.terms?.holding === 'wet' ? 'the wet-lease minimum' : 'rent'} every week, flying or not.` }
+        : { key: `i${ac.id}`, tone: 'warn', to: `/aircraft/${ac.id}`, title: `${ac.reg} is not flying`,
+            body: `It still costs ${ac.terms?.holding === 'wet' ? 'the wet-lease minimum' : 'rent'} every week. Give it a route.` });
     } else if (ac.status === 'delivering' && ac.available_day - world.game_day <= 14 && !flying.has(ac.id)) {
-      alerts.push({ key: `d${ac.id}`, tone: 'info', to: `/aircraft/${ac.id}`, title: `${ac.reg} arrives on day ${ac.available_day}`,
-        body: 'Plan its routes now so it flies from the day it arrives.' });
+      alerts.push({ key: `d${ac.id}`, tone: 'info', to: `/aircraft/${ac.id}`, title: `${ac.reg} arrives in week ${arrivalWeek(ac.available_day)}`,
+        body: 'Plan its routes now so it flies from the week it arrives.' });
     }
   }
   for (const r of routes) {
@@ -100,7 +103,7 @@ export function Home() {
     }
   }
   const wet = fl.filter((a) => a.terms?.holding === 'wet' && a.status === 'active');
-  if (wet.length && world.game_day > 30) {
+  if (wet.length && world.game_day + 1 - row.first_flight_day > 28) {
     alerts.push({ key: 'wet', tone: 'info', to: '/market', title: `${wet.length === 1 ? wet[0].reg + ' is' : wet.length + ' aircraft are'} still on wet lease`,
       body: 'A wet lease costs about twice as much as an operating lease. Lease an aircraft from the pool and return the wet one when it arrives.' });
   }
@@ -114,22 +117,29 @@ export function Home() {
         <Logo code={row.code} color={row.livery?.color} lg />
         <div className="grow">
           <h1>{row.name}</h1>
-          <div className="sub">{dayLabel(Math.max(world.game_day, 1))}{row.status !== 'active' ? ' · in administration' : ''}</div>
+          <div className="sub">{weekLabel(currentWeek(world), world.start_date)}{row.status !== 'active' ? ' · in administration' : ''}</div>
         </div>
         <button className="back phone-only" aria-label="Menu" onClick={() => setMenu(true)}><Icon name="more" /></button>
       </div>
 
       <div className="grid4-d">
         <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} note={f && f.debt_inr > 0 ? `${inr(f.debt_inr)} borrowed` : 'No borrowing'} />
-        <Kpi label="Yesterday's profit" value={yesterday ? inr(dailyNetProfit(last!), { sign: true }) : '–'} tone={last ? (dailyNetProfit(last) >= 0 ? 'good' : 'bad') : undefined}
-          note={yesterday ? `${num(yesterday.pax)} passengers` : 'No flights yet'} />
-        <Kpi label="Seats sold, 7 days" value={week.ask > 0 ? pct(week.rpk / week.ask) : '–'} note="Healthy is 80 to 88%" />
+        <Kpi label="Last week's profit" value={week.days ? inr(week.netProfit, { sign: true }) : '–'} tone={week.days ? (week.netProfit >= 0 ? 'good' : 'bad') : undefined}
+          note={week.days ? `${num(week.pax)} passengers` : flyingIn > 0 ? `First flights in ${weeks(Math.ceil(flyingIn / 7) * 7)}` : 'No flights yet'} />
+        <Kpi label="Seats sold, last week" value={week.ask > 0 ? pct(week.rpk / week.ask) : '–'} note="Healthy is 80 to 88%" />
         <Kpi label="On time · Brand" value={`${pct(row.otp)} · ${num(row.brand)}`} note="Brand drives demand" />
       </div>
 
       <div className="split">
         <div className="stack-lg">
 
+          {flyingIn > 0 && (
+            <div className="card info stack">
+              <h2>Pre-launch: {weeks(Math.ceil(flyingIn / 7) * 7)} to your first flights</h2>
+              <p className="small">Your first flights are on {dateLabel(row.first_flight_day, world.start_date, true)}, week {weekOf(row.first_flight_day)}. Until then nothing flies and
+                nothing is charged. Use the time: open routes, put aircraft on them, and lease or order more aircraft. They take weeks to arrive.</p>
+            </div>
+          )}
           {!started && <GettingStarted hasRoute={routes.length > 0} hasRotation={rots.length > 0} />}
 
           <section className="stack">
@@ -155,16 +165,16 @@ export function Home() {
 
         <div className="stack-lg">
           <div className="card">
-            <div className="card-title"><h2>Profit by day</h2><span className="small muted">after interest, last 28 days</span></div>
-            {daily.isLoading ? <Loading /> : <ProfitBars points={days.map((d) => ({ day: d.game_day, v: dailyNetProfit(d) }))} />}
-            {week.days > 0 && <p className="small muted" style={{ marginTop: 8 }}>Last 7 days: {inr(week.revenue)} revenue, {inr(week.netProfit, { sign: true })} profit.</p>}
+            <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest, last 12 weeks</span></div>
+            {daily.isLoading ? <Loading /> : <ProfitBars points={wk.map((w) => ({ day: w.week, v: w.netProfit }))} />}
+            {week.days > 0 && <p className="small muted" style={{ marginTop: 8 }}>Last week: {inr(week.revenue)} revenue, {inr(week.netProfit, { sign: true })} profit.</p>}
           </div>
           <div className="card flush">
             <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>News</h2><Link to="/ranks" className="small">Leaderboard</Link></div>
             <div className="list">
               {(news.data ?? []).slice(0, 8).map((n) => (
                 <div key={n.id} className="item small" style={{ alignItems: 'flex-start' }}>
-                  <span className="faint num" style={{ width: 52, flexShrink: 0 }}>Day {n.game_day}</span>
+                  <span className="faint num" style={{ width: 58, flexShrink: 0 }}>Wk {weekOf(Math.max(n.game_day, 1))}</span>
                   <span className="grow">{n.body}</span>
                 </div>
               ))}
@@ -183,14 +193,14 @@ function GettingStarted({ hasRoute, hasRotation }: { hasRoute: boolean; hasRotat
   const steps = [
     { done: hasRoute, t: 'Open your first route from your base', to: '/network' },
     { done: hasRotation, t: 'Put your aircraft on it: choose how many round trips a week', to: '/fleet' },
-    { done: false, t: 'Come back after the next game day to see how full the flights were, then adjust the fare', to: '/network' },
+    { done: false, t: 'Come back after your first week of flying to see how full the flights were, then adjust the fare', to: '/network' },
   ];
   const next = steps.find((s) => !s.done)!;
   return (
     <div className="card accent stack">
       <div>
         <h2>Get flying</h2>
-        <p className="small" style={{ marginTop: 4 }}>Three steps to your first passengers. Your wet-leased aircraft is ready.</p>
+        <p className="small" style={{ marginTop: 4 }}>Three steps to your first passengers. Your wet-leased aircraft is yours from the start.</p>
       </div>
       <div className="steps">
         {steps.map((s, i) => (

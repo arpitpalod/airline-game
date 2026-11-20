@@ -3,9 +3,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/api';
 import { useGame } from '../lib/data';
-import { clock } from '../lib/game';
-import { dayLabel, realSpan } from '../lib/format';
-import { Icon, Logo } from './ui';
+import { clock, worldFirstFlight } from '../lib/game';
+import { currentWeek, realTime, weekLabel, weeks } from '../lib/format';
+import { Badge, Icon, Logo } from './ui';
 
 const TABS = [
   { to: '/', label: 'Home', icon: 'home' },
@@ -86,15 +86,18 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 export function WorldClock() {
-  const { world } = useGame();
+  const { world, airline } = useGame();
   const [, tick] = useState(0);
   useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(i); }, []);
   const c = clock(world);
+  const wk = currentWeek(world);
+  const ffw = Math.floor(((airline?.first_flight_day ?? worldFirstFlight(world)) - 1) / 7) + 1;
   return (
     <div>
-      <div className="strong" style={{ color: 'var(--ink)' }}>{dayLabel(Math.max(world.game_day, 1))}</div>
+      <div className="strong" style={{ color: 'var(--ink)' }}>{weekLabel(wk, world.start_date)}</div>
       <div className="tiny">
-        {world.status === 'running' && c.nextInSec != null && `Next results in about ${realSpan(c.nextInSec / 86400 * world.speed, world.speed)}`}
+        {wk < ffw && world.status !== 'ended' && <div style={{ margin: '4px 0' }}><Badge tone="info">Pre-launch · flying in {weeks((ffw - wk) * 7)}</Badge></div>}
+        {world.status === 'running' && c.nextInSec != null && `This week's results in about ${realTime(c.nextInSec)}`}
         {world.status === 'setup' && 'World not started yet'}
         {world.status === 'paused' && 'Paused'}
         {world.status === 'ended' && 'Season over'}
@@ -107,7 +110,7 @@ function WorldBanner() {
   const { world } = useGame();
   if (world.status === 'running') return null;
   const text = world.status === 'setup'
-    ? 'The world has not started yet. Look around and plan; actions open when it starts. Your wet-leased aircraft will fly from day 1.'
+    ? `The world has not started yet. Look around and plan; actions open when it starts. Then come ${world.prelaunch_weeks} weeks of pre-launch to get ready: first flights are in week ${world.prelaunch_weeks + 1}.`
     : world.status === 'paused' ? 'The world is paused. Results and actions resume when it restarts.' : 'This season is over.';
   return <div className="card info small" style={{ marginBottom: 16 }}>{text}</div>;
 }

@@ -125,7 +125,8 @@ export async function checks5(t) {
   await run(1);
   await q(`update public.game_params set num = 0 where key = 'event_duty_prob_day'`);
   const ev = (await q(`select announced_day, starts_day from public.events where world_id = $1 and kind = 'duty_rules'`, [W]))[0];
-  ok('the regulator announces stricter duty-time rules 91 days ahead', ev && ev.starts_day === ev.announced_day + 91);
+  ok('the regulator announces stricter duty-time rules 13 weeks ahead, from the start of a week (0018)',
+    ev && ev.starts_day >= ev.announced_day + 91 && ev.starts_day < ev.announced_day + 98 && ev.starts_day % 7 === 1, `announced day ${ev?.announced_day}, starts day ${ev?.starts_day}`);
   ok('from then each pilot flies 10% fewer hours', Number(await one(`select game.pilot_bh($1, $2)`, [W, ev.starts_day])) === 2.16
     && Number(await one(`select game.pilot_bh($1, $2)`, [W, ev.starts_day - 1])) === 2.4);
   ok('and only once a season', (await run(1), await one(`select count(*)::int from public.events where world_id = $1 and kind = 'duty_rules'`, [W])) === 1);

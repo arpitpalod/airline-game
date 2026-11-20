@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { rows, supabase } from '../lib/api';
 import { useEvents, useGame, useNews, useQuarterlies, useWorldAirlines } from '../lib/data';
-import { inr, num, pct } from '../lib/format';
+import { inr, num, pct, weekOf } from '../lib/format';
 import type { Profile } from '../lib/types';
 import { Badge, Loading, Logo, PageHeader, Seg } from '../components/ui';
 
@@ -45,7 +45,7 @@ export function Ranks() {
                   {players.map((p) => (
                     <div key={p.id} className={`item ${p.id === airline.id ? 'me' : ''}`}>
                       <Logo code={p.code} color={p.livery?.color} />
-                      <div className="grow"><div className="strong">{p.name}</div><div className="tiny muted">{who(p.user_id) ?? ''} · joined day {p.created_day}</div></div>
+                      <div className="grow"><div className="strong">{p.name}</div><div className="tiny muted">{who(p.user_id) ?? ''} · joined week {weekOf(Math.max(p.created_day, 1))}</div></div>
                       {p.administrations > 0 && <Badge tone="bad">{p.administrations}× administration</Badge>}
                     </div>
                   ))}
@@ -81,7 +81,7 @@ export function Ranks() {
                 {events.data!.map((e) => (
                   <div key={e.id} className="item small">
                     <span className="grow">{EVENT_TEXT[e.kind] ?? e.kind}{e.kind === 'airport_opening' && e.payload?.city ? `: ${e.payload.city as string}` : ''}</span>
-                    <span className="tiny muted">day {e.starts_day}{e.ends_day ? `–${e.ends_day}` : ''}</span>
+                    <span className="tiny muted">week {weekOf(e.starts_day)}{e.ends_day && weekOf(e.ends_day) !== weekOf(e.starts_day) ? `–${weekOf(e.ends_day)}` : ''}</span>
                   </div>
                 ))}
               </div>
@@ -92,7 +92,7 @@ export function Ranks() {
             <div className="list">
               {(news.data ?? []).map((n) => (
                 <div key={n.id} className="item small" style={{ alignItems: 'flex-start' }}>
-                  <span className="faint num" style={{ width: 52, flexShrink: 0 }}>Day {n.game_day}</span>
+                  <span className="faint num" style={{ width: 58, flexShrink: 0 }}>Wk {weekOf(Math.max(n.game_day, 1))}</span>
                   <span className="grow">{n.body}</span>
                 </div>
               ))}

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, type FleetItem } from '../lib/data';
 import { aircraftStats, hoursByAircraft, windowShare } from '../lib/derive';
 import { holdingLabel, STATUS_LABEL } from '../lib/game';
-import { inr, pct, usd } from '../lib/format';
+import { arrivalWeek, currentWeek, inr, pct, usd } from '../lib/format';
 import { Badge, Bar, Button, Empty, Icon, Loading, PageHeader } from '../components/ui';
 import { PilotsCard } from '../components/PilotsCard';
 
@@ -33,11 +33,11 @@ export function Fleet() {
   const hours = useMemo(() => (net.data ? hoursByAircraft(fl, routes, rots, markets.data, ref) : {}), [fl, routes, rots, markets.data, ref, net.data]);
   const ad = useAircraftDaily();
   const money = useMemo(() => aircraftStats(ad.data ?? [], world.game_day - 6), [ad.data, world.game_day]);
-  // result a day over the last 7 days: revenue less flying costs and what holding the aircraft costs
+  // last week's result: revenue less flying costs and what holding the aircraft costs
   const result = (a: FleetItem) => {
     const s = money[a.id];
     if (!s || !s.days) return <span className="muted">–</span>;
-    const r = s.result / s.days;
+    const r = (s.result * 7) / s.days;
     return <span className={`num ${r >= 0 ? 'good' : 'bad'}`}>{inr(r, { sign: true })}</span>;
   };
   const flying = new Set(rots.map((r) => r.aircraft_id));
@@ -53,16 +53,16 @@ export function Fleet() {
     .map((r) => routes.find((x) => x.id === r.route_id)).filter(Boolean).map((r) => `${r!.origin}–${r!.dest}`);
 
   const status = (a: FleetItem) => {
-    if (a.status === 'delivering') return <Badge tone="info">Arrives day {a.available_day}</Badge>;
-    if (a.status === 'grounded') return <Badge tone="warn">Grounded to day {a.available_day}</Badge>;
-    if (a.status === 'refit') return <Badge tone="info">Refit to day {a.available_day}</Badge>;
+    if (a.status === 'delivering') return <Badge tone="info">Arrives week {arrivalWeek(a.available_day)}</Badge>;
+    if (a.status === 'grounded') return <Badge tone="warn">Grounded to week {arrivalWeek(a.available_day)}</Badge>;
+    if (a.status === 'refit') return <Badge tone="info">Refit to week {arrivalWeek(a.available_day)}</Badge>;
     if (a.status === 'active' && !flying.has(a.id)) return <Badge tone="warn">Not flying</Badge>;
     return <Badge tone="good">{STATUS_LABEL[a.status]}</Badge>;
   };
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Fleet" sub={`${fl.length} aircraft · day ${world.game_day}`}
+      <PageHeader title="Fleet" sub={`${fl.length} aircraft · week ${currentWeek(world)}`}
         actions={<Button size="sm" onClick={() => nav('/market')}><Icon name="plus" />Get aircraft</Button>} />
       <PilotsCard />
       <div className="chips" role="tablist">
@@ -93,14 +93,14 @@ export function Fleet() {
                   <div className="row between tiny muted" style={{ marginTop: 8 }}>
                     <span>{holdingLabel(a)}</span><span>{costLabel(a)}</span>
                   </div>
-                  {money[a.id] && <div className="row between small" style={{ marginTop: 6 }}><span className="muted">Result a day, last 7 days</span>{result(a)}</div>}
+                  {money[a.id] && <div className="row between small" style={{ marginTop: 6 }}><span className="muted">Result last week</span>{result(a)}</div>}
                 </div>
               );
             })}
           </div>
           <div className="card flush desk-only">
             <table className="table">
-              <thead><tr><th>Aircraft</th><th>Type</th><th>Base</th><th className="r">Seats</th><th>Routes</th><th>Use of day</th><th>Holding</th><th className="r">Result a day</th><th>Status</th></tr></thead>
+              <thead><tr><th>Aircraft</th><th>Type</th><th>Base</th><th className="r">Seats</th><th>Routes</th><th>Use of day</th><th>Holding</th><th className="r">Result last week</th><th>Status</th></tr></thead>
               <tbody>
                 {shown.map((a) => {
                   const use = windowShare(a, hours[a.id] ?? 0, ref);
@@ -123,7 +123,7 @@ export function Fleet() {
           </div>
         </>
       )}
-      <p className="small muted">An aircraft can fly {ref.type.A20N?.day_window_h ?? 17} hours a day (more for long-range types). Above 85% of that, flights start running late. Result a day is its revenue less its flying costs and rent or ownership, before pilot salaries, head office and marketing.</p>
+      <p className="small muted">An aircraft can fly {ref.type.A20N?.day_window_h ?? 17} hours a day (more for long-range types). Above 85% of that, flights start running late. Result last week is its revenue less its flying costs and rent or ownership, before pilot salaries, head office and marketing.</p>
     </div>
   );
 }

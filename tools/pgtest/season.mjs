@@ -43,10 +43,11 @@ const one = async (s, p) => Object.values((await db.query(s, p)).rows[0] ?? {})[
 const tryq = async (s) => { try { return await q(s); } catch (e) { return null; } };
 
 for (const [k, v] of Object.entries(JSON.parse(arg('--params', '{}')))) await q(`update public.game_params set num = $1 where key = $2`, [v, k]);
-const W = await one(`select id from public.worlds limit 1`);
+const W = await one(`select id from public.worlds where name = 'World 1'`);
 const code = await one(`select invite_code from public.world_secrets where world_id = $1`, [W]);
 const PLACES = +arg('--places', players.length);
-await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off']);
+await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4, prelaunch_weeks = 0 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off']);
+await q(`update public.airlines set first_flight_day = 1 where world_id = $1`, [W]);
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
 await q(`select public.admin_start_world($1)`, [W]);
 console.log(`${players.length} players, demand_scale ${SCALE.toFixed(2)}, ${PLACES} places, pilots ${arg('--pilots', 'on')}, ${DAYS} days`);

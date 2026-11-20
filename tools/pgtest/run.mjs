@@ -11,6 +11,7 @@ import { checks4 } from './checks_4.mjs';
 import { checks5 } from './checks_5.mjs';
 import { checks6 } from './checks_6.mjs';
 import { checks7 } from './checks_7.mjs';
+import { checks8 } from './checks_8.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -29,12 +30,24 @@ for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) {
   catch (e) { console.log('FAIL', f, e.message); process.exit(1); }
 }
 
+// Migration 0018 opens a fresh Test World. The older checks expect World 1 alone: note what 0018 made, then remove it.
+const freshTestWorld = (await db.query(`select w.status, w.speed::float, w.prelaunch_weeks, w.pilots, w.max_airlines, s.invite_code
+  from public.worlds w join public.world_secrets s on s.world_id = w.id where w.name = 'Test World'`)).rows[0];
+await db.exec(`delete from public.worlds where name = 'Test World'`);
 // The checks written before migration 0013 expect the flat pilot cost per aircraft: their worlds run without pilots.
 await db.exec(`update public.worlds set pilots = false; alter table public.worlds alter column pilots set default false;`);
+// The checks written before migration 0018 run without a pre-launch: airlines fly from day 1.
+await db.exec(`update public.worlds set prelaunch_weeks = 0; alter table public.worlds alter column prelaunch_weeks set default 0;
+  update public.airlines set first_flight_day = 1;`);
+// and with the game values they were written for; checks_8 puts back the values 0018 set
+const weekParams = (await db.query(`select key, num::float from public.game_params where key in ('wet_lead_days', 'season_start_month', 'tick_max_days')`)).rows;
+await db.exec(`update public.game_params set num = case key when 'wet_lead_days' then 13 when 'season_start_month' then 4 else 30 end
+  where key in ('wet_lead_days', 'season_start_month', 'tick_max_days');
+  alter table public.airlines disable trigger airlines_first_flight; alter table public.aircraft disable trigger aircraft_week_start;`);
 
 let failed = 0;
 const t = {
-  db,
+  db, freshTestWorld, weekParams,
   q: async (s, p) => (await db.query(s, p)).rows,
   one: async (s, p) => Object.values((await db.query(s, p)).rows[0])[0],
   ok(name, cond, detail = '') { if (!cond) failed++; console.log(cond ? '  pass' : '  FAIL', name, detail); },
@@ -55,5 +68,6 @@ await checks4(t);
 await checks5(t);
 await checks6(t);
 await checks7(t);
+await checks8(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

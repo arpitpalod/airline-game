@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { useBases, useGame, useMarketsFrom, useRouteDaily, useRoutes } from '../lib/data';
 import { lfTone, routeStat } from '../lib/derive';
 import { marketTotal, pairKey } from '../lib/game';
-import { inr, num, pct } from '../lib/format';
+import { inr, num, pct, weekOf } from '../lib/format';
 import type { Market } from '../lib/types';
 import { WorldMap } from '../components/WorldMap';
 import { useAction } from '../components/toast';
@@ -78,7 +78,7 @@ export function Network() {
             <div className="row wrap">
               {baseIatas.map((b) => <Badge key={b} tone="accent">{ref.airport[b]?.city} ({b})</Badge>)}
             </div>
-            <p className="small muted" style={{ marginTop: 10 }}>Aircraft live at a base and every route starts at one. Another base costs {inr(ref.param.base_open_inr)} to open plus {inr(ref.param.base_fixed_inr_day)} a day. Tap an Indian airport on the map to open one.</p>
+            <p className="small muted" style={{ marginTop: 10 }}>Aircraft live at a base and every route starts at one. Another base costs {inr(ref.param.base_open_inr)} to open plus {inr(ref.param.base_fixed_inr_day * 7)} a week. Tap an Indian airport on the map to open one.</p>
           </div>
         </div>
       </div>
@@ -109,7 +109,7 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
           <Badge tone={a.runway_class === 1 ? 'warn' : 'neutral'}>{['', 'Turboprops only', 'Up to A321', 'Any aircraft'][a.runway_class]}</Badge>
           {a.slot_cap && <Badge tone="warn">Congested: slots cost more</Badge>}
           {isBase && <Badge tone="accent">Your base</Badge>}
-          {opensLater && <Badge tone="info">Opens on day {a.opens_day}</Badge>}
+          {opensLater && <Badge tone="info">Opens in week {weekOf(a.opens_day)}</Badge>}
         </div>
         <div className="kv">
           {a.is_india ? <><span>Passengers a year</span><span>{num(a.pax_m, 1)} million</span></>
@@ -167,14 +167,14 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
         <div className="stack">
           <div className="kv">
             <span>Distance</span><span>{num(m.km)} km{m.intl ? ' · international' : ''}</span>
-            <span>Potential travellers a day, each way</span><span>about {num(marketTotal(m) * world.demand_scale)}</span>
+            <span>Potential travellers a week, each way</span><span>about {num(marketTotal(m) * world.demand_scale * 7)}</span>
             <span>Of whom on business</span><span>{pct(m.n_biz / marketTotal(m))}</span>
             <span>Reference fare</span><span>{inr(m.ref_fare)}</span>
           </div>
           {ref.airport[dest].runway_class === 1 && <div className="card warn small">{ref.airport[dest].city} takes turboprops only: only an ATR 72 can fly this route.</div>}
           {flying.has(pairKey(base, dest)) && <div className="card warn small">You already fly this route.</div>}
           <StudyCard a={base} b={dest} />
-          <Field label="Economy fare" hint="Start near the reference fare. You can change it any time; it takes effect the next game day.">
+          <Field label="Economy fare" hint="Start near the reference fare. You can change it any time; it counts for the week being played.">
             <div className="row">
               <input className="input num" type="number" inputMode="numeric" step={100} value={fareVal} onChange={(e) => setFare(Number(e.target.value))} style={{ maxWidth: 180 }} />
               <span className="small muted">{m.ref_fare ? `${(fareVal / m.ref_fare).toFixed(2)}× reference` : ''}</span>
@@ -210,7 +210,7 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
                   <div className="num strong" style={{ width: 40 }}>{other}</div>
                   <div className="grow">
                     <div>{ref.airport[other].city}{flying.has(pairKey(base, other)) && <span className="tiny muted"> · flying</span>}</div>
-                    <div className="tiny muted">{num(mk.km)} km · about {num(marketTotal(mk) * world.demand_scale)} a day · {inr(mk.ref_fare)}</div>
+                    <div className="tiny muted">{num(mk.km)} km · about {num(marketTotal(mk) * world.demand_scale * 7)} a week · {inr(mk.ref_fare)}</div>
                   </div>
                   {ref.airport[other].runway_class === 1 && <Badge tone="warn">ATR only</Badge>}
                   <Icon name="right" />

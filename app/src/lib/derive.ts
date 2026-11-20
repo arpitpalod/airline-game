@@ -20,6 +20,13 @@ export function sumDaily(ds: AirlineDaily[]): Sum {
   return s;
 }
 
+/** Results week by week (week 1 is days 1 to 7), oldest first. */
+export function byWeek(ds: AirlineDaily[]): (Sum & { week: number })[] {
+  const m = new Map<number, AirlineDaily[]>();
+  for (const d of ds) { const w = Math.floor((d.game_day - 1) / 7) + 1; m.set(w, [...(m.get(w) ?? []), d]); }
+  return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([week, rows]) => ({ week, ...sumDaily(rows) }));
+}
+
 export interface RouteStat { lf: number | null; pax: number; seats: number; revenue: number; varCost: number; aircraftCost: number; spill: number; days: number; flights: number }
 export function routeStat(rd: RouteDaily[], routeId: string, fromDay: number): RouteStat {
   const s: RouteStat = { lf: null, pax: 0, seats: 0, revenue: 0, varCost: 0, aircraftCost: 0, spill: 0, days: 0, flights: 0 };

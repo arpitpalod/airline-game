@@ -89,7 +89,7 @@ export function Extras() {
       </div>
       <div className="grid4-d">
         <Kpi label={`Extras earn, on ${sample.label}`} value={inr(rev * sample.fare)} note={`per economy passenger${cost ? `; free extras cost ${inr(cost * sample.fare)}` : ''}`} />
-        <Kpi label="Extras earned, last 7 days" value={pax ? inr(anc / pax) : '–'} note={pax ? `per passenger, ${inr(anc)} in all` : 'No flights yet'} />
+        <Kpi label="Extras earned, last week" value={pax ? inr(anc / pax) : '–'} note={pax ? `per passenger, ${inr(anc)} in all` : 'No flights yet'} />
       </div>
       <div className="split">
         <div className="stack">
@@ -136,7 +136,7 @@ export function Extras() {
           </div>
           <Button block disabled={!dirty} busy={busy === 'extras'} onClick={() => run('extras', () => call('set_extras', {
             p_airline: airline.id, p_settings: Object.fromEntries(Object.entries(edit).map(([id, c]) => [id, { included: c.included, mult: c.mult }])),
-          }), 'Extras saved. They count from the next game day.').then((r) => r !== undefined && setEdit({}))}>Save extras</Button>
+          }), 'Extras saved. They count from this week.').then((r) => r !== undefined && setEdit({}))}>Save extras</Button>
           <p className="tiny muted">Rivals see your extras just like your fares.</p>
         </div>
       </div>

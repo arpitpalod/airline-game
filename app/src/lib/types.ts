@@ -5,12 +5,13 @@ export interface World {
   speed: number; started_at: string | null; paused_at: string | null; paused_seconds: number;
   game_day: number; season: number; season_days: number; demand_scale: number;
   fuel_inr_kg: number; fx_inr_usd: number; max_airlines: number; pilots: boolean;
+  prelaunch_weeks: number; prelaunch_minutes: number; start_date: string;
 }
 
 export interface Airline {
   id: string; world_id: string; user_id: string | null; is_ai: boolean; name: string; code: string;
   livery: { color?: string }; status: 'active' | 'administration' | 'closed'; brand: number; otp: number;
-  marketing_inr_day: number; created_day: number; administrations: number;
+  marketing_inr_day: number; created_day: number; administrations: number; first_flight_day: number;
 }
 
 export interface Finance {

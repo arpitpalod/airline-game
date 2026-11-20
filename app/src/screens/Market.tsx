@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAircraftMarket, useBases, useGame, usePool, useTxns } from '../lib/data';
 import { ageYears, poolRentUsd } from '../lib/game';
-import { inr, num, realSpan, usd } from '../lib/format';
+import { arrivalLabel, inr, num, usd, weeks } from '../lib/format';
 import type { Aircraft } from '../lib/types';
 import { useAction } from '../components/toast';
 import { Badge, Button, Empty, Field, Loading, PageHeader, Seg, Sheet, Stepper } from '../components/ui';
@@ -51,9 +51,9 @@ export function Market() {
         { value: 'lease', label: 'Lease' }, { value: 'order', label: 'Order new' }, { value: 'wet', label: 'Wet lease' },
       ]} />
       <div className="card info small">
-        {tab === 'lease' && <>An operating lease from the lessor pool arrives in {realSpan(39, world.speed)} to {realSpan(91, world.speed)} and runs {num(ref.param.lease_term_days / 364, 0)} game years. Rent rises as the pool empties. You pay {ref.param.lease_deposit_months} months' rent as a deposit. You can take {left} more from the pool right now: lessors place at most {ref.param.pool_lease_max_qtr} with one airline in any 91 game days.</>}
-        {tab === 'order' && <>A new aircraft is the cheapest to run but takes about {realSpan(ref.param.order_lead_min_days, world.speed)} to arrive. You pay 15% now and the rest on delivery: cash, an aircraft loan, or a sale and leaseback. You choose its cabin.</>}
-        {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives in {ref.param.wet_lead_days ?? 13} game days ({realSpan(ref.param.wet_lead_days ?? 13, world.speed)}). It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
+        {tab === 'lease' && <>An operating lease from the lessor pool arrives in {weeks(42)} to {weeks(91)} and runs {num(ref.param.lease_term_days / 364, 0)} game years. Rent rises as the pool empties. You pay {ref.param.lease_deposit_months} months' rent as a deposit. You can take {left} more from the pool right now: lessors place at most {ref.param.pool_lease_max_qtr} with one airline in any 13 weeks.</>}
+        {tab === 'order' && <>A new aircraft is the cheapest to run but takes at least {weeks(Math.ceil(ref.param.order_lead_min_days / 7) * 7)} to arrive. You pay 15% now and the rest on delivery: cash, an aircraft loan, or a sale and leaseback. You choose its cabin.</>}
+        {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives in {weeks(ref.param.wet_lead_days ?? 28)}, so order it ahead. It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
       </div>
 
       {market.isLoading ? <Loading h={240} /> : tab === 'lease' ? (
@@ -97,8 +97,8 @@ export function Market() {
                 <div><h2>{t.name}</h2><div className="tiny muted">{t.role} · {t.ref_seats} standard seats · {num(t.range_km)} km</div></div>
                 <div className="kv">
                   <span>Price</span><span>{usd(q.order_price_usd)}</span>
-                  <span>Delivery</span><span>day {q.order_delivery_day}</span>
-                  <span>Arrives in</span><span>{realSpan(q.order_delivery_day - world.game_day, world.speed)}</span>
+                  <span>Delivery</span><span>{arrivalLabel(q.order_delivery_day, world.start_date)}</span>
+                  <span>Arrives in</span><span>{weeks(Math.max(7, (Math.ceil((q.order_delivery_day - 1) / 7) * 7 + 1) - (world.game_day + 1)))}</span>
                 </div>
                 <Button kind="secondary" onClick={() => nav(`/configure/${t.id}`)}>Choose cabin and order</Button>
               </div>
@@ -114,8 +114,8 @@ export function Market() {
                 <div><h2>{t.name}</h2><div className="tiny muted">{t.ref_seats} seats, standard cabin, with crew</div></div>
                 <div className="kv">
                   <span>Rate</span><span>{usd(q.wet_usd_bh)} a block hour</span>
-                  <span>Minimum a day</span><span>{inr(q.wet_usd_bh * ref.param.wet_min_hours_day * world.fx_inr_usd)}</span>
-                  <span>Arrives</span><span>day {world.game_day + q.wet_lead_days}</span>
+                  <span>Minimum a week</span><span>{inr(q.wet_usd_bh * ref.param.wet_min_hours_day * 7 * world.fx_inr_usd)}</span>
+                  <span>Arrives</span><span>{arrivalLabel(world.game_day + 1 + q.wet_lead_days, world.start_date)}</span>
                 </div>
                 <Button kind="secondary" onClick={() => setWet(t.id)}>Wet-lease one</Button>
               </div>
@@ -141,7 +141,7 @@ function TypeFacts({ typeId }: { typeId: string }) {
         <span>In the pool</span><span>{q.pool_available} of {q.pool_target}</span>
         <span>Rent now</span><span>{q.rent_mult > 1.001 ? `${num(q.rent_mult, 2)}× the base rent` : 'base rent'}</span>
         <span>Base rent, new</span><span>{usd(t.lease_usd_month)} a month</span>
-        <span>Arrives</span><span>day {world.game_day + q.lease_lead_days}</span>
+        <span>Arrives</span><span>{arrivalLabel(world.game_day + 1 + q.lease_lead_days, world.start_date)}</span>
         <span>Standard cabin</span><span>{t.ref_seats} seats</span>
         <span>Range</span><span>{num(t.range_km)} km</span>
         <span>Runways</span><span>{['', 'any', 'not turboprop-only', 'widebody airports'][t.runway_class]}</span>
@@ -194,7 +194,7 @@ function LeaseSheet({ group, onClose, left }: { group: PoolGroup; onClose: () =>
         <div className="kv">
           <span>Cabin</span><span>{ac.seats_biz ? `${ac.seats_biz} + ` : ''}{ac.seats_econ} seats, economy at {ac.econ_pitch} in</span>
           <span>Available like this</span><span>{group.members.length}</span>
-          <span>Arrive</span><span>day {world.game_day + q.lease_lead_days}</span>
+          <span>Arrive</span><span>{arrivalLabel(world.game_day + 1 + q.lease_lead_days, world.start_date)}</span>
         </div>
         {most === 0 ? (
           <div className="card warn small">You have reached the pool limit of {ref.param.pool_lease_max_qtr} leases in 91 days. Order new or wet-lease instead.</div>
@@ -210,7 +210,7 @@ function LeaseSheet({ group, onClose, left }: { group: PoolGroup; onClose: () =>
         <BasePicker typeId={ac.type_id} value={base || def} onChange={setBase} />
         <Button block disabled={most === 0} busy={busy === 'lease'} onClick={() => run('lease', () => call<{ reg: string; arrives_day: number }[]>('lease_aircraft_bulk', {
           p_airline: airline.id, p_aircraft: chosen.map((a) => a.id), p_base: base || def,
-        }), (r) => `${r.map((x) => x.reg).join(', ')} leased. ${r.length > 1 ? 'They arrive' : 'It arrives'} on day ${r[0].arrives_day}; you can plan routes now.`).then((r) => r && nav('/fleet'))}>
+        }), (r) => `${r.map((x) => x.reg).join(', ')} leased. ${r.length > 1 ? 'They arrive' : 'It arrives'} in ${arrivalLabel(r[0].arrives_day, world.start_date)}; you can plan routes now.`).then((r) => r && nav('/fleet'))}>
           {n > 1 ? `Lease ${n} aircraft` : 'Lease it'}
         </Button>
       </div>
@@ -219,7 +219,7 @@ function LeaseSheet({ group, onClose, left }: { group: PoolGroup; onClose: () =>
 }
 
 function WetSheet({ typeId, onClose }: { typeId: string; onClose: () => void }) {
-  const { ref, airline } = useGame();
+  const { ref, airline, world } = useGame();
   const { run, busy } = useAction();
   const nav = useNavigate();
   const def = useDefaultBase(typeId);
@@ -231,7 +231,7 @@ function WetSheet({ typeId, onClose }: { typeId: string; onClose: () => void }) 
         <BasePicker typeId={typeId} value={base || def} onChange={setBase} />
         <Button block busy={busy === 'wet'} onClick={() => run('wet', () => call<{ reg: string; arrives_day: number }>('wet_lease', {
           p_airline: airline.id, p_type: typeId, p_base: base || def,
-        }), (r) => `${r.reg} arrives on day ${r.arrives_day}.`).then((r) => r && nav('/fleet'))}>Wet-lease it</Button>
+        }), (r) => `${r.reg} arrives in ${arrivalLabel(r.arrives_day, world.start_date)}.`).then((r) => r && nav('/fleet'))}>Wet-lease it</Button>
         <Badge tone="warn">Costs about twice an operating lease</Badge>
       </div>
     </Sheet>
