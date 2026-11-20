@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext } from 'react';
 import { call, rows, supabase } from './api';
 import { pairKey } from './game';
+import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   News, Profile, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World,
@@ -367,5 +368,14 @@ export function useMarketWatch(a: string | undefined, b: string | undefined) {
       moves: await rows<MarketMove>(supabase.from('market_moves').select('*').eq('world_id', world.id).eq('a', x).eq('b', y)
         .order('week', { ascending: false }).limit(20)),
     }),
+  });
+}
+
+/** What works where: the last 13 flown weeks of the world's routes, by kind of sector, market shape and strategy. */
+export function useSectorInsights() {
+  const { world } = useGame();
+  return useQuery({
+    queryKey: ['w', world.id, 'insights', world.game_day],
+    queryFn: () => rows<SectorInsight>(supabase.from('sector_insights').select('*').eq('world_id', world.id)),
   });
 }

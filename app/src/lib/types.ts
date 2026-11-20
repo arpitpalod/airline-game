@@ -54,6 +54,7 @@ export interface RouteWeek {
   price_e: number | null; price_b: number | null; bk_be: number; bk_l: number; bk_u: number; bk_b: number;
   rev_e: number; rev_b: number; sold_wk: number; spill: number;
   noshow: number | null; denied: number | null; comp: number | null; flown_e: number | null; flown_b: number | null;
+  rev_flown_e: number | null; rev_flown_b: number | null; strategy: StrategyKey | null;
 }
 export interface AirlineWeek { airline_id: string; week: number; sales_inr: number; refunds_inr: number; comp_inr: number; advance_inr: number }
 export interface MarketWatch { route_id: string; airline_id: string; a: string; b: string; week: number; fare_e: number | null; fare_b: number | null; trips: number; seats: number }

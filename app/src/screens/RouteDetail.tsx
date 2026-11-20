@@ -8,7 +8,7 @@ import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from 
 import { inr, num, pct, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
-import { MarketMoves, SeatsOnSale, StrategyCard } from '../components/Selling';
+import { LastFlights, MarketMoves, RouteAudit, SeatsOnSale, StrategyCard } from '../components/Selling';
 import { useAction } from '../components/toast';
 import { Badge, Button, Empty, Kpi, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -81,6 +81,7 @@ export function RouteDetail() {
       <div className="split">
         <div className="stack-lg">
           {world.selling && <SeatsOnSale route={route} />}
+          {world.selling && <LastFlights route={route} />}
           <div className="card">
             <div className="card-title"><h2>How full, last 4 weeks</h2></div>
             <LoadChart points={series} />
@@ -110,6 +111,7 @@ export function RouteDetail() {
         </div>
 
         <div className="stack-lg">
+          {world.selling && m && <RouteAudit route={route} km={m.km} intl={m.intl} refFare={m.ref_fare} airlines={comp.filter((x) => x.weekly > 0).length} />}
           {world.selling ? <StrategyCard route={route} /> : (
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}><h2>Fares</h2></div>

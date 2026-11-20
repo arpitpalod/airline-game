@@ -541,6 +541,17 @@ Step 2 of section 19. Owner's decisions (20 Nov 2026): tickets sell 26 weeks ahe
 - **Tested.** 22 local checks (`checks_9`); the older checks run with selling off. A bots-only comparison at constant reference fares gives loads at or above the daily model, so demand is unchanged; with the strategies, the computer-run airlines' third-quarter revenue is within 2% of the daily model and their loads within a few points.
 - **Tuning, first pass (to revisit after playtesting).** In the three-year season simulation (no pre-launch; simulated players open routes as aircraft arrive, so new routes start with two weeks of sales) players do worse than with daily fares: year-3 operating margins of about -0.3 to +0.09 against up to +0.19 before. Early strategy settings with 85-92% targets and floors at 0.50-0.55 of the reference fare started price wars; the values above are the second set. Runs differ a lot from seed to seed.
 
+### 14.14 Insights (migration 0020)
+
+Step 3 of section 19.
+
+- **Too full, too empty.** The route page's Last flights card shows each of the last six flown weeks as a bar: passengers flown, seats flown empty and travellers who wanted a seat after the last one sold. A week is Too full when those turned away reach 5% of the seats, Too empty when 20% of the seats fly empty, otherwise About right, with one line of advice for the latest week. From `route_weeks`, in the app.
+- **What works where (public `sector_insights`).** Each week of selling sums every route's last 13 flown weeks by kind of sector (short under 800 km, medium under 1,800 km, long domestic, international), how many airlines fly the market that week (alone, two, three or four, five or more) and the strategy each flight week sold with (`route_weeks.strategy`): routes, load, fare per passenger and revenue per seat, both over the reference fare. A cell shows only with three routes or more (G `insight_min_routes`), so no single airline's route can be read off it. The Insights screen shows the table by kind of sector and an audit of each of your routes (the best way of selling for routes like it); the route page's How it compares card puts the route beside the cells for its kind, in rupees a seat.
+- **The computer-run airlines sell their own ways (G, `bot_airlines.strategy`):** Sarus Airways Top fares, Koel Air Fill every seat, Bulbul Air Follow the market, the rest Balanced, so What works where has more than one strategy to compare. Their third-quarter revenue stays within 1% of the daily model.
+- **Rival moves in the news.** A rival starting or stopping a market, changing its fare four weeks out by 15% or more (G `news_fare_move`) or its flights by 25% or more (G `news_flights_move`) makes private news for every player flying that market.
+- **Practice flight** (Insights screen, in the app, nothing saved). One of your routes, a quiet, normal or busy week: one flight week on sale for 26 weeks under each strategy, against rivals holding their current fares, with the same booking curves, fare rise and pace rule as the engine (economy only, no no-shows). Ranked by revenue, with the selected strategy's seats sold and fare week by week.
+- **Tested.** 6 local checks (`checks_10`), the app test.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -673,7 +684,7 @@ The game's main lesson (owner): sell too many cheap seats and business traveller
 - **Money.** Cash comes in when a ticket is sold; revenue counts when the flight flies. Tickets sold for future flights are shown as "Advance sales". The Money screen has three tabs: Profit, Cash flow and Balance sheet. Wording stays neutral: no warnings about money "owed".
 - World 1 restarts after step 2.
 
-**Step 3: insights**
+**Step 3: insights** (built: section 14.14)
 - **Too full, too empty.** Per flight: travellers turned away and seats flown empty, in plain words.
 - **What works where.** Which strategies do best on which kinds of sector, updated each quarter from every airline's results, linked to a route audit.
 - **Rival moves** in the news.
