@@ -1,7 +1,7 @@
 // Full-season simulation: the computer-run airlines plus simulated players with different strategies.
 // Used to tune Stage 2c. Usage: node season.mjs ../../supabase/migrations [--days 2366] [--scale auto] [--seed snapshot.tgz]
 // Players act once a game week through the public action functions, like a person checking the app.
-// --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
+// --selling off runs the daily fares of section 4 instead of selling 26 weeks ahead. --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 
@@ -12,15 +12,15 @@ const SNAP = arg('--seed', null);   // optional snapshot of migrations 0001-0006
 
 // strategy: aircraft type and cabin, how aircraft are acquired, fare band, which routes
 const STRATS = {
-  lcc_trunk:  { type: 'A20N', lay: [0, null, 28], src: 'pool', lo: 0.90, hi: 1.20, start: 0.95, pick: 'trunk', bases: ['DEL', 'BLR'] },
-  niche:      { type: 'A20N', lay: [0, null, 29], src: 'pool', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['PNQ', 'JAI'] },
-  full_svc:   { type: 'A20N', lay: [3, 38, 30],   src: 'pool', lo: 1.00, hi: 1.50, start: 1.10, pick: 'trunk', bases: ['BOM', 'HYD'], mkt: 40 },
-  regional:   { type: 'AT76', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', maxkm: 700, bases: ['HYD', 'CCU'] },
-  gulf:       { type: 'A21N', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.50, start: 1.00, pick: 'intl', maxkm: 3500, bases: ['COK', 'HYD'] },
-  long_haul:  { type: 'A359', lay: [9, null, 31], src: 'pool', lo: 1.00, hi: 1.60, start: 1.10, pick: 'intl', minkm: 3500, bases: ['DEL', 'BOM'] },
-  order_loan: { type: 'A20N', lay: [0, null, 29], src: 'loan', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['AMD', 'CCU'] },
-  order_cash: { type: 'A20N', lay: [0, null, 29], src: 'cash', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['MAA', 'GOI'] },
-  wet_only:   { type: 'A20N', lay: [0, null, 29], src: 'wet',  lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['IDR', 'NAG'] },
+  lcc_trunk:  { type: 'A20N', lay: [0, null, 28], src: 'pool', lo: 0.90, hi: 1.20, start: 0.95, pick: 'trunk', bases: ['DEL', 'BLR'] , rm: 'fill' },
+  niche:      { type: 'A20N', lay: [0, null, 29], src: 'pool', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['PNQ', 'JAI'] , rm: 'balanced' },
+  full_svc:   { type: 'A20N', lay: [3, 38, 30],   src: 'pool', lo: 1.00, hi: 1.50, start: 1.10, pick: 'trunk', bases: ['BOM', 'HYD'], mkt: 40 , rm: 'top' },
+  regional:   { type: 'AT76', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', maxkm: 700, bases: ['HYD', 'CCU'] , rm: 'balanced' },
+  gulf:       { type: 'A21N', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.50, start: 1.00, pick: 'intl', maxkm: 3500, bases: ['COK', 'HYD'] , rm: 'follow' },
+  long_haul:  { type: 'A359', lay: [9, null, 31], src: 'pool', lo: 1.00, hi: 1.60, start: 1.10, pick: 'intl', minkm: 3500, bases: ['DEL', 'BOM'] , rm: 'balanced' },
+  order_loan: { type: 'A20N', lay: [0, null, 29], src: 'loan', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['AMD', 'CCU'] , rm: 'balanced' },
+  order_cash: { type: 'A20N', lay: [0, null, 29], src: 'cash', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['MAA', 'GOI'] , rm: 'balanced' },
+  wet_only:   { type: 'A20N', lay: [0, null, 29], src: 'wet',  lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['IDR', 'NAG'] , rm: 'fill' },
 };
 const players = Object.entries(STRATS).flatMap(([k, s]) => s.bases.map((b, i) => ({ strat: k, s, base: b, name: `${k} ${i + 1}` })));
 const SCALE = arg('--scale', 'auto') === 'auto' ? players.length / 50 : +arg('--scale');
@@ -46,7 +46,7 @@ for (const [k, v] of Object.entries(JSON.parse(arg('--params', '{}')))) await q(
 const W = await one(`select id from public.worlds where name = 'World 1'`);
 const code = await one(`select invite_code from public.world_secrets where world_id = $1`, [W]);
 const PLACES = +arg('--places', players.length);
-await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4, prelaunch_weeks = 0 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off']);
+await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots = $4, prelaunch_weeks = 0, selling = $5 where id = $2`, [SCALE, W, PLACES, arg('--pilots', 'on') !== 'off', arg('--selling', 'on') !== 'off']);
 await q(`update public.airlines set first_flight_day = 1 where world_id = $1`, [W]);
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
 await q(`select public.admin_start_world($1)`, [W]);
@@ -134,6 +134,10 @@ async function act(p, day) {
     const b = Math.round(Math.min(s.hi * 3.5, Math.max(s.lo * 3.5, adj(r.fare_biz, r.lfb) / r.ref_fare)) * r.ref_fare);
     if (e !== r.fare_econ || b !== r.fare_biz) await tryq(`select public.set_fares('${p.id}', '${r.id}', ${e}, ${b})`);
   }
+  // selling worlds (0019): each route sells by the player's strategy (set_fares above is refused there)
+  for (const r of await q(`select r.id from public.routes r join public.route_plans pl on pl.route_id = r.id
+      where r.airline_id = $1 and r.status = 'open' and pl.strategy <> $2`, [p.id, s.rm]))
+    await tryq(`select public.set_strategy('${p.id}', '${r.id}', '${s.rm}')`);
   // 2. once an own aircraft is flying, the wet-leased ones go back; their routes are filled again in step 3
   if (s.src !== 'wet' && await one(`select count(*)::int from public.aircraft a join public.aircraft_terms t on t.aircraft_id = a.id
       where a.airline_id = $1 and a.status = 'active' and t.holding <> 'wet'`, [p.id]) > 0)

@@ -272,3 +272,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 .map-ctl { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; }
 .map-ctl button { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 18px; cursor: pointer; box-shadow: var(--shadow); }
 .map-legend { position: absolute; left: 10px; bottom: 10px; background: rgba(255,255,255,.92); border-radius: 10px; padding: 6px 10px; font-size: 12px; display: flex; gap: 12px; }
+
+/* Selling ahead (0019): strategy choices and the 26-week seats strip */
+.choices { display: grid; gap: 8px; }
+.choice { text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 12px; padding: 10px 12px; cursor: pointer; font: inherit; color: inherit; }
+.choice.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.choice .t { font-weight: 600; font-size: 14px; }
+.choice .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.weeks-strip { display: grid; grid-template-columns: repeat(26, 1fr); gap: 2px; height: 64px; }
+.weeks-strip .wk { background: var(--bg); border-radius: 3px; position: relative; overflow: hidden; cursor: pointer; border: 0; padding: 0; }
+.weeks-strip .wk i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); opacity: .85; }
+.weeks-strip .wk.full i { background: var(--warn-ink); }
+.weeks-strip .wk.sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+.weeks-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 4px; }

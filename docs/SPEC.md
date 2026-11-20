@@ -517,6 +517,30 @@ Owner's decisions, 20 Nov 2026: the week is the unit of time; a game week takes 
 - **App.** Every screen shows "Week N · dates" and, before first flights, a pre-launch chip; Home shows a countdown card. Results are by the week: last week's profit, profit by week, passengers, revenue and flight profit a week, a route's load by week, aircraft results last week. Marketing, pilot salaries and wet-lease minimums are shown a week. Arrivals, refits and groundings are shown as weeks. The Admin clock is set in hours per game week.
 - **Tested.** 17 new local checks (203 in all; the checks written before 0018 run in worlds without a pre-launch and with the game values they were written for) and the app test, which now plays the pre-launch.
 
+### 14.13 Selling ahead (migration 0019)
+
+Step 2 of section 19. Owner's decisions (20 Nov 2026): tickets sell 26 weeks ahead; truly dynamic fares, no fare levels; players choose only a strategy, rule-based selling does the rest and the admin tunes it; automatic overbooking with hidden no-show patterns; cash at booking, revenue at flight; market shape and rival moves; new routes fly two weeks after opening.
+
+- **Selling runs once a week** (`game.sell_week`), on the first day of the week before the week's flights. Worlds have `selling` (true for new worlds; worlds running before 0019 keep daily fares).
+- **Seats on sale.** Each open route is on sale for flight weeks W to W+25 (`route_weeks`, figures each way for the week), with seats from today's rotations; an aircraft counts from the week it arrives, so aircraft on order can be planned and sold ahead. A route flies its first flight two weeks (G `route_lead_days`) after it opens, and not before its airline's first flights.
+- **Who books when (G).** Of each week's travellers, the share deciding n weeks before the flight week follows (n + 0.5)^shape x exp(-(n + 0.5)/scale): business shape 0, scale 1.5 (most in the last two weeks); leisure 2, 2.5 (most about 5 weeks ahead); visiting friends and relatives 2, 3.5 (about 7 weeks ahead). When a flight week first goes on sale on its market (the world's first week, or a market nobody served), everyone who would have booked by then books then. Each arriving traveller chooses by the nested logit of section 4 at the fares on sale that week, among airlines with seats left.
+- **Strategies (G, table `rm_strategies`, Admin screen).** Fill every seat, Balanced, Top fares, Follow the market. A flight week's economy fare is the reference fare x (early_mult + (late_mult - early_mult) x ramp) x adj, where ramp = ((25 - n)/25)^3 rises late in the sale; business the same from biz_early_mult and biz_late_mult x the business reference. Each week adj moves when seats sold are more than band away from the target curve (target_lf x the share of travellers who would have booked by then): one step for each band's width off, up to three, within min_mult and max_mult. A flight week new on sale starts from the adj of the week now closing, so each route carries what it has learnt. Follow the market charges the rivals' average for the same week (x (1 + follow_gap)), and runs as Balanced with no rival.
+
+| Strategy | Target load | Fare 26 weeks out | Fare in the week | Lowest | Highest | Step | Band | Overbooking |
+|---|---|---|---|---|---|---|---|---|
+| Fill every seat | 88% | 0.75 | 1.05 | 0.60 | 1.40 | 4% | 6% | 1.0 |
+| Balanced | 80% | 0.85 | 1.35 | 0.75 | 1.90 | 3% | 8% | 0.8 |
+| Top fares | 72% | 1.00 | 1.80 | 0.90 | 2.50 | 3% | 8% | 0.6 |
+| Follow the market | 80% | as Balanced | | | | | | 0.8 |
+
+- **Overbooking and no-shows.** Seats are sold beyond the cabin by the strategy's overbooking x the no-shows the engine expects on the market. No-shows by traveller type (G: business 12%, leisure 5%, visiting friends and relatives 3%) x a hidden factor per market (spread 0.35) x a weekly swing (0.25). When a flight week closes, passengers who turn up beyond the seats cannot board: a full refund plus Rs 10,000 each (G), as a cost; where the seats were cut by the airline's own schedule change after selling, a refund only. No-shows' fares are kept.
+- **Money.** Cash comes in when a ticket sells; revenue counts when the flight flies (the week's bookings who could board, a seventh a day, each at the fare paid, no-shows' fares included). Flights cancelled on the day refund their passengers. Closing a route refunds its later tickets at the next week of selling. An airline in administration loses its tickets sold with everything else. `airline_weeks` holds each week's sales, refunds, compensation and advance sales (tickets sold for later weeks). Net worth for the ranking subtracts advance sales.
+- **What rivals see.** `market_watch` (public): each airline's economy fare four weeks ahead and next week's flights; `market_moves` (public): entries, exits, fare changes of 7% or more and flight changes of 10% or more, week by week (13 weeks kept). Strategies are private (`route_plans`).
+- **Actions.** `set_strategy(airline, route, strategy)`; `admin_set_strategy(key, values)`; `set_fares` is refused in selling worlds (open_route still takes a fare, used only for display until the first week of selling).
+- **App.** Route: How it sells (the four strategies, fares on sale now, a line on no-shows), Seats on sale (share sold for each of the next 26 weeks, seats left, advance sales), Competition (monopoly, duopoly, oligopoly or crowded, and recent moves). Opening a route asks how it sells. Money: Profit, Cash flow (by week) and Balance sheet tabs. Home shows advance sales with cash. Admin: the strategies table.
+- **Tested.** 22 local checks (`checks_9`); the older checks run with selling off. A bots-only comparison at constant reference fares gives loads at or above the daily model, so demand is unchanged; with the strategies, the computer-run airlines' third-quarter revenue is within 2% of the daily model and their loads within a few points.
+- **Tuning, first pass (to revisit after playtesting).** In the three-year season simulation (no pre-launch; simulated players open routes as aircraft arrive, so new routes start with two weeks of sales) players do worse than with daily fares: year-3 operating margins of about -0.3 to +0.09 against up to +0.19 before. Early strategy settings with 85-92% targets and floors at 0.50-0.55 of the reference fare started price wars; the values above are the second set. Runs differ a lot from seed to seed.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -639,7 +663,7 @@ Built: section 14.8.
 
 The game's main lesson (owner): sell too many cheap seats and business travellers find the plane full; hold back too many and seats fly empty. Players choose a strategy; rule-based pricing does the rest. Mockups: the design canvas "Airline game: selling and money". Built in three steps: weeks (14.12, done), then selling and money, then insights.
 
-**Step 2: selling and money**
+**Step 2: selling and money** (built: section 14.13)
 - **Tickets sell 26 weeks (G) before departure.** Every flight is on sale for 26 weeks; a new route goes on sale at once and flies its first flight two weeks (G) later.
 - **Truly dynamic pricing, no fare levels.** There are no booking classes for players to set. Each route runs one of four strategies: Fill every seat, Balanced, Top fares, Follow the market. A rule-based engine prices every flight from the strategy, how it is selling against its ideal booking curve, weeks to departure, season and rivals. The engine's values are game values (G) the admin tunes. Fares stop being a player input (`set_fares` goes).
 - **Travellers.** Business, leisure, visiting friends and relatives, each booking at its own time before departure and with its own price sensitivity.
