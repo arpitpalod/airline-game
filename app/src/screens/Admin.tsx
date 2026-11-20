@@ -1,7 +1,7 @@
 // Admin: invite link, start, pause and resume. Only for profiles marked is_admin; the server checks this again.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { call } from '../lib/api';
+import { call, rows, supabase } from '../lib/api';
 import { useGame, useStrategies, useWorldAirlines } from '../lib/data';
 import type { Strategy } from '../lib/types';
 import { clock, inPrelaunch } from '../lib/game';
@@ -72,6 +72,7 @@ export function Admin() {
         </div>
       </div>
       <StrategiesAdmin />
+      <BotsAdmin />
       {confirm && (
         <Sheet title={confirm === 'start' ? 'Start the world?' : confirm === 'pause' ? 'Pause the world?' : 'Resume the world?'} onClose={() => setConfirm(null)}>
           <div className="stack">
@@ -203,6 +204,81 @@ function StrategiesAdmin() {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// The computer-run airlines (all worlds): how likely each fights a player who enters its market, the mix of ways of
+// selling its new routes start from, and the game values for how they review and fight (migration 0021).
+interface BotRow { code: string; name: string; aggression: number }
+interface MixRow { code: string; strategy: string; weight: number }
+const BOT_PARAMS: { k: string; label: string }[] = [
+  { k: 'bot_review_weeks', label: 'Review every (weeks)' }, { k: 'bot_explore_prob', label: 'Chance to try another way' },
+  { k: 'bot_switch_gain', label: 'Switch when better by' }, { k: 'bot_fight_weeks', label: 'Fight lasts (weeks)' },
+  { k: 'bot_follow_cut', label: 'Follow a player cut of' },
+];
+const MIX_KEYS = ['fill', 'balanced', 'top', 'follow'];
+function BotsAdmin() {
+  const { ref } = useGame();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const bots = useQuery({ queryKey: ['bots'], queryFn: () => rows<BotRow>(supabase.from('bot_airlines').select('code,name,aggression').order('sort')) });
+  const mix = useQuery({ queryKey: ['bot_mix'], queryFn: () => rows<MixRow>(supabase.from('bot_strategy_mix').select('*')) });
+  const [edit, setEdit] = useState<Record<string, Record<string, string>>>({});
+  const [pv, setPv] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!bots.data || !mix.data) return null;
+  const w = (code: string, k: string) => String(mix.data!.find((m) => m.code === code && m.strategy === k)?.weight ?? 0);
+  const save = async (key: string, fn: () => Promise<unknown>, msg: string) => {
+    setBusy(key);
+    try { await fn(); toast(msg); await qc.invalidateQueries({ queryKey: ['bots'] }); await qc.invalidateQueries({ queryKey: ['bot_mix'] }); }
+    catch (er) { toast((er as Error).message, 'error'); } finally { setBusy(null); }
+  };
+  return (
+    <div className="card flush">
+      <div className="card-title" style={{ padding: '14px 16px 0' }}><h2>Computer-run airlines</h2><span className="small muted">all worlds</span></div>
+      <p className="tiny muted" style={{ padding: '0 16px' }}>Aggression is the chance an airline fights a player who starts flying one of its markets (Fill every seat for some weeks). New routes draw their way of selling from the mix; every few weeks each route moves to what works better on routes like it, or tries another way at random.</p>
+      <div className="scroll-x">
+        <table className="table">
+          <thead><tr><th>Airline</th><th className="r">Aggression</th>{MIX_KEYS.map((k) => <th key={k} className="r">{k === 'fill' ? 'Fill' : k === 'top' ? 'Top' : k === 'follow' ? 'Follow' : 'Balanced'}</th>)}<th /></tr></thead>
+          <tbody>
+            {bots.data.map((b) => {
+              const e = edit[b.code] ?? {};
+              const val = (k: string, d: string) => e[k] ?? d;
+              return (
+                <tr key={b.code}>
+                  <td className="strong">{b.name}</td>
+                  <td className="r"><input className="input num" style={{ width: 64, height: 32 }} inputMode="decimal" aria-label={`${b.name} aggression`}
+                    value={val('aggression', String(b.aggression))} onChange={(ev) => setEdit({ ...edit, [b.code]: { ...e, aggression: ev.target.value } })} /></td>
+                  {MIX_KEYS.map((k) => (
+                    <td key={k} className="r"><input className="input num" style={{ width: 56, height: 32 }} inputMode="decimal" aria-label={`${b.name} ${k} weight`}
+                      value={val(k, w(b.code, k))} onChange={(ev) => setEdit({ ...edit, [b.code]: { ...e, [k]: ev.target.value } })} /></td>
+                  ))}
+                  <td><Button size="sm" kind="secondary" disabled={!Object.keys(e).length} busy={busy === b.code} onClick={() => save(b.code, async () => {
+                    await call('admin_set_bot', { p_code: b.code, p_aggression: Number(val('aggression', String(b.aggression))),
+                      p_mix: Object.fromEntries(MIX_KEYS.map((k) => [k, Number(val(k, w(b.code, k)))])) });
+                    setEdit({ ...edit, [b.code]: {} });
+                  }, `${b.name} saved`)}>Save</Button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="stack" style={{ padding: '0 16px 14px' }}>
+        <div className="grid3">
+          {BOT_PARAMS.map((p) => (
+            <Field key={p.k} label={p.label}>
+              <input className="input num" inputMode="decimal" value={pv[p.k] ?? String(ref.param[p.k] ?? '')} onChange={(ev) => setPv({ ...pv, [p.k]: ev.target.value })} />
+            </Field>
+          ))}
+        </div>
+        <Button kind="secondary" disabled={!Object.keys(pv).length} busy={busy === 'params'} onClick={() => save('params', async () => {
+          for (const [k, v] of Object.entries(pv)) await call('admin_set_param', { p_key: k, p_num: Number(v) });
+          setPv({});
+          await qc.invalidateQueries({ queryKey: ['ref'] });
+        }, 'Saved. Reload to see the new values everywhere.')}>Save these values</Button>
       </div>
     </div>
   );

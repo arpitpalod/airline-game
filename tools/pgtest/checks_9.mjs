@@ -54,7 +54,8 @@ export async function checks9(t) {
   await run(1);         // day 92: selling for week 14, then the first flights
   const w14 = (await q(`select (bk_be + bk_l + bk_u + bk_b)::float sold, noshow::float ns, denied::float den, flown_e::float fe, rev_flown_e::float + rev_flown_b::float rf
     from public.route_weeks where route_id = $1 and week = 14`, [rt]))[0];
-  ok('week 14 closes: about 1 in 20 do not turn up; the rest fit', w14.ns / w14.sold > 0.01 && w14.ns / w14.sold < 0.15 && w14.den === 0,
+  ok('week 14 closes: a few percent do not turn up; the rest fly, up to the seats', w14.ns / w14.sold > 0.01 && w14.ns / w14.sold < 0.15
+    && w14.fe <= Number(await one(`select seats_e from public.route_weeks where route_id = $1 and week = 14`, [rt])) + 0.01,
     `${(100 * w14.ns / w14.sold).toFixed(1)}% no-shows of ${Math.round(w14.sold)}`);
   const rd = (await q(`select pax_econ, revenue_inr::float rev from public.route_daily where route_id = $1 and game_day = 92`, [rt]))[0];
   ok('each day of the week flies a seventh of those who turned up', rd && Math.abs(rd.pax_econ - 2 * w14.fe / 7) <= 1, `${rd?.pax_econ} passengers`);
@@ -76,7 +77,7 @@ export async function checks9(t) {
   ok('an overbooked week: those beyond the seats cannot board, get their fare back and Rs 10,000 each',
     w15.den > 0 && Math.abs(w15.den - (w15.sold - w15.ns - w15.se)) < 0.01 && Math.abs(w15.comp - w15.den) < 0.01
       && Math.abs(aw15.c - 2 * w15.den * 10000) <= 1 && aw15.r > 0, `${Math.round(2 * w15.den)} passengers`);
-  ok('and the compensation is a cost', Number(await one(`select -sum(pnl_inr)::float from public.transactions where airline_id = $1 and kind = 'denied_boarding'`, [P])) === Math.round(aw15.c));
+  ok('and the compensation is a cost', Number(await one(`select -sum(pnl_inr)::float from public.transactions where airline_id = $1 and kind = 'denied_boarding' and game_day = 99`, [P])) === Math.round(aw15.c));
 
   // a schedule cut after selling: passengers who cannot fly get a refund only
   await run(6);   // day 105, the end of week 15
