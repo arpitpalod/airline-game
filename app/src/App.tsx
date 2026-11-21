@@ -21,6 +21,7 @@ import { Ranks } from './screens/Ranks';
 import { Admin } from './screens/Admin';
 import { Extras } from './screens/Extras';
 import { Insights } from './screens/Insights';
+import { Consultant } from './screens/Consultant';
 import { Ops, OpsDollar, OpsFuel, OpsMaint, OpsStyle } from './screens/Ops';
 import { NewWorld, Worlds } from './screens/Worlds';
 
@@ -141,6 +142,7 @@ function GameProvider({ game }: { game: Game }) {
           <Route path="/worlds/new" element={<NewWorld />} />
           <Route path="/extras" element={<Extras />} />
           <Route path="/insights" element={<Insights />} />
+          <Route path="/consultant" element={<Consultant />} />
           <Route path="/practice" element={<Insights />} />
           <Route path="/join" element={<Navigate to="/" replace />} />
           <Route path="*" element={<NotFound />} />

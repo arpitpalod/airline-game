@@ -2,5 +2,5 @@
   "name": "airline-localstack",
   "private": true,
   "type": "module",
-  "dependencies": { "pg": "^8.13.1" }
+  "dependencies": { "pg": "^8.13.1", "deno": "^2.5.0" }
 }
