@@ -19,7 +19,7 @@ const LINES: { key: string; name: string; color: string; lever: string; to?: str
   { key: 'crew', name: 'Crew', color: '#1E5AA8', lever: 'Hired for you · operating style', to: '/ops/style', of: (d) => d.c_crew },
   { key: 'airports', name: 'Airports and slots', color: '#7FA7DD', lever: 'Set by your routes', to: '/network', of: (d) => d.c_airport + d.c_slots },
   { key: 'sales', name: 'Sales and service', color: '#F0A04B', lever: 'Extras and marketing', to: '/extras', of: (d) => d.c_dist + d.c_marketing },
-  { key: 'office', name: 'Head office', color: '#98A2B3', lever: 'Fixed: spread over more seats as you grow', of: (d) => d.c_overhead },
+  { key: 'office', name: 'Head office', color: '#98A2B3', lever: 'Grows with your fleet up to 20 aircraft, then spreads over more seats', of: (d) => d.c_overhead },
 ];
 
 const sum = (xs: AirlineDaily[], f: (d: AirlineDaily) => number) => xs.reduce((s, d) => s + f(d), 0);
