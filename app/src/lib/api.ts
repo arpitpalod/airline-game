@@ -44,3 +44,23 @@ export async function checkInvite(invite: string) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'Could not check the invite code');
 }
+
+// The Claude consultant (spec 14.25): the consultant edge function charges the fee and starts the report, then answers
+// at once; the report is written in the background and read from consultant_reports.
+export async function askConsultant(airline: string): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) throw new Error('Your sign-in has expired. Sign in again.');
+  let res: Response;
+  try {
+    res = await fetch(`${SUPABASE_URL}/functions/v1/consultant`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', apikey: SUPABASE_KEY, authorization: `Bearer ${data.session.access_token}` },
+      body: JSON.stringify({ airline_id: airline }),
+    });
+  } catch {
+    throw new Error('Could not reach the game server. Check your connection.');
+  }
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(cleanError(body.error || body.message || body.msg || 'The consultant could not start'));
+  return body.report_id as string;
+}
