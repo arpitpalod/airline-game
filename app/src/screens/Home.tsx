@@ -398,7 +398,7 @@ function GettingStarted({ hasRoute, hasRotation }: { hasRoute: boolean; hasRotat
 }
 
 function MoreMenu({ onClose }: { onClose: () => void }) {
-  const { profile, myAirlines, airline, switchAirline, world, uid } = useGame();
+  const { profile, myAirlines, airline, switchAirline, world, uid, ref } = useGame();
   const nav = useNavigate();
   const runs = profile?.is_admin || (world.founder_id != null && world.founder_id === uid);
   const go = (to: string) => { onClose(); nav(to); };
@@ -410,6 +410,8 @@ function MoreMenu({ onClose }: { onClose: () => void }) {
           <div className="list">
             <div className="item link" onClick={() => go('/market')}><Icon name="market" /><span className="grow">Get aircraft</span><Icon name="right" /></div>
             <div className="item link" onClick={() => go('/ranks')}><Icon name="trophy" /><span className="grow">Leaderboard and news</span><Icon name="right" /></div>
+            {(profile?.is_admin || Number(ref.param.consultant_open ?? 0) >= 1) &&
+              <div className="item link" onClick={() => go('/consultant')}><Icon name="bulb" /><span className="grow">Consultant</span><Icon name="right" /></div>}
             <div className="item link" onClick={() => go('/worlds')}><Icon name="globe" /><span className="grow">Worlds</span><Icon name="right" /></div>
             {runs && <div className="item link" onClick={() => go('/admin')}><Icon name="shield" /><span className="grow">{profile?.is_admin ? 'Admin' : 'Your world'}</span><Icon name="right" /></div>}
           </div>

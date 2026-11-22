@@ -327,6 +327,30 @@ with sync_playwright() as p:
     shot(page, 'p13b-airport-closed')
     sql(f"delete from events where world_id = '{WORLD}' and kind = 'airport_closed'")
 
+    print('the consultant: the admin asks Claude (a stub here) for a report and does one of its actions (spec 14.25)')
+    assert sql("select count(*) from route_plans p join airlines a on a.id = p.airline_id where a.name = 'Tarang Air' and p.strategy = 'fill'") == '0'
+    go(page, '/'); page.get_by_role('button', name='Menu').click()
+    page.locator('.sheet .item', has_text='Consultant').click()
+    page.get_by_text('Fee for a report').wait_for()
+    page.get_by_role('button', name='Ask Claude').click()
+    page.locator('.sheet').get_by_role('button', name='Pay').click()
+    toast_ok(page, 'Claude is reading your books')
+    page.get_by_text('Stub report').wait_for(timeout=30000)
+    expect(page.get_by_text('A made-up aircraft')).to_have_count(0)   # an id Claude was never shown is dropped
+    expect(page.get_by_role('button', name='Do it')).to_have_count(2)
+    shot(page, 'p13c-consultant')
+    page.get_by_role('button', name='Do it').first.click()
+    expect(page.locator('.sheet')).to_contain_text('as Fill')
+    page.locator('.sheet').get_by_role('button', name='Do it').click()
+    toast_ok(page, 'Done: Sell')
+    assert sql("select count(*) from route_plans p join airlines a on a.id = p.airline_id where a.name = 'Tarang Air' and p.strategy = 'fill'") == '1'
+    assert sql("select count(*) from transactions t join airlines a on a.id = t.airline_id where a.name = 'Tarang Air' and t.kind = 'consultant'") == '1'
+    assert sql("select status || ' ' || tokens_cached || ' ' || (cost_usd > 0) from consultant_reports") == 'done 2600 true'
+    stub = [json.loads(l) for l in open('/tmp/claude_stub.log')]
+    assert len(stub) == 2 and all(r['headers']['key'] for r in stub)
+    assert all(r['body']['system'][0].get('cache_control') for r in stub), 'the playbook is not cached'
+    assert not any('Tarang' in json.dumps(r['body']['messages']) for r in stub), 'a player-written name reached Claude'
+
     if not os.environ.get('SKIP_TEARDOWN'):   # keeps a flying airline for screenshots
         print('take VT-AAA off its route, end its wet lease, close the route')
         go(page, '/network'); page.locator('.list .item.link').first.click()

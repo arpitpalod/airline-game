@@ -3,6 +3,8 @@
 //   /auth/v1/signup, /resend, /recover, /verify      sign-up and password reset with 6-digit codes (spec 14.21);
 //                                                    no email: GET /__test/code?email=... returns the last code
 //   /functions/v1/join                               same checks as supabase/functions/join (the invite code)
+//   /functions/v1/consultant                         passed to the real edge function, run under Deno on CONSULTANT_PORT
+//                                                    (run_e2e.sh starts it, with claude_stub.mjs in place of Claude)
 //   /rest/v1/<table>                                 PostgREST-style reads: select, eq/neq/gt/gte/lt/lte/in/is, order, limit
 //   /rest/v1/rpc/<function>                          function calls with named arguments
 // Every request runs as the caller's role with request.jwt.claims set, so row-level security applies as in Supabase.
@@ -203,6 +205,14 @@ const server = http.createServer(async (req, res) => {
                                    [String(b.invite || ''), 'ended'])).rowCount;
       if (!ok) return send(400, { error: 'That invite code is not valid' });
       return send(200, { ok: true });
+    }
+    if (p === '/functions/v1/consultant') {
+      const r = await fetch(`http://127.0.0.1:${process.env.CONSULTANT_PORT || 54330}/`, {
+        method: 'POST', body: JSON.stringify(await body(req)),
+        headers: { 'content-type': 'application/json', authorization: req.headers.authorization || '' },
+      }).catch(() => null);
+      if (!r) return send(503, { error: 'The consultant function is not running' });
+      return send(r.status, await r.json());
     }
     if (p.startsWith('/rest/v1/rpc/') && req.method === 'POST') {
       return send(200, await rpc(p.slice('/rest/v1/rpc/'.length), await body(req), claimsOf(req)));
