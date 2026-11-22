@@ -72,7 +72,7 @@ export function Consultant() {
   return (
     <div className="stack-lg">
       <PageHeader title="Consultant" back sub="Claude reads your airline's books and the public market, finds your three biggest money problems and suggests up to three actions. Nothing changes until you tap Do it." />
-      {!s ? <Loading /> : (
+      {status.isError ? <div className="card small">The consultant could not load: {(status.error as Error).message}</div> : !s ? <Loading /> : (
         <div className="card stack" style={{ gap: 10 }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div><div className="tiny muted">Fee for a report</div><div className="kpi-s" style={{ fontSize: 22 }}>{inr(s.fee_inr)}</div></div>

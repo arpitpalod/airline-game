@@ -52,10 +52,10 @@ function claimsOf(req) {
   const c = verify((req.headers.authorization || '').replace(/^Bearer /i, '')) || verify(req.headers.apikey);
   return c || { role: 'anon' };
 }
-async function asCaller(claims, sql, params) {
+async function asCaller(claims, sql, params, readOnly = false) {
   const cl = await pool.connect();
   try {
-    await cl.query('begin');
+    await cl.query(readOnly ? 'begin read only' : 'begin');   // PostgREST calls STABLE and IMMUTABLE functions read-only
     if (claims.role !== 'service_role' || claims.sub) await cl.query(`set local role ${claims.role === 'authenticated' ? 'authenticated' : 'anon'}`);
     else await cl.query('set local role service_role');
     await cl.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify(claims)]);
@@ -113,7 +113,7 @@ async function restGet(table, url, claims) {
 async function rpc(fn, args, claims) {
   if (!IDENT.test(fn)) throw Object.assign(new Error('bad function'), { status: 400 });
   const meta = (await pool.query(
-    `select p.proretset, p.prorettype::regtype::text as rt, p.proargnames, p.proargmodes,
+    `select p.proretset, p.prorettype::regtype::text as rt, p.proargnames, p.proargmodes, p.provolatile,
             coalesce(p.proallargtypes, p.proargtypes::oid[])::regtype[]::text[] as types
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = $1`, [fn])).rows[0];
   if (!meta) throw Object.assign(new Error(`Could not find the function public.${fn}`), { status: 404, code: 'PGRST202' });
@@ -127,7 +127,7 @@ async function rpc(fn, args, claims) {
   }
   const call = `public."${fn}"(${named.join(', ')})`;
   const tableLike = meta.proretset || meta.rt === 'record';
-  const r = await asCaller(claims, tableLike ? `select * from ${call}` : `select ${call} as r`, params);
+  const r = await asCaller(claims, tableLike ? `select * from ${call}` : `select ${call} as r`, params, meta.provolatile !== 'v');
   return tableLike ? r.rows : meta.rt === 'void' ? null : r.rows[0].r;
 }
 
