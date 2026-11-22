@@ -13,6 +13,7 @@ import { Badge, Button, Empty, Loading, PageHeader, Sheet } from '../components/
 
 export interface ConsultantStatus {
   fee_inr: number; can_ask: boolean; reason: string | null; asked_today: number; per_day: number; this_quarter: number; admin: boolean; busy: boolean;
+  on?: boolean; fee_share?: number; fee_min_inr?: number;   // the world's rule (0032)
 }
 type Tag = 'Certain' | 'Likely' | 'Guessing';
 export interface ConsultantAction { title: string; fn: string; args: Record<string, string | number>; why: string; effect: string; risk: string; tag: Tag }
@@ -20,7 +21,7 @@ export interface ConsultantReport {
   id: string; game_day: number; created_at: string; status: 'working' | 'done' | 'failed'; fee_inr: number; model: string | null;
   tokens_in: number; tokens_cached: number; tokens_out: number; cost_usd: number; error: string | null;
   report: { summary: string; problems: { title: string; evidence: string; tag: Tag }[]; actions: ConsultantAction[];
-            missing: string | null; turns?: number; seconds?: number } | null;
+            missing: string | null; turns?: number; seconds?: number; dropped?: { title: string; fn: string; reason: string }[] } | null;
 }
 
 const TAG_TONE: Record<Tag, 'good' | 'info' | 'warn'> = { Certain: 'good', Likely: 'info', Guessing: 'warn' };
@@ -78,7 +79,7 @@ export function Consultant() {
             <div><div className="tiny muted">Fee for a report</div><div className="kpi-s" style={{ fontSize: 22 }}>{inr(s.fee_inr)}</div></div>
             {s.admin && <Badge tone="accent">Admin test</Badge>}
           </div>
-          <p className="small muted">1% of your revenue last quarter, at least ₹25 lakh, booked as a one-off cost. Refunded if the report fails. One report a game quarter, and at most {s.per_day} a day.</p>
+          <p className="small muted">{feeRule(s)} One report a game quarter, and at most {s.per_day} a day.</p>
           {s.can_ask && !working
             ? <Button block onClick={() => setConfirm(true)}>Ask Claude</Button>
             : <div className="small">{working ? 'A report is being written.' : s.reason}</div>}
@@ -97,6 +98,13 @@ export function Consultant() {
       )}
     </div>
   );
+}
+
+function feeRule(s: ConsultantStatus) {
+  if (s.on === false) return 'This world was founded without the consultant.';
+  const share = s.fee_share ?? 0.01, min = s.fee_min_inr ?? 2500000;
+  if (share <= 0 && min <= 0) return 'Free in this world.';
+  return `${pct(share)} of your revenue last quarter, at least ${inr(min)}, booked as a one-off cost. Refunded if the report fails.`;
 }
 
 function ReportCard({ r, open, admin }: { r: ConsultantReport; open: boolean; admin: boolean }) {
@@ -131,6 +139,7 @@ function ReportCard({ r, open, admin }: { r: ConsultantReport; open: boolean; ad
           {rep.actions.length === 0 ? <p className="small muted">No action this time.</p>
             : rep.actions.map((a, i) => <ActionRow key={i} a={a} reportId={r.id} n={i} />)}
           {rep.missing && <p className="small muted">Missing: {rep.missing}</p>}
+          {admin && (rep.dropped ?? []).map((d, i) => <p key={i} className="tiny muted">Left out: {d.title || 'actions'} ({d.fn || 'none'}): {d.reason}</p>)}
           {admin && <p className="tiny muted">{r.model} · {rep.turns ?? '?'} turns · {rep.seconds ?? '?'} s · {r.tokens_in.toLocaleString()} in, {r.tokens_cached.toLocaleString()} cached, {r.tokens_out.toLocaleString()} out · ${Number(r.cost_usd).toFixed(3)}</p>}
         </>
       )}

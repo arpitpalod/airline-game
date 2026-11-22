@@ -12,7 +12,7 @@ export interface World {
 }
 
 /** The choices a founder makes for a world (migration 0027, G). `vals` are the game values the choice sets. */
-export type WorldSetting = 'region' | 'pace' | 'turn' | 'places' | 'money' | 'banks' | 'growth' | 'seats' | 'shocks' | 'bots';
+export type WorldSetting = 'region' | 'pace' | 'turn' | 'places' | 'money' | 'banks' | 'growth' | 'seats' | 'shocks' | 'bots' | 'consultant';
 /** Seats between India and a country with a limit, this world (0028): the limit, all airlines' seats and the airline's own, a week each way. */
 export interface SeatRoom { country: string; name: string; limit: number; used: number; mine: number }
 export interface WorldOption {

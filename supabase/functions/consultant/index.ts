@@ -7,7 +7,7 @@
 //     data, never another airline's private data or any text a player wrote), in at most max_turns turns, then calls
 //     submit_report. The report is checked and saved with consultant_finish; any failure refunds the fee.
 // Actions in a report never run here: the player taps "Do it" in the app, which calls the usual public function.
-// Deployed with verify_jwt on. ANTHROPIC_API_KEY is a Supabase secret; SUPABASE_URL, SUPABASE_ANON_KEY and
+// Deployed with verify_jwt on (version 2 from 22 Nov 2026: registrations and route codes accepted, dropped actions kept). ANTHROPIC_API_KEY is a Supabase secret; SUPABASE_URL, SUPABASE_ANON_KEY and
 // SUPABASE_SERVICE_ROLE_KEY are provided by the platform. None of them is ever returned or logged.
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
@@ -72,7 +72,8 @@ const tools = [
           items: { type: 'object', required: ['title', 'fn', 'why', 'effect', 'risk', 'tag'], properties: {
             title: { type: 'string', description: 'What to do, in a few words' },
             fn: { type: 'string', enum: Object.keys(ACTIONS) },
-            route_id: { type: 'string' }, aircraft_id: { type: 'string' },
+            route_id: { type: 'string', description: 'The route_id from the routes look-up (an id, not airport codes)' },
+            aircraft_id: { type: 'string', description: 'The aircraft_id from the fleet look-up (an id, not the registration)' },
             strategy: { type: 'string', enum: ['fill', 'balanced', 'top', 'follow'] },
             round_trips_a_week: { type: 'integer', minimum: 0, maximum: 70 },
             from: { type: 'string', description: 'IATA code' }, to: { type: 'string', description: 'IATA code' },
@@ -129,10 +130,11 @@ async function write(db: SupabaseClient, s: Start) {
     p_tokens_out: used.out, p_cost_usd: Number(cost().toFixed(4)), p_error: err,
   });
   const seen = new Set<string>();            // every id the consultant was shown: actions may only use these
+  const alias = new Map<string, string>();   // registrations and route codes it was shown, to the ids they stand for
   const looked: string[] = [];
   const messages: { role: string; content: unknown }[] = [{
     role: 'user',
-    content: `Write this week's report for the airline. You have at most ${s.max_turns} turns; call several look-ups in one turn where you can. Start with overview and routes, then look deeper where the problems are, then call submit_report.`,
+    content: `Write this week's report for the airline. You have at most ${s.max_turns} turns; call several look-ups in one turn where you can. Start with overview and routes, then look deeper where the problems are, then call submit_report with three problems and up to three actions the player can take now. An action names its route or aircraft by the route_id or aircraft_id from the look-ups.`,
   }];
   try {
     for (let turn = 0; turn < s.max_turns; turn++) {
@@ -144,7 +146,7 @@ async function write(db: SupabaseClient, s: Start) {
       const blocks = res.content as Block[];
       const done = blocks.find((b) => b.type === 'tool_use' && b.name === 'submit_report');
       if (done) {
-        const report = check(done.input ?? {}, seen);
+        const report = check(done.input ?? {}, seen, alias);
         await finish(true, { ...report, turns: turn + 1, looked_up: looked, seconds: Math.round((Date.now() - t0) / 1000) }, null);
         return;
       }
@@ -160,6 +162,12 @@ async function write(db: SupabaseClient, s: Start) {
           out = error ? JSON.stringify({ error: 'That look-up failed' }) : JSON.stringify(data);
           for (const m of out.matchAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g)) seen.add(m[0]);
           for (const m of out.matchAll(/"(?:from|to|a|b)":"([A-Z]{3})"/g)) seen.add(m[1]);
+          if (!error && Array.isArray(data)) for (const x of data as Record<string, unknown>[]) {
+            if (c.name === 'fleet' && x.reg && x.aircraft_id) alias.set(String(x.reg).toUpperCase(), String(x.aircraft_id));
+            if (c.name === 'routes' && x.from && x.to && x.route_id) {
+              alias.set(`${x.from}-${x.to}`, String(x.route_id)); alias.set(`${x.to}-${x.from}`, String(x.route_id));
+            }
+          }
           if (out.length > MAX_RESULT_CHARS) out = out.slice(0, MAX_RESULT_CHARS) + ' …(cut: too long)';
         }
         return { type: 'tool_result', tool_use_id: c.id, content: out };
@@ -199,25 +207,38 @@ async function claude(s: Start, messages: unknown[], force: boolean, msLeft: num
 }
 
 // Keep only what the app can show and run: 3 problems, up to 3 actions with the fields their function needs and ids the
-// consultant was actually shown. Anything else is dropped, never trusted.
-function check(x: Record<string, unknown>, seen: Set<string>) {
+// consultant was actually shown (a registration or route code it was shown is turned into its id). Anything else is
+// dropped, never trusted, and listed with the reason under `dropped` (shown to admins) so the playbook can be fixed.
+function check(x: Record<string, unknown>, seen: Set<string>, alias: Map<string, string>) {
   const str = (v: unknown, n = 1200) => (typeof v === 'string' ? v.slice(0, n) : '');
   const tag = (v: unknown) => (TAGS.includes(v as string) ? v as string : 'Guessing');
-  const problems = (Array.isArray(x.problems) ? x.problems : []).slice(0, 3).map((p: Record<string, unknown>) =>
+  const list = (v: unknown): Record<string, unknown>[] => {   // models sometimes send an array as a JSON string
+    if (typeof v === 'string') { try { v = JSON.parse(v); } catch { return []; } }
+    return Array.isArray(v) ? v.filter((e) => e && typeof e === 'object') : [];
+  };
+  const problems = list(x.problems).slice(0, 3).map((p) =>
     ({ title: str(p.title, 120), evidence: str(p.evidence), tag: tag(p.tag) })).filter((p) => p.title);
-  const actions = (Array.isArray(x.actions) ? x.actions : []).slice(0, 3).flatMap((a: Record<string, unknown>) => {
+  const dropped: { title: string; fn: string; reason: string }[] = [];
+  const actions = list(x.actions).slice(0, 3).flatMap((a) => {
     const fn = String(a.fn ?? ''), need = ACTIONS[fn];
-    if (!need) return [];
+    const drop = (reason: string) => { dropped.push({ title: str(a.title, 120), fn: fn.slice(0, 40), reason }); return []; };
+    if (!need) return drop('not one of the actions the app can run');
     const args: Record<string, unknown> = {};
     for (const k of need) {
       let v = a[k];
-      if (v === undefined || v === null || v === '') return [];
+      if (v === undefined || v === null || v === '') return drop(`no ${k}`);
       if (k === 'from' || k === 'to') v = String(v).toUpperCase();
-      if ((k === 'route_id' || k === 'aircraft_id') && !seen.has(String(v))) return [];
+      if (k === 'route_id' || k === 'aircraft_id') {
+        const key = String(v).trim().toUpperCase().replace(/[\u2013\u2014 ]/g, '-');
+        if (!seen.has(String(v))) v = alias.get(key) ?? v;
+        if (!seen.has(String(v))) return drop(`${k} ${String(a[k]).slice(0, 40)} was not in the look-ups`);
+      }
       args[k] = v;
     }
     return [{ title: str(a.title, 120), fn, args, why: str(a.why), effect: str(a.effect, 300), risk: str(a.risk, 600), tag: tag(a.tag) }];
   });
   if (problems.length === 0) throw new Error('The report had no problems in it');
-  return { summary: str(x.summary, 800), problems, actions, missing: str(x.missing, 600) || null };
+  if (actions.length === 0 && dropped.length === 0 && x.actions !== undefined && list(x.actions).length === 0)
+    dropped.push({ title: '', fn: '', reason: `actions came as ${Array.isArray(x.actions) ? 'an empty list' : typeof x.actions}` });
+  return { summary: str(x.summary, 800), problems, actions, missing: str(x.missing, 600) || null, dropped };
 }

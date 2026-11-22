@@ -781,6 +781,19 @@ Owner's decisions (21 Nov 2026): a player pays an in-game fee for advice from Cl
 
 **Fix after the first live test (migration 0031, 22 Nov 2026).** The status card never loaded on the phone: `consultant_status` is read-only (STABLE), so the server runs it in a read-only transaction, but it called `game.actor`, which locks rows, and Postgres refused (HTTP 405). It now checks the owner without locks. The consultant may also be asked in a paused world; a world in setup or one that has ended shows a plain reason. The local app test now calls read-only functions read-only, as the server does, and 4 new checks cover both fixes.
 
+**A world rule (migration 0032, owner's decision 22 Nov 2026).** The founder chooses the consultant with the other rules, and it is fixed once the world is founded (no function changes it); players and, later, the computer-run airlines get the same rule. Every number is (G), in `world_options`:
+
+| Choice | Fee a report |
+|---|---|
+| Off | No consultant ("This world was founded without the consultant") |
+| Free | Nothing booked, nothing refunded; the same limits apply |
+| Standard (default) | 1% of last quarter's revenue, at least Rs 25 lakh |
+| Premium | 3% of last quarter's revenue, at least Rs 1 crore |
+
+Worlds made before 0032 get Standard, written to their own values so a later change of the game's defaults does not move them. Rejected: a success fee (hard to say how much of a gain came from the advice) and a weekly retainer (more to build; can come later).
+
+**The first real report (22 Nov 2026, Air World in Test World)** took 39 seconds, 3 turns and $0.09, and found three sound problems (aircraft cost twice the industry's from two wet-leased aircraft, a 61% load, cash flattered by advance sales) but no actions. Edge function version 2 therefore turns a registration or route code Claude names into the id, asks plainly for actions by id, and keeps every dropped action with its reason (`report.dropped`, shown to admins), so a dropped action is never silent again.
+
 **Tested.** 15 local checks (`checks_20`): who may ask, the fee before and after a quarter, the fee charged, one report at a time, players cannot call the service-only functions, refunds for failed and unfinished reports, every look-up, another airline's route refused, no player-written name in the look-ups, 2 a day, one a quarter, the monthly budget. The app test runs the real edge function under Deno against a stub of Claude (`tools/localstack/claude_stub.mjs`): ask, pay, the report appears, an action with an id Claude never saw is dropped, Do it changes the route's selling way, the playbook is sent cached, and no airline name reaches Claude.
 
 ## 15. Screens
