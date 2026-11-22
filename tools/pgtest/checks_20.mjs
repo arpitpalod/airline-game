@@ -102,6 +102,29 @@ export async function checks20(t) {
   await as(ADMIN);
   await fails('once the month\'s budget is spent, nobody can ask', `select public.consultant_start('${A}')`, /fully booked this month/);
   await as(null);
+
+  // ---------- 0031: the status in a read-only transaction (as the app reads it), paused and setup worlds ----------
+  await q(`update public.consultant_reports set cost_usd = 0 where id = $1`, [s3.report_id]);
+  await as(P);
+  await q(`begin read only`);
+  let ro = null;
+  try { ro = await one(`select public.consultant_status($1)`, [B]); } catch (e) { console.log('   ', e.message); }
+  await q(`rollback`);
+  ok('the status reads in a read-only transaction, as the app calls it (0031)', ro && Number(ro.fee_inr) > 0);
+  await as(null);
+  await q(`update public.worlds set status = 'paused' where id = $1`, [W]);
+  await as(ADMIN);
+  const s4 = await one(`select public.consultant_start($1)`, [A]);
+  await as(null);
+  ok('a paused world may ask (0031)', !!s4.report_id);
+  await q(`select public.consultant_finish($1, false, null, 0, 0, 0, 0, 'test')`, [s4.report_id]);
+  await q(`update public.worlds set status = 'setup' where id = $1`, [W]);
+  await as(ADMIN);
+  const ss = await one(`select public.consultant_status($1)`, [A]);
+  await fails('a world in setup gets a plain reason (0031)', `select public.consultant_start('${A}')`, /opens once the world has started/);
+  await as(null);
+  ok('and the status says so', ss.can_ask === false && /opens once the world has started/.test(ss.reason));
+  await q(`update public.worlds set status = 'running' where id = $1`, [W]);
   await q(`update public.game_params set num = 0 where key = 'consultant_open'`);
   await q(`delete from public.worlds where id = $1`, [W]);
 }
