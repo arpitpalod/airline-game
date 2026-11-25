@@ -336,7 +336,7 @@ with sync_playwright() as p:
     page.locator('.sheet').get_by_role('button', name='Pay').click()
     toast_ok(page, 'Claude is reading your books')
     page.get_by_text('Stub report').wait_for(timeout=30000)
-    expect(page.get_by_text('A made-up aircraft')).to_have_count(0)   # an id Claude was never shown is dropped
+    expect(page.locator('strong', has_text='A made-up aircraft')).to_have_count(0)   # an id Claude was never shown is dropped
     expect(page.get_by_role('button', name='Do it')).to_have_count(2)
     shot(page, 'p13c-consultant')
     page.get_by_role('button', name='Do it').first.click()
@@ -346,6 +346,8 @@ with sync_playwright() as p:
     assert sql("select count(*) from route_plans p join airlines a on a.id = p.airline_id where a.name = 'Tarang Air' and p.strategy = 'fill'") == '1'
     assert sql("select count(*) from transactions t join airlines a on a.id = t.airline_id where a.name = 'Tarang Air' and t.kind = 'consultant'") == '1'
     assert sql("select status || ' ' || tokens_cached || ' ' || (cost_usd > 0) from consultant_reports") == 'done 2600 true'
+    assert sql("select jsonb_array_length(report->'dropped') || ' ' || (report->'dropped'->0->>'reason') from consultant_reports") == '1 aircraft_id 00000000-0000-0000-0000-000000000000 was not in the look-ups'
+    expect(page.get_by_text('Left out: A made-up aircraft')).to_have_count(1)
     stub = [json.loads(l) for l in open('/tmp/claude_stub.log')]
     assert len(stub) == 2 and all(r['headers']['key'] for r in stub)
     assert all(r['body']['system'][0].get('cache_control') for r in stub), 'the playbook is not cached'

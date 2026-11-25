@@ -1,6 +1,7 @@
 // Stand-in for the Claude Messages API, so the consultant edge function can be tested end to end without a key or the
 // internet. Turn 1 asks for the overview, routes and fleet; turn 2 hands in a report that uses the first route and
-// aircraft it was shown. Every request is appended to /tmp/claude_stub.log (one JSON per line) for e2e.py to check.
+// aircraft it was shown (the route by its airport codes, as a model may, to test that the function turns it into the id;
+// and one action with a made-up aircraft, to test that it is dropped). Every request is appended to /tmp/claude_stub.log (one JSON per line) for e2e.py to check.
 // Usage: node claude_stub.mjs   (port 54331, or PORT)
 import http from 'http';
 import fs from 'fs';
@@ -34,7 +35,7 @@ http.createServer((req, res) => {
           { title: 'Thin network', evidence: 'One route carries the whole fleet.', tag: 'Guessing' },
         ],
         actions: [
-          { title: 'Sell this route to fill', fn: 'set_strategy', route_id: route, strategy: 'fill', why: 'Empty seats earn nothing.', effect: 'Rs 1 to 3 lakh a week', risk: 'Fewer passengers early.', tag: 'Likely' },
+          { title: 'Sell this route to fill', fn: 'set_strategy', route_id: `${routes[0]?.from}\u2013${routes[0]?.to}`, strategy: 'fill', why: 'Empty seats earn nothing.', effect: 'Rs 1 to 3 lakh a week', risk: 'Fewer passengers early.', tag: 'Likely' },
           { title: 'Hedge a quarter of fuel', fn: 'set_hedge', share: 0.25, why: 'Shocks cost more than the 2%.', effect: 'Rs 0 to 1 lakh a week', risk: 'Fuel may fall.', tag: 'Guessing' },
           { title: 'A made-up aircraft', fn: 'return_aircraft', aircraft_id: '00000000-0000-0000-0000-000000000000', why: 'x', effect: 'x', risk: 'x', tag: 'Certain' },
         ],

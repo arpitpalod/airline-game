@@ -13,6 +13,7 @@ import { Badge, Button, Field, Icon, Loading, PageHeader, Sheet, Stepper } from 
 const SETTING_NAME: Record<WorldSetting, string> = {
   region: 'Home region', pace: 'Pace', turn: 'Turns', places: 'Places', money: 'Starting money', banks: 'Banks',
   growth: 'Demand growth', seats: 'Seats between countries', shocks: 'Shocks', bots: 'Computer-run airlines',
+  consultant: 'Claude consultant (fixed once founded)',
 };
 
 /** A world's rules as short labels: pace, turns and places from the world itself (they can change), the rest as founded. */
@@ -29,6 +30,7 @@ export function ruleChips(w: World, options: WorldOption[]) {
     label('seats') && `Seats abroad: ${label('seats')}`,
     label('shocks') && `${label('shocks')} shocks`,
     label('bots') && `Rivals: ${label('bots')}`,
+    label('consultant') && `Consultant: ${label('consultant')}`,
   ].filter(Boolean) as string[];
 }
 
@@ -152,7 +154,7 @@ function licenceLine(l: FounderStatus) {
 // ---------- Found a world ----------
 
 const STEP1: WorldSetting[] = ['region', 'pace', 'turn', 'places'];
-const STEP2: WorldSetting[] = ['money', 'banks', 'growth', 'seats', 'shocks', 'bots'];
+const STEP2: WorldSetting[] = ['money', 'banks', 'growth', 'seats', 'shocks', 'bots', 'consultant'];
 
 export function NewWorld() {
   const { ref, startJoin } = useGame();
