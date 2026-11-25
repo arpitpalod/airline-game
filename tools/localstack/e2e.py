@@ -2,7 +2,7 @@
 # world as admin, opens a route, flies days, and uses every player action from the screens. Saves screenshots at
 # phone (390x844) and laptop (1440x900) sizes and fails on any page error or failed action.
 # Usage: python3 e2e.py <app url, e.g. http://localhost:4173/airline-game/> <screenshot dir>
-import json, os, subprocess, sys, time
+import json, os, re, subprocess, sys, time
 from playwright.sync_api import sync_playwright, expect
 
 BASE, OUT = sys.argv[1], sys.argv[2]
@@ -116,6 +116,7 @@ with sync_playwright() as p:
     shot(page, 'p05a-study')
     page.locator('.sheet .choice', has_text='Top fares').click()
     expect(page.locator('.sheet')).to_contain_text('the first flight is in week 14')
+    expect(page.locator('.sheet')).to_contain_text('Launch: stations, sales and marketing')   # 0033: a launch is priced
     page.locator('.sheet').get_by_role('button', name='Open route').click()
     toast_ok(page, 'Route opened')
     page.get_by_text('Put an aircraft on this route').wait_for()
@@ -249,6 +250,8 @@ with sync_playwright() as p:
     print('wet lease')
     go(page, '/market?tab=wet')
     page.get_by_role('button', name='Wet-lease one').nth(1).click()
+    expect(page.locator('.sheet')).to_contain_text('free in this world')   # 0033: wet lessors are few
+    expect(page.locator('.sheet')).to_contain_text('13 weeks from arrival')
     page.get_by_role('button', name='Wet-lease it').click()
     toast_ok(page, 'arrives in week')
 
@@ -312,6 +315,7 @@ with sync_playwright() as p:
     page.locator('.card.link', has_text='Leased').first.click()
     page.get_by_role('button', name='Move to another base').click()
     page.get_by_label('New base').select_option('BOM')
+    expect(page.locator('.sheet')).to_contain_text(re.compile('flies there empty|delivered there at no cost'))   # 0033: a ferry flight
     page.locator('.sheet').get_by_role('button', name='Move', exact=True).click()
     toast_ok(page, 'Moved to')
     page.get_by_role('button', name='Change cabin').click()
@@ -366,10 +370,12 @@ with sync_playwright() as p:
         go(page, '/fleet')
         page.locator('.card.link', has_text='VT-AAA').click()
         page.get_by_role('button', name='End the wet lease').click()
+        expect(page.locator('.sheet')).to_contain_text(re.compile('Nothing more is owed|minimum hours left'))
         page.locator('.sheet').get_by_role('button', name='End the wet lease').click()
         toast_ok(page, 'wet lease has ended')
         go(page, '/network'); page.locator('.list .item.link').first.click()
         page.get_by_role('button', name='Close this route').click()
+        expect(page.locator('.sheet')).to_contain_text('Tickets sold, refunded')   # 0033: refunds and compensation shown first
         page.locator('.sheet').get_by_role('button', name='Close route').click()
         toast_ok(page, 'Route closed')
 

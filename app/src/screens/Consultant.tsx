@@ -169,7 +169,7 @@ function ActionRow({ a, reportId, n }: { a: ConsultantAction; reportId: string; 
     set_strategy: `Sell ${rname} as ${STRAT_SHORT[v.strategy as StrategyKey] ?? v.strategy}`,
     set_rotation: `Fly ${reg ?? 'an aircraft'} ${v.round_trips_a_week} round trips a week on ${rname}`,
     open_route: `Open ${v.from}–${v.to}`,
-    close_route: `Close ${rname} (tickets sold are refunded)`,
+    close_route: `Close ${rname} (tickets sold are refunded, with compensation for flights soon)`,
     set_sell_where: `Sell ${rname}: ${pos.data?.find((x) => x.key === v.where)?.name ?? v.where}`,
     return_aircraft: `Return ${reg ?? 'an aircraft'}`,
     set_hedge: `Hedge ${pct(Number(v.share))} of fuel`,

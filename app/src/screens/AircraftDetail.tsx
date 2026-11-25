@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, useTurnDelta } from '../lib/data';
+import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useQuote, useRoutes, useTurnDelta } from '../lib/data';
 import { aircraftStats, hoursByAircraft } from '../lib/derive';
 import { ageYears, cabinRange, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
 import { arrivalWeek, inr, num, pct, usd, weekOf } from '../lib/format';
@@ -118,8 +118,7 @@ export function AircraftDetail() {
         <Sheet title={returnLabel} onClose={() => setSheet(null)}>
           <div className="stack">
             <p className="small">
-              {terms?.holding === 'lease' && 'The rent for the rest of the lease is owed, up to the deposit you paid. What is left of the deposit comes back. The aircraft goes back to the lessor pool, where a rival can lease it.'}
-              {terms?.holding === 'wet' && 'The wet lease ends from this week. Nothing more is owed.'}
+              {(terms?.holding === 'lease' || terms?.holding === 'wet') && <ReturnCost acId={ac.id} holding={terms.holding} delivering={ac.status === 'delivering'} />}
               {terms?.holding === 'owned' && `It sells at ${pct(ref.param.sale_discount)} of its book value${terms.loan_usd || terms.loan_inr ? ', and the rest of its loan is repaid from the proceeds' : ''}. It goes to the lessor pool.`}
               {' '}Its routes lose this aircraft at once.
             </p>
@@ -132,6 +131,19 @@ export function AircraftDetail() {
       )}
     </div>
   );
+}
+
+// 0033: what giving it back costs, before it is given back
+function ReturnCost({ acId, holding, delivering }: { acId: string; holding: 'lease' | 'wet'; delivering: boolean }) {
+  const q = useQuote<{ fee_inr: number | null; cash_inr: number; deposit_inr?: number; months?: number; gone?: boolean }>('return', acId);
+  const x = q.data;
+  if (!x) return <span className="muted">Working out the cost… </span>;
+  if (x.gone) return null;
+  if (holding === 'wet') {
+    return <>{x.fee_inr ? `A wet lease runs at least 13 weeks from its arrival: ending it now pays the minimum hours left, ${inr(x.fee_inr)}.` : 'The wet lease ends from this week. Nothing more is owed.'} </>;
+  }
+  if (delivering) return <>It has not arrived: the deposit of {inr(x.deposit_inr ?? 0)} is lost. </>;
+  return <>The rent for the rest of the lease is owed, up to {x.months} months: {inr(x.fee_inr ?? 0)}, taken from your deposit of {inr(x.deposit_inr ?? 0)}{x.cash_inr >= 0 ? `, so ${inr(x.cash_inr)} comes back` : `, so ${inr(-x.cash_inr)} more is paid`}. The aircraft goes back to the lessor pool, where a rival can lease it. </>;
 }
 
 function AddToRoute({ acId, onClose, used, markets }: { acId: string; onClose: () => void; used: number; markets?: Record<string, import('../lib/types').Market> }) {
@@ -195,6 +207,7 @@ function MoveBase({ acId, current, hasRoutes, onClose }: { acId: string; current
                 {options.map((b) => <option key={b.iata} value={b.iata}>{ref.airport[b.iata]?.city} ({b.iata})</option>)}
               </select>
             </Field>
+            <FerryCost acId={acId} to={pick} />
             <Button block disabled={hasRoutes || !pick} busy={busy === 'move'} onClick={() => run('move', () => call('rebase_aircraft', {
               p_airline: airline.id, p_aircraft: acId, p_base: pick,
             }), `Moved to ${pick}`).then((x) => x !== undefined && onClose())}>Move</Button>
@@ -203,6 +216,13 @@ function MoveBase({ acId, current, hasRoutes, onClose }: { acId: string; current
       </div>
     </Sheet>
   );
+}
+
+// 0033: one empty flight to the new base
+function FerryCost({ acId, to }: { acId: string; to: string }) {
+  const q = useQuote<{ cost_inr: number; gone?: boolean }>('ferry', acId, to, !!to);
+  if (!to || !q.data || q.data.gone) return null;
+  return <p className="small muted">{q.data.cost_inr > 0 ? `It flies there empty: fuel, crew, maintenance and fees, about ${inr(q.data.cost_inr)}.` : 'It is still on its way, so it is delivered there at no cost.'}</p>;
 }
 
 // Last week: the revenue an aircraft earned and the costs that belong to it. Pilot salaries, head office and

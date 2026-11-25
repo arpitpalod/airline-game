@@ -2,8 +2,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useRivals, useRouteDaily, useRoutes, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
-import { hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
+import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useQuote, useRivals, useRouteDaily, useRoutes, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
+import { cancelRule, hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct, plural, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
@@ -151,6 +151,7 @@ export function RouteDetail() {
                 })}
               </div>
             )}
+            {rots.length > 0 && m && world.selling && <p className="tiny muted" style={{ padding: '0 16px 14px' }}>{cancelRule(ref.param, m.km, route.fare_econ, inr)}</p>}
           </div>
           <StudyCard a={route.origin} b={route.dest} />
           <Button kind="danger" onClick={() => setClosing(true)}>Close this route</Button>
@@ -164,13 +165,27 @@ export function RouteDetail() {
       {closing && (
         <Sheet title="Close this route?" onClose={() => setClosing(false)}>
           <div className="stack">
-            <p className="small">Its aircraft stop flying it from this week and become free for other routes. You can open it again later.</p>
+            <p className="small">Its aircraft stop flying it from this week and become free for other routes. You can open it again later{ref.param.route_launch_inr ? `, for a new launch of ${inr(ref.param.route_launch_inr)}` : ''}.</p>
+            {world.selling && <CloseCost routeId={route.id} />}
             <Button kind="danger-solid" block busy={busy === 'close'} onClick={() => run('close', () => call('close_route', { p_airline: airline.id, p_route: route.id }), 'Route closed').then((r) => {
               if (r !== undefined) nav('/network');
             })}>Close route</Button>
           </div>
         </Sheet>
       )}
+    </div>
+  );
+}
+
+// 0033: what closing costs now: tickets sold are refunded, and flights within the region's notice pay compensation
+function CloseCost({ routeId }: { routeId: string }) {
+  const q = useQuote<{ refund_inr: number; comp_inr: number; notice_days: number }>('close_route', routeId);
+  const x = q.data;
+  if (!x) return <p className="small muted">Working out the refunds…</p>;
+  return (
+    <div className="kv small">
+      <span>Tickets sold, refunded</span><span>{inr(x.refund_inr)}</span>
+      <span>Compensation{x.notice_days ? ` (flights within ${x.notice_days === 1 ? 'a day' : `${x.notice_days} days`})` : ''}</span><span className={x.comp_inr > 0 ? 'bad-ink' : ''}>{x.comp_inr > 0 ? `−${inr(x.comp_inr)}` : 'none'}</span>
     </div>
   );
 }

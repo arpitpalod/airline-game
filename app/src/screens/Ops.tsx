@@ -14,7 +14,7 @@ import { Badge, Button, Loading, PageHeader } from '../components/ui';
 // ---------- cost lines ----------
 const LINES: { key: string; name: string; color: string; lever: string; to?: string; usd?: boolean; of: (d: AirlineDaily) => number }[] = [
   { key: 'fuel', name: 'Fuel', color: '#0E7C70', lever: 'Fuel hedging · operating style', to: '/ops/fuel', of: (d) => d.c_fuel },
-  { key: 'aircraft', name: 'Aircraft', color: '#4FA59A', lever: 'Lease or buy, in Get aircraft', to: '/market', usd: true, of: (d) => d.c_rent + d.c_depr },
+  { key: 'aircraft', name: 'Aircraft', color: '#4FA59A', lever: 'Lease or buy, in Get aircraft · insurance included', to: '/market', usd: true, of: (d) => d.c_rent + d.c_depr + Number(d.c_insurance ?? 0) },
   { key: 'maintenance', name: 'Maintenance', color: '#9AD0C7', lever: 'Maintenance strategy', to: '/ops/maintenance', usd: true, of: (d) => d.c_maint },
   { key: 'crew', name: 'Crew', color: '#1E5AA8', lever: 'Hired for you · operating style', to: '/ops/style', of: (d) => d.c_crew },
   { key: 'airports', name: 'Airports and slots', color: '#7FA7DD', lever: 'Set by your routes', to: '/network', of: (d) => d.c_airport + d.c_slots },
@@ -24,9 +24,12 @@ const LINES: { key: string; name: string; color: string; lever: string; to?: str
 
 const sum = (xs: AirlineDaily[], f: (d: AirlineDaily) => number) => xs.reduce((s, d) => s + f(d), 0);
 
-/** 13 weeks of a bill (fuel, or dollar costs in rupees) under a hedged share h if prices move by s: the hedged part at
- *  today's price plus the premium. */
-export const hedgeBill = (fuelWeek: number, h: number, s: number, premium: number) => 13 * fuelWeek * ((1 - h) * (1 + s) + h * (1 + premium));
+/** 13 weeks of a bill (fuel, or dollar costs in rupees) under a hedged share h if prices move by s from today's: the hedged
+ *  part at the price a hedge locks, as a multiple of today's (0033: the price expected in 13 weeks, premium included). */
+export const hedgeBill = (fuelWeek: number, h: number, s: number, lock: number) => 13 * fuelWeek * ((1 - h) * (1 + s) + h * lock);
+/** what a hedge bought now locks, as a multiple of today's price */
+const fuelLock = (p: OpsPreview) => (p.fuel_lock && p.fuel_price ? p.fuel_lock / p.fuel_price : 1 + p.hedge_premium);
+const usdLock = (p: OpsPreview) => (p.usd.lock && p.usd.rate ? p.usd.lock / p.usd.rate : 1 + p.usd.premium);
 
 export interface Decision { key: string; tone: 'warn' | 'info'; tag: string; title: string; body: ReactNode; to?: string; action?: { label: string; run: () => void; busy?: boolean }; alt?: string }
 
@@ -47,10 +50,10 @@ export function useOpsDecisions(): Decision[] {
   const cur = p.styles.find((s) => s.key === p.style);
   if (shock >= 0.1 && p.hedge_share < max - 1e-9 && cur && cur.fuel_week > 0) {
     const next = Math.min(max, p.hedge_share + step);
-    const b = (h: number, s: number) => inr(hedgeBill(cur.fuel_week, h, s, p.hedge_premium));
+    const b = (h: number, s: number) => inr(hedgeBill(cur.fuel_week, h, s, fuelLock(p)));
     out.push({ key: 'fuel', tone: 'warn', tag: 'Fuel', title: `Fuel is ${pct(shock)} above normal`,
       body: <>
-        <p className="small">You hedge {pct(p.hedge_share)}. Hedging more now locks today's high price for 13 weeks, starting in 13 weeks: it pays if the shock lasts and costs if it ends.</p>
+        <p className="small">You hedge {pct(p.hedge_share)}. Hedging more now locks ₹{(p.fuel_lock ?? p.fuel_price).toFixed(0)} a kg for fuel 13 weeks ahead: the price expected then, as shocks fade, plus the premium. It pays if the shock lasts and costs if it ends sooner.</p>
         <div className="kv small" style={{ marginTop: 6 }}>
           <span>13 weeks of fuel, if prices stay</span><span>{b(p.hedge_share, 0)} at {pct(p.hedge_share)} · {b(next, 0)} at {pct(next)}</span>
           <span>if they rise 20% more</span><span>{b(p.hedge_share, 0.2)} · {b(next, 0.2)}</span>
@@ -68,7 +71,7 @@ export function useOpsDecisions(): Decision[] {
   const usdWeek = (p.usd?.week_usd ?? 0) * world.fx_inr_usd;
   if (p.usd && weak >= 0.05 && p.usd.share < p.usd.max - 1e-9 && usdWeek > 0) {
     const next = Math.min(p.usd.max, p.usd.share + p.usd.step);
-    const b = (h: number, s: number) => inr(hedgeBill(usdWeek, h, s, p.usd.premium));
+    const b = (h: number, s: number) => inr(hedgeBill(usdWeek, h, s, usdLock(p)));
     out.push({ key: 'usd', tone: 'warn', tag: 'Currency', title: `The rupee is ${pct(weak)} weaker than ₹${fxRef}`,
       body: <>
         <p className="small">Your dollar costs (aircraft, maintenance, dollar loans) are about {inr(usdWeek)} a week, and you hedge {pct(p.usd.share)}. Hedging more locks today's rate for 13 weeks, starting in 13 weeks: it pays if the rupee weakens further and costs if it recovers.</p>
@@ -310,13 +313,13 @@ export function OpsFuel() {
   const booked = p.hedges.filter((h) => h.share > 0);
   const wNow = weekOf(world.game_day + 1);
   const rows = [[-0.2, 'fall 20%', '#4FA59A'], [0, 'stay', 'var(--accent)'], [0.2, 'rise 20%', '#F0A04B']] as const;
-  const bills = rows.map(([s]) => hedgeBill(fuelWeek, share, s, p.hedge_premium));
-  const top = hedgeBill(fuelWeek, 0, 0.2, p.hedge_premium) || 1;
+  const bills = rows.map(([s]) => hedgeBill(fuelWeek, share, s, fuelLock(p)));
+  const top = Math.max(hedgeBill(fuelWeek, 0, 0.2, fuelLock(p)), hedgeBill(fuelWeek, share, 0.2, fuelLock(p))) || 1;
   const blurb = (h: number) => (h === 0 ? 'Pay the market price every week. Cheapest when fuel falls; shocks hit in full.'
     : h <= 0.25 ? 'Takes the edge off a shock.' : h <= 0.5 ? "Half of each week's fuel bought ahead: steadier costs." : 'Most of the bill fixed 13 weeks ahead. Costly if prices fall.');
   return (
     <div className="stack-lg">
-      <PageHeader title="Fuel hedging" back="/ops" sub={`Buy part of each week's fuel ${p.hedge_lead_weeks} weeks ahead, at that week's price plus ${pct(p.hedge_premium)}. It evens out shocks, and costs a little when prices fall.`} />
+      <PageHeader title="Fuel hedging" back="/ops" sub={`Buy part of each week's fuel ${p.hedge_lead_weeks} weeks ahead, at the price expected then plus ${pct(p.hedge_premium)}. It evens out shocks, and costs a little when prices fall.`} />
       <div className="split">
         <div className="stack-lg">
           <div className="card stack" style={{ gap: 8 }}>
@@ -326,6 +329,7 @@ export function OpsFuel() {
             </div>
             <div className="kv small">
               <span>Fuel charge in fares</span><span>{Math.abs((world.fare_index ?? 1) - 1) < 0.001 ? 'none' : `${(world.fare_index ?? 1) > 1 ? '+' : '−'}${pct(Math.abs((world.fare_index ?? 1) - 1), 1)} on every fare`}</span>
+              {p.fuel_lock != null && <><span>A hedge bought now locks</span><span>₹{p.fuel_lock.toFixed(0)} a kg (expected ₹{(p.fuel_expected ?? 0).toFixed(0)}, plus {pct(p.hedge_premium)})</span></>}
               <span>Already bought</span><span>{booked.length ? `weeks ${booked[0].week} to ${booked[booked.length - 1].week}` : 'nothing yet'}</span>
               {booked.length > 0 && <><span>at an average of</span><span>₹{(booked.reduce((s, h) => s + h.price, 0) / booked.length).toFixed(0)} a kg</span></>}
               <span>Hedge result last week</span><span className={sum(week, (d) => d.hedge_inr) >= 0 ? 'good' : 'bad-ink'}>{signed(sum(week, (d) => d.hedge_inr))}</span>
@@ -378,14 +382,14 @@ export function OpsDollar() {
   const booked = u.bought.filter((h) => h.share > 0);
   const wNow = weekOf(world.game_day + 1);
   const rows = [[-0.05, 'gains 5%', '#4FA59A'], [0, 'stays', 'var(--accent)'], [0.05, 'loses 5%', '#F0A04B'], [0.1, 'loses 10%', '#D9644A']] as const;
-  const bills = rows.map(([s]) => hedgeBill(usdWeek, share, s, u.premium));
-  const top = hedgeBill(usdWeek, 0, 0.1, u.premium) || 1;
+  const bills = rows.map(([s]) => hedgeBill(usdWeek, share, s, usdLock(p)));
+  const top = Math.max(hedgeBill(usdWeek, 0, 0.1, usdLock(p)), hedgeBill(usdWeek, share, 0.1, usdLock(p))) || 1;
   const blurb = (h: number) => (h === 0 ? 'Buy dollars at the going rate every week. Cheapest when the rupee strengthens; a fall hits in full.'
     : h <= 0.25 ? 'Takes the edge off a fall.' : h <= 0.5 ? "Half of each week's dollars bought ahead: steadier costs." : 'Most of the dollar bill fixed 13 weeks ahead. Costly if the rupee recovers.');
   const res = (xs: typeof days) => sum(xs, (d) => d.usd_hedge_inr ?? 0);
   return (
     <div className="stack-lg">
-      <PageHeader title="Dollar hedging" back="/ops" sub={`Aircraft rent, maintenance and dollar loans are paid in dollars; your fares are in rupees. Buy part of each week's dollars ${p.hedge_lead_weeks} weeks ahead, at that week's rate plus ${pct(u.premium)}.`} />
+      <PageHeader title="Dollar hedging" back="/ops" sub={`Aircraft rent, maintenance and dollar loans are paid in dollars; your fares are in rupees. Buy part of each week's dollars ${p.hedge_lead_weeks} weeks ahead, at the rate expected then plus ${pct(u.premium)}.`} />
       <div className="split">
         <div className="stack-lg">
           <div className="card stack" style={{ gap: 8 }}>
@@ -395,6 +399,7 @@ export function OpsDollar() {
             </div>
             <div className="kv small">
               <span>Your dollar costs</span><span>{u.week_usd > 0 ? `${usd(u.week_usd)} a week (${inr(usdWeek)})` : 'none yet'}</span>
+              {u.lock != null && <><span>A hedge bought now locks</span><span>₹{u.lock.toFixed(2)} a dollar (expected ₹{(u.expected ?? 0).toFixed(2)}, plus {pct(u.premium)})</span></>}
               <span>Already bought</span><span>{booked.length ? `weeks ${booked[0].week} to ${booked[booked.length - 1].week}` : 'nothing yet'}</span>
               {booked.length > 0 && <><span>at an average of</span><span>₹{(booked.reduce((s0, h) => s0 + h.rate, 0) / booked.length).toFixed(2)} a dollar</span></>}
               <span>Hedge result last week</span><span className={res(week) >= 0 ? 'good' : 'bad-ink'}>{signed(res(week))}</span>

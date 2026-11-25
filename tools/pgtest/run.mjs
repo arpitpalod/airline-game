@@ -25,6 +25,7 @@ import { checks18 } from './checks_18.mjs';
 import { checks19 } from './checks_19.mjs';
 import { checks20 } from './checks_20.mjs';
 import { checks21 } from './checks_21.mjs';
+import { checks22 } from './checks_22.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -99,9 +100,19 @@ const w9Params = (await db.query(`select key, num::float from public.game_params
 await db.exec(`update public.game_params set num = case key when 'overhead_min_share' then 1 else 0 end
   where key in ('overhead_min_share', 'bot_concentrate', 'bot_defend_share');`);
 
+// 0033: every action priced, region rules. Checks written before it run with the old prices: no compensation for an
+// airline's own cancellations, no interest on cash, insurance or tax, leases broken for the deposit, free launches and
+// ferry flights, unlimited wet leases at the full rate, hedges at today's price, computer-run airlines as before.
+const W10 = { cancel_comp_1_inr: 0, cancel_comp_2_inr: 0, cancel_comp_3_inr: 0, cancel_fare_share: 0, cash_interest_year: 0,
+  insurance_year: 0, tax_rate: 0, restart_score_mult: 0, lease_break_months: 3, route_launch_inr: 0, ferry_on: 0,
+  wet_per_place: 999, wet_min_weeks: 0, wet_starter_mult: 2.2, hedge_expected: 0, bot_from_pool: 0, bot_equal_rules: 0 };
+const w10Params = (await db.query(`select key, num::float from public.game_params where key = any($1)`, [Object.keys(W10)])).rows;
+for (const [k, v] of Object.entries(W10)) await db.query(`update public.game_params set num = $1 where key = $2`, [v, k]);
+await db.query(`delete from public.world_params where key = any($1)`, [Object.keys(W10).concat(['cash_interest_year', 'tax_rate'])]);
+
 let failed = 0;
 const t = {
-  db, freshTestWorld, weekParams, y1Params, z5Params, w8Params, w9Params,
+  db, freshTestWorld, weekParams, y1Params, z5Params, w8Params, w9Params, w10Params,
   q: async (s, p) => (await db.query(s, p)).rows,
   one: async (s, p) => Object.values((await db.query(s, p)).rows[0])[0],
   ok(name, cond, detail = '') { if (!cond) failed++; console.log(cond ? '  pass' : '  FAIL', name, detail); },
@@ -136,5 +147,6 @@ await checks18(t);
 await checks19(t);
 await checks20(t);
 await checks21(t);
+await checks22(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

@@ -28,7 +28,7 @@ export function Money() {
   const days = daily.data ?? [];
   const sel = days.filter((d) => d.game_day > world.game_day - Number(period));
   const s = sumDaily(sel);
-  const line = (k: keyof AirlineDaily) => sel.reduce((a, d) => a + (d[k] as number), 0);
+  const line = (k: keyof AirlineDaily) => sel.reduce((a, d) => a + Number(d[k] ?? 0), 0);
   const mktLakh = mkt ?? Math.round((row.marketing_inr_day * 7) / 1e5);   // set by the day in the database, shown by the week
   const mine = (q.data ?? []).filter((x) => x.airline_id === airline.id).slice(0, 4);
   const amt = Math.round(Number(amount) * 1e7);
@@ -37,7 +37,7 @@ export function Money() {
     <div className="stack-lg">
       <PageHeader title="Money" sub="Cash, borrowing and results" />
       <div className="grid4-d">
-        <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} tone={f && f.cash_inr < 0 ? 'bad' : undefined} />
+        <Kpi label="Cash" value={f ? inr(f.cash_inr) : '…'} tone={f && f.cash_inr < 0 ? 'bad' : undefined} note={ref.param.cash_interest_year ? `earns ${pct(ref.param.cash_interest_year)} a year` : undefined} />
         <Kpi label="Borrowed" value={f ? inr(f.debt_inr) : '…'} note={`at ${pct(ref.param.interest_year)} a year`} />
         <Kpi label="Credit left" value={f ? inr(f.credit_limit_inr - f.debt_inr) : '…'} note={f ? `of ${inr(f.credit_limit_inr)}` : ''} />
         <Kpi label="Seats sold" value={s.ask ? pct(s.rpk / s.ask) : '–'} note={period === '7' ? 'last week' : `last ${weeks(Number(period))}`} />
@@ -60,10 +60,12 @@ export function Money() {
                   <tr><td>Tickets</td><td className="r">{inr(line('rev_ticket'))}</td></tr>
                   <tr><td><a href="#/extras">Extras (bags, seats, meals)</a></td><td className="r">{inr(line('rev_anc'))}</td></tr>
                   <tr><td className="strong">Revenue</td><td className="r strong">{inr(s.revenue)}</td></tr>
-                  {COST_LINES.map((c) => { const v = line(c.key); return v ? <tr key={c.key}><td className="muted">{c.label}</td><td className="r muted">−{inr(v).replace('−', '')}</td></tr> : null; })}
+                  {COST_LINES.map((c) => { const v = sel.reduce((a, d) => a + c.of(d), 0); return Math.round(v) ? <tr key={c.key}><td className="muted">{c.label}</td><td className="r muted">−{inr(v).replace('−', '')}</td></tr> : null; })}
                   <tr><td className="strong">Operating profit</td><td className={`r strong ${s.opProfit >= 0 ? 'good' : 'bad'}`}>{inr(s.opProfit, { sign: true })} · {s.revenue ? pct(s.opProfit / s.revenue) : '–'}</td></tr>
-                  <tr><td className="muted">Interest</td><td className="r muted">{line('c_interest') ? `−${inr(line('c_interest'))}` : inr(0)}</td></tr>
-                  <tr><td className="strong">Profit after interest</td><td className={`r strong ${s.netProfit >= 0 ? 'good' : 'bad'}`}>{inr(s.netProfit, { sign: true })}</td></tr>
+                  <tr><td className="muted">Interest paid</td><td className="r muted">{line('c_interest') ? `−${inr(line('c_interest'))}` : inr(0)}</td></tr>
+                  {line('i_cash') > 0 && <tr><td className="muted">Interest on cash, at {pct(ref.param.cash_interest_year ?? 0)} a year</td><td className="r muted">+{inr(line('i_cash'))}</td></tr>}
+                  {line('c_tax') > 0 && <tr><td className="muted">Tax on the quarter's profit, at {pct(ref.param.tax_rate ?? 0)}</td><td className="r muted">−{inr(line('c_tax'))}</td></tr>}
+                  <tr><td className="strong">Profit after interest and tax</td><td className={`r strong ${s.netProfit >= 0 ? 'good' : 'bad'}`}>{inr(s.netProfit, { sign: true })}</td></tr>
                 </tbody>
               </table>
             )}
@@ -76,7 +78,7 @@ export function Money() {
             )}
           </div>
           <div className="card">
-            <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest</span></div>
+            <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest and tax</span></div>
             <ProfitBars points={byWeek(days).map((w) => ({ day: w.week, v: w.netProfit }))} />
           </div>
           </>}
@@ -137,7 +139,7 @@ export function Money() {
 }
 
 // Cash flow by week (selling worlds): tickets are paid for when sold, so cash and profit part ways.
-const CASH_COSTS: (keyof AirlineDaily)[] = ['c_fuel', 'c_crew', 'c_maint', 'c_airport', 'c_rent', 'c_slots', 'c_dist', 'c_marketing', 'c_overhead', 'c_interest', 'loan_repaid'];
+const CASH_COSTS: (keyof AirlineDaily)[] = ['c_fuel', 'c_crew', 'c_maint', 'c_airport', 'c_rent', 'c_slots', 'c_dist', 'c_marketing', 'c_overhead', 'c_interest', 'loan_repaid', 'c_insurance'];
 function CashFlow({ days, txns }: { days: AirlineDaily[]; txns: Txn[] }) {
   const { world } = useGame();
   const aw = useAirlineWeeks();
@@ -150,9 +152,12 @@ function CashFlow({ days, txns }: { days: AirlineDaily[]; txns: Txn[] }) {
     const sum = (k: keyof AirlineDaily) => ds.reduce((s, d) => s + Number(d[k] ?? 0), 0);
     const sales = a?.sales_inr ?? 0;
     const extras = sum('rev_anc');
-    const refunds = (a?.refunds_inr ?? 0) + (a?.comp_inr ?? 0) + sum('refunds_inr');
-    const costs = CASH_COSTS.reduce((s, k) => s + sum(k), 0);
-    const other = txns.filter((x) => weekOf(Math.max(1, x.game_day)) === w && x.kind !== 'denied_boarding').reduce((s, x) => s + Number(x.amount_inr), 0);
+    // 0033: compensation for cancelled flights comes as one-off payments; it counts with refunds here
+    const wkTx = txns.filter((x) => weekOf(Math.max(1, x.game_day)) === w);
+    const cancelComp = -wkTx.filter((x) => x.kind === 'cancellation').reduce((s, x) => s + Number(x.amount_inr), 0);
+    const refunds = (a?.refunds_inr ?? 0) + (a?.comp_inr ?? 0) + sum('refunds_inr') + cancelComp;
+    const costs = CASH_COSTS.reduce((s, k) => s + sum(k), 0) - sum('i_cash');
+    const other = wkTx.filter((x) => x.kind !== 'denied_boarding' && x.kind !== 'cancellation').reduce((s, x) => s + Number(x.amount_inr), 0);
     return { sales, extras, refunds, costs, other, net: sales + extras - refunds - costs + other, advance: a?.advance_inr ?? null };
   };
   const data = cols.map((w) => ({ w, ...wk(w) }));
@@ -171,8 +176,8 @@ function CashFlow({ days, txns }: { days: AirlineDaily[]; txns: Txn[] }) {
               {row('Tickets sold', 'sales')}
               {row('Extras', 'extras')}
               {row('Refunds and compensation', 'refunds', true)}
-              {row('Running costs and interest', 'costs', true)}
-              {row('Aircraft, deposits and other', 'other')}
+              {row('Running costs, less interest earned', 'costs', true)}
+              {row('Aircraft, deposits, tax and other', 'other')}
               {row('Net cash', 'net', false, true)}
               <tr><td className="muted">Advance sales at the end</td>{data.map((d) => <td key={d.w} style={{ whiteSpace: 'nowrap' }} className="r muted">{d.advance != null ? inr(d.advance) : '–'}</td>)}</tr>
             </tbody>

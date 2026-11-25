@@ -81,6 +81,14 @@ export const useWorldOptions = () =>
   useQuery({ queryKey: ['world_options'], staleTime: 600_000,
     queryFn: () => rows<WorldOption>(supabase.from('world_options').select('*').order('setting').order('sort')) });
 
+/** What an action would cost before it is taken (public.price_quote, 0033): 'return' and 'ferry' for an aircraft (ferry to
+ *  the base in text), 'close_route' for a route, 'wet' for the wet lessors of a type (in text). */
+export function useQuote<T = Record<string, number | null>>(kind: 'return' | 'ferry' | 'close_route' | 'wet', id?: string | null, text?: string | null, enabled = true) {
+  const { world, airline } = useGame();
+  return useQuery({ queryKey: ['w', world.id, 'quote', airline.id, kind, id ?? '', text ?? '', world.game_day], enabled,
+    queryFn: () => call<T>('price_quote', { p_airline: airline.id, p_kind: kind, p_id: id ?? null, p_text: text ?? null }) });
+}
+
 /** Seats between countries in this world (0028), with the playing airline's own. */
 export function useSeatRoom() {
   const { world, airline } = useGame();
