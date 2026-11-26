@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useQuote, useRivals, useRouteDaily, useRoutes, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
 import { cancelRule, hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
-import { maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
+import { cannotFly, maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct, plural, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
@@ -221,20 +221,19 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
   const { ref, airline } = useGame();
   const turnDelta = useTurnDelta();
   const { run, busy } = useAction();
-  // each aircraft's room on this route: round trips a week that fit its free hours, or none if the route is beyond its range
-  const outOfRange = (a: FleetItem) => {
-    const tt = ref.type[a.type_id];
-    return km > Math.round(tt.range_km * Math.min(1.1, 1 - (0.4 * (a.seats_econ + a.seats_biz - tt.ref_seats)) / tt.ref_seats));
-  };
-  const roomOf = (a: FleetItem) => (outOfRange(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0, turnDelta));
+  // each aircraft's room on this route: round trips a week that fit its free hours, or none where it cannot fly the route
+  // (a runway too short at either end, or beyond its range), shown before it is chosen rather than refused after
+  const blocked = (a: FleetItem) => cannotFly(ref.type[a.type_id], a.seats_econ + a.seats_biz, ends.map((x) => ref.airport[x]), km);
+  const roomOf = (a: FleetItem) => (blocked(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0, turnDelta));
   const candidates = fleet.filter((a) => !already.has(a.id) && a.base_iata && ends.includes(a.base_iata) && ['active', 'delivering', 'grounded', 'refit'].includes(a.status))
     .sort((x, y) => Number(roomOf(y) > 0) - Number(roomOf(x) > 0));
   const others = fleet.filter((a) => !already.has(a.id) && !(a.base_iata && ends.includes(a.base_iata)) && a.status !== 'returned');
   const [pick, setPick] = useState<string | null>(candidates.find((a) => roomOf(a) > 0)?.id ?? null);
   const ac = candidates.find((a) => a.id === pick);
   const t = ac ? ref.type[ac.type_id] : null;
-  const max = ac && t ? maxWeekly(t, ac, km, hours[ac.id] ?? 0, turnDelta) : 0;
-  const tooFar = ac && t ? km > Math.round(t.range_km * Math.min(1.1, 1 - (0.4 * (ac.seats_econ + ac.seats_biz - t.ref_seats)) / t.ref_seats)) : false;
+  const max = ac ? roomOf(ac) : 0;
+  const noFlyer = candidates.length > 0 && candidates.every((a) => blocked(a));
+  const shortEnd = ends.map((x) => ref.airport[x]).find((ap) => ap?.runway_class === 1);
   const [trips, setTrips] = useState<number | null>(null);
   const tv = trips ?? Math.min(max, 14);
   return (
@@ -252,7 +251,7 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                   const tt = ref.type[a.type_id];
                   const free = Math.max(0, weekHours(tt) - (hours[a.id] ?? 0));
                   const room = roomOf(a);
-                  const far = outOfRange(a);
+                  const no = blocked(a);
                   return (
                     <div key={a.id} className={`item ${room > 0 ? 'link' : 'off'} ${a.id === pick ? 'me' : ''}`} aria-disabled={room === 0}
                       onClick={() => { if (room > 0) { setPick(a.id); setTrips(null); } }}>
@@ -260,11 +259,11 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                         <div className="strong">{a.reg} · {tt.name}</div>
                         <div className="tiny muted">{a.seats_econ + a.seats_biz} seats · {STATUS_LABEL[a.status]} · {num(free)} of {num(weekHours(tt))} hours a week free</div>
                         <div className={`small ${room > 0 ? '' : 'bad-ink'}`} style={{ marginTop: 2 }}>
-                          {far ? 'This route is beyond its range' : room > 0 ? `Room for ${plural(room, 'round trip')} a week here` : 'No room: not enough free hours for one round trip here'}
+                          {no ? no.why : room > 0 ? `Room for ${plural(room, 'round trip')} a week here` : 'No room: not enough free hours for one round trip here'}
                         </div>
                       </div>
                       <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>
-                        {room === 0 && <Badge tone="bad">{far ? 'Too far' : 'Full'}</Badge>}
+                        {room === 0 && <Badge tone="bad">{no ? no.badge : 'Full'}</Badge>}
                         {a.terms?.holding === 'wet' && <Badge tone="warn">Wet lease</Badge>}
                       </div>
                     </div>
@@ -272,9 +271,9 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                 })}
               </div>
             </div>
+            {noFlyer && <div className="card warn small">None of these aircraft can fly this route.{shortEnd ? ` ${shortEnd.city} takes turboprops only: lease or order an ATR 72 in Get aircraft.` : ''}</div>}
             {ac && t && (
-              tooFar ? <div className="card warn small">This route is beyond {ac.reg}'s range with its current cabin.</div>
-                : max === 0 ? <div className="card warn small">{ac.reg} has no free hours left. Take it off another route first.</div>
+              max === 0 ? <div className="card warn small">{ac.reg} has no free hours left. Take it off another route first.</div>
                   : (
                     <div className="field">
                       <label>Round trips a week (up to {max})</label>
@@ -283,7 +282,7 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                     </div>
                   )
             )}
-            <Button block disabled={!ac || max === 0 || tooFar} busy={busy === 'assign'} onClick={() => run('assign', () => call('set_rotation', {
+            <Button block disabled={!ac || max === 0} busy={busy === 'assign'} onClick={() => run('assign', () => call('set_rotation', {
               p_airline: airline.id, p_aircraft: ac!.id, p_route: routeId, p_weekly_trips: tv,
             }), `${ac!.reg} will fly ${tv} round trips a week`).then((r) => r !== undefined && onClose())}>Assign</Button>
           </>

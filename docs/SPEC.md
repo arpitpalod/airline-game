@@ -891,9 +891,15 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 
 25. Lease length (14.20). Owner, 21 Nov 2026: anything from 6 to 12 years, which can be random. To design: the lease term today is 2 years (728 days) and renews at the market rent.
 
-26. Home regions other than India (14.22): each needs its airports, markets, traffic and computer-run airlines as data, and its own currency and fuel price. One region at a time, after the playtest.
+26. Home regions other than India (14.22): each needs its airports, markets, traffic and computer-run airlines as data, and its own currency and fuel price. One region at a time, after the playtest. Owner's rule (26 Nov 2026): a world has one home region, and every airline in it is founded and opens bases in that region only; its routes may still fly abroad.
 
 27. Settled 21 Nov 2026 (14.23): worlds parts 2 and 3, the four new shocks and seats between countries. Engine deliveries (spare engines late, so engine events last longer) were left out: late aircraft carry the lesson.
+
+28. In-game QA (26 Nov 2026, the app played at phone size against the local stack to week 20): actions the app offers and the server then refuses, and advice that misleads. Fixed: aircraft that cannot fly a route (a runway too short at either end, or beyond range) show why and cannot be picked, on the route's Put an aircraft sheet and the aircraft's Add to a route sheet (`cannotFly` in `app/src/lib/game.ts`, the checks of `set_rotation`). Open, awaiting the owner:
+    - Refused after tapping: room on a route ignores the free seats between countries (offered 15 round trips, 2 allowed); orders, leases, bases, the hangar, launches and studies do not compare their cost with the cash in hand (refused with "Not enough cash"); Borrow takes more than the credit line, Repay works with nothing owed; Close this base shows when aircraft or routes still use it; route search finds nothing across the Domestic and International tabs ("Dubai" in Domestic); opening a route to a turboprop-only airport costs the launch with no aircraft able to fly it.
+    - Advice that misleads: a new rotation defaults to 14 round trips whatever the demand (Delhi–Kullu: about 30 travellers a week, 1,008 seats); "Too empty" blames fares where seats far outnumber travellers; Ranks says the first ranks come on day 91 (they come at week 26) and its score line leaves out administrations; a locked maintenance contract still reads "Change any time".
+    - Costs not shown before acting (principle 8): the lease sheet has no lease length or early-return cost; the wet-lease cards lack the 13-week minimum and the lessors free; a wet lease's terms lack its minimum end; give-back buttons do not carry their cost.
+    - Wording: "Wet-lease a A320neo", "1 aircraft are wet-leased", "1 players", "84.9 weeks" (weeks are whole), unformatted seat counts and "Rs 238.93 crore" in refusals, "-60%" with a hyphen, Home's "after interest" against Money's "after interest and tax".
 
 **Sources for (V) figures**
 

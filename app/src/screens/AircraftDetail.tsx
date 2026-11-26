@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useQuote, useRoutes, useTurnDelta } from '../lib/data';
 import { aircraftStats, hoursByAircraft } from '../lib/derive';
-import { ageYears, cabinRange, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
+import { ageYears, cabinRange, cannotFly, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
 import { arrivalWeek, inr, num, pct, usd, weekOf } from '../lib/format';
 import { useAction } from '../components/toast';
 import { Badge, Bar, Button, Empty, Field, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
@@ -156,10 +156,13 @@ function AddToRoute({ acId, onClose, used, markets }: { acId: string; onClose: (
   const t = ref.type[ac.type_id];
   const taken = new Set((net.data?.rotations ?? []).filter((r) => r.aircraft_id === acId).map((r) => r.route_id));
   const options = (net.data?.routes ?? []).filter((r) => !taken.has(r.id) && ac.base_iata && [r.origin, r.dest].includes(ac.base_iata));
-  const [pick, setPick] = useState<string | null>(options[0]?.id ?? null);
+  // routes it cannot fly (a runway too short, or beyond its range) show why, and cannot be picked
+  const blocked = (o: { origin: string; dest: string }) =>
+    cannotFly(t, ac.seats_econ + ac.seats_biz, [ref.airport[o.origin], ref.airport[o.dest]], markets?.[pairKey(o.origin, o.dest)]?.km ?? 0);
+  const [pick, setPick] = useState<string | null>(options.find((o) => !blocked(o))?.id ?? null);
   const r = options.find((x) => x.id === pick);
   const km = r ? markets?.[pairKey(r.origin, r.dest)]?.km ?? 0 : 0;
-  const max = r ? maxWeekly(t, ac, km, used, turnDelta) : 0;
+  const max = r && !blocked(r) ? maxWeekly(t, ac, km, used, turnDelta) : 0;
   const [trips, setTrips] = useState<number | null>(null);
   const tv = trips ?? Math.min(max, 14);
   return (
@@ -168,12 +171,19 @@ function AddToRoute({ acId, onClose, used, markets }: { acId: string; onClose: (
         {options.length === 0 ? <div className="card warn small">You have no other open route from {ac.base_iata}. Open one on the Network screen.</div> : (
           <>
             <div className="card flush"><div className="list">
-              {options.map((o) => (
-                <div key={o.id} className={`item link ${o.id === pick ? 'me' : ''}`} onClick={() => { setPick(o.id); setTrips(null); }}>
-                  <span className="grow">{ref.airport[o.origin]?.city} – {ref.airport[o.dest]?.city}</span>
-                  <span className="tiny muted">{num(markets?.[pairKey(o.origin, o.dest)]?.km)} km</span>
-                </div>
-              ))}
+              {options.map((o) => {
+                const no = blocked(o);
+                return (
+                  <div key={o.id} className={`item ${no ? 'off' : 'link'} ${o.id === pick ? 'me' : ''}`} aria-disabled={!!no}
+                    onClick={() => { if (!no) { setPick(o.id); setTrips(null); } }}>
+                    <div className="grow">
+                      <div>{ref.airport[o.origin]?.city} – {ref.airport[o.dest]?.city}</div>
+                      {no && <div className="small bad-ink">{no.why}</div>}
+                    </div>
+                    {no ? <Badge tone="bad">{no.badge}</Badge> : <span className="tiny muted">{num(markets?.[pairKey(o.origin, o.dest)]?.km)} km</span>}
+                  </div>
+                );
+              })}
             </div></div>
             {r && (max === 0 ? <div className="card warn small">No free hours left for this route. Take it off another route first.</div> : (
               <Field label={`Round trips a week (up to ${max})`}>
