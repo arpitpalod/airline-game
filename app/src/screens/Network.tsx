@@ -169,14 +169,17 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
   const launchShort = useShort(ref.param.route_launch_inr ?? 0);
   const fleet = useFleet();
 
-  // a search looks in both tabs: a destination typed is found wherever it is, domestic or international
-  const options = useMemo(() => Object.values(markets ?? {})
+  // a search looks in both tabs: a destination typed is found wherever it is, domestic or international. Routes the
+  // airline already flies from this base are left out (the owner, 26 Nov 2026); a search that finds only those says so.
+  const matches = useMemo(() => Object.values(markets ?? {})
     .filter((m) => m.a === base || m.b === base)
     .map((m) => ({ m, other: m.a === base ? m.b : m.a }))
     .filter(({ other }) => ref.airport[other] && ref.airport[other].opens_day <= world.game_day + 1)
     .filter(({ m }) => !!q || (scope === 'intl') === m.intl)
     .filter(({ other }) => !q || `${ref.airport[other].city} ${other} ${ref.airport[other].country}`.toLowerCase().includes(q.toLowerCase()))
     .sort((x, y) => marketTotal(y.m) - marketTotal(x.m)), [markets, base, q, scope, ref.airport, world.game_day]);
+  const options = matches.filter(({ other }) => !flying.has(pairKey(base, other)));
+  const flownHits = q ? matches.filter(({ other }) => flying.has(pairKey(base, other))).map(({ other }) => ref.airport[other].city) : [];
   // no aircraft of the airline's (in hand or on order) can use a turboprop-only airport: say so before the launch is paid
   const turboOnly = dest ? [base, dest].map((x) => ref.airport[x]).find((ap) => ap?.runway_class === 1) : undefined;
   const canLand = (fleet.data ?? []).some((x) => x.status !== 'returned' && ref.type[x.type_id]?.runway_class === 1);
@@ -245,21 +248,22 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
             <Seg value={scope} onChange={setScope} options={[{ value: 'india', label: 'Domestic' }, { value: 'intl', label: 'International' }]} />
           </div>
           <div className="search"><Icon name="search" /><input className="input" placeholder="Search city or code" value={q} onChange={(e) => setQ(e.target.value)} /></div>
-          <p className="tiny muted">Sorted by potential travellers. Busy routes earn more but draw more rivals.</p>
+          <p className="tiny muted">Sorted by potential travellers; routes you already fly are left out. Busy routes earn more but draw more rivals.</p>
           <div className="card flush" style={{ maxHeight: '50dvh', overflowY: 'auto' }}>
             <div className="list">
               {options.map(({ m: mk, other }) => (
                 <div key={other} className="item link" onClick={() => { setDest(other); setFare(null); }}>
                   <div className="num strong" style={{ width: 40 }}>{other}</div>
                   <div className="grow">
-                    <div>{ref.airport[other].city}{q && mk.intl && <span className="tiny muted"> · international</span>}{flying.has(pairKey(base, other)) && <span className="tiny muted"> · flying</span>}</div>
+                    <div>{ref.airport[other].city}{q && mk.intl && <span className="tiny muted"> · international</span>}</div>
                     <div className="tiny muted">{num(mk.km)} km · about {num(marketTotal(mk) * world.demand_scale * 7)} a week · {inr(mk.ref_fare)}</div>
                   </div>
                   {ref.airport[other].runway_class === 1 && <Badge tone="warn">ATR only</Badge>}
                   <Icon name="right" />
                 </div>
               ))}
-              {options.length === 0 && <div className="item small muted">{q ? `No market links ${ref.airport[base]?.city} with "${q}".` : 'No destinations match.'}</div>}
+              {options.length === 0 && <div className="item small muted">{flownHits.length ? `You already fly ${ref.airport[base]?.city} to ${flownHits.join(', ')}: it is on your Network.`
+                : q ? `No market links ${ref.airport[base]?.city} with "${q}".` : 'You already fly every route from here.'}</div>}
             </div>
           </div>
         </div>
