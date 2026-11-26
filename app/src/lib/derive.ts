@@ -5,10 +5,12 @@ import type { AircraftDaily, AirlineDaily, Market, Rotation, Route, RouteDaily }
 
 export function dailyRevenue(d: AirlineDaily) { return d.rev_ticket + d.rev_anc; }
 export function dailyOpCost(d: AirlineDaily) {
-  return d.c_fuel + d.c_crew + d.c_maint + d.c_airport + d.c_rent + d.c_slots + d.c_dist + d.c_marketing + d.c_overhead + d.c_other + d.c_depr;
+  return d.c_fuel + d.c_crew + d.c_maint + d.c_airport + d.c_rent + d.c_slots + d.c_dist + d.c_marketing + d.c_overhead + d.c_other + d.c_depr
+    + Number(d.c_insurance ?? 0);
 }
 export function dailyOpProfit(d: AirlineDaily) { return dailyRevenue(d) - dailyOpCost(d); }
-export function dailyNetProfit(d: AirlineDaily) { return dailyOpProfit(d) - d.c_interest; }
+/** Profit after interest paid and earned, and tax (0033) */
+export function dailyNetProfit(d: AirlineDaily) { return dailyOpProfit(d) - d.c_interest + Number(d.i_cash ?? 0) - Number(d.c_tax ?? 0); }
 
 export interface Sum { pax: number; ask: number; rpk: number; revenue: number; opCost: number; opProfit: number; netProfit: number; days: number; flights: number; cancelled: number }
 export function sumDaily(ds: AirlineDaily[]): Sum {
@@ -65,12 +67,30 @@ export function windowShare(ac: FleetItem, hours: number, ref: Ref) {
   return hours / weekHours(ref.type[ac.type_id]);
 }
 
-export const COST_LINES: { key: keyof AirlineDaily; label: string }[] = [
-  { key: 'c_fuel', label: 'Fuel' }, { key: 'c_rent', label: 'Aircraft rent' }, { key: 'c_crew', label: 'Crew' },
-  { key: 'c_maint', label: 'Maintenance' }, { key: 'c_airport', label: 'Airport and navigation' }, { key: 'c_slots', label: 'Slots' },
-  { key: 'c_dist', label: 'Sales, service and free extras' }, { key: 'c_marketing', label: 'Marketing' }, { key: 'c_overhead', label: 'Head office and bases' },
-  { key: 'c_depr', label: 'Depreciation' }, { key: 'c_other', label: 'Other' },
+export const COST_LINES: { key: string; label: string; of: (d: AirlineDaily) => number }[] = [
+  { key: 'c_fuel', label: 'Fuel', of: (d) => d.c_fuel }, { key: 'c_rent', label: 'Aircraft rent', of: (d) => d.c_rent },
+  { key: 'c_crew', label: 'Crew', of: (d) => d.c_crew }, { key: 'c_maint', label: 'Maintenance', of: (d) => d.c_maint },
+  { key: 'c_airport', label: 'Airport and navigation', of: (d) => d.c_airport }, { key: 'c_slots', label: 'Slots', of: (d) => d.c_slots },
+  { key: 'c_dist', label: 'Sales, service and free extras', of: (d) => d.c_dist }, { key: 'c_marketing', label: 'Marketing', of: (d) => d.c_marketing },
+  { key: 'c_overhead', label: 'Head office and bases', of: (d) => d.c_overhead }, { key: 'c_depr', label: 'Depreciation', of: (d) => d.c_depr },
+  { key: 'c_insurance', label: 'Insurance', of: (d) => Number(d.c_insurance ?? 0) },
+  { key: 'c_comp', label: 'Compensation for cancelled flights', of: (d) => Number(d.c_comp ?? 0) },
+  { key: 'c_other', label: 'Launches, ferry flights and other', of: (d) => d.c_other - Number(d.c_comp ?? 0) },
 ];
+
+/** What a traveller gets in this world when the airline cancels a flight they bought within the region's notice (0033):
+ *  by distance band, capped at a multiple of the fare, plus a share of the fare. */
+export function cancelComp(p: Record<string, number>, km: number, fare: number) {
+  const band = km <= (p.cancel_km_1 ?? 0) ? p.cancel_comp_1_inr : km <= (p.cancel_km_2 ?? 0) ? p.cancel_comp_2_inr : p.cancel_comp_3_inr;
+  return Math.min(band ?? 0, (p.cancel_cap_fare_mult ?? 1) * Math.max(0, fare)) + (p.cancel_fare_share ?? 0) * Math.max(0, fare);
+}
+/** The region's rule in a few words, for the screens where flights are cut. */
+export function cancelRule(p: Record<string, number>, km: number, fare: number, inr: (x: number) => string) {
+  const c = cancelComp(p, km, fare);
+  const days = p.cancel_notice_days ?? 0;
+  if (c <= 0) return 'Travellers on flights you take off are refunded; this region asks no compensation.';
+  return `Travellers on flights you take off are refunded, and those flying within ${days === 1 ? 'a day' : `${days} days`} are also paid about ${inr(c)} each.`;
+}
 
 // Unit economics of a route over a period: revenue and cost (flying costs plus the aircraft cost it carries) per seat-km,
 // and the load factor at which revenue would just cover that cost at today's fares. Pilot salaries, head office and

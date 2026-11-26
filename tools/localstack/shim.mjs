@@ -222,6 +222,7 @@ const server = http.createServer(async (req, res) => {
     }
     return send(404, { message: `not in the shim: ${req.method} ${p}` });
   } catch (e) {
+    console.error('shim error', req.method, req.url, e.message);
     return send(e.status || 400, { message: e.message, code: e.code || 'P0001', details: e.detail || null, hint: e.hint || null });
   }
 });

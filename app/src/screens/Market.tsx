@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useAircraftMarket, useBases, useGame, usePool, useTxns } from '../lib/data';
+import { useAircraftMarket, useBases, useGame, usePool, useQuote, useTxns } from '../lib/data';
 import { ageYears, poolRentUsd } from '../lib/game';
 import { arrivalLabel, inr, num, usd, weeks } from '../lib/format';
 import type { Aircraft } from '../lib/types';
@@ -224,12 +224,17 @@ function WetSheet({ typeId, onClose }: { typeId: string; onClose: () => void }) 
   const nav = useNavigate();
   const def = useDefaultBase(typeId);
   const [base, setBase] = useState('');
+  const room = useQuote<{ free: number; max: number; min_weeks: number }>('wet', null, typeId).data;   // 0033: few wet lessors
   return (
     <Sheet title={`Wet-lease a ${ref.type[typeId].name}`} onClose={onClose}>
       <div className="stack">
         <p className="small">Use a wet lease to fill a gap while a leased or new aircraft is on its way, then end it. It cannot be refitted.</p>
+        {room && <div className="kv small">
+          <span>Wet lessors' {ref.type[typeId].name}s free in this world</span><span className={room.free === 0 ? 'bad-ink' : ''}>{room.free} of {room.max}</span>
+          <span>Shortest lease</span><span>{room.min_weeks} weeks from arrival: ending sooner pays the minimum hours left</span>
+        </div>}
         <BasePicker typeId={typeId} value={base || def} onChange={setBase} />
-        <Button block busy={busy === 'wet'} onClick={() => run('wet', () => call<{ reg: string; arrives_day: number }>('wet_lease', {
+        <Button block disabled={room?.free === 0} busy={busy === 'wet'} onClick={() => run('wet', () => call<{ reg: string; arrives_day: number }>('wet_lease', {
           p_airline: airline.id, p_type: typeId, p_base: base || def,
         }), (r) => `${r.reg} arrives in ${arrivalLabel(r.arrives_day, world.start_date)}.`).then((r) => r && nav('/fleet'))}>Wet-lease it</Button>
         <Badge tone="warn">Costs about twice an operating lease</Badge>

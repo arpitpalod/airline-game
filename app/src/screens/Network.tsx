@@ -78,7 +78,7 @@ export function Network() {
             <div className="row wrap">
               {baseIatas.map((b) => <Badge key={b} tone="accent">{ref.airport[b]?.city} ({b})</Badge>)}
             </div>
-            <p className="small muted" style={{ marginTop: 10 }}>Aircraft live at a base and every route starts at one. Another base costs {inr(ref.param.base_open_inr)} to open plus {inr(ref.param.base_fixed_inr_day * 7)} a week. Tap an Indian airport on the map to open one.</p>
+            <p className="small muted" style={{ marginTop: 10 }}>Aircraft live at a base and every route starts at one. Another base costs {inr(ref.param.base_open_inr)} to open plus {inr(ref.param.base_fixed_inr_day * 7)} a week. Tap an Indian airport on the map to open one, or a base to close it.</p>
           </div>
         </div>
       </div>
@@ -123,6 +123,13 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
             <Button key={b} block onClick={() => onRoute(b, iata)}>Open route from {b} · {num(m.km)} km</Button>
           );
         })}
+        {isBase && bases.length > 1 && (
+          <Button block kind="danger" busy={busy === 'close-base'}
+            onClick={() => run('close-base', () => call('close_base', { p_airline: airline.id, p_iata: iata }), `The base at ${a.city} is closed`).then((r) => r !== undefined && onClose())}>
+            Close this base · saves {inr(ref.param.base_fixed_inr_day * 7)} a week
+          </Button>
+        )}
+        {isBase && bases.length > 1 && <p className="tiny muted">Move or return the aircraft based here, and close the routes that start here, first. The opening cost is not refunded.</p>}
         {!isBase && a.is_india && !opensLater && (
           <Button block kind="secondary" busy={busy === 'base'}
             onClick={() => run('base', () => call('open_base', { p_airline: airline.id, p_iata: iata }), `${a.city} is now a base`).then((r) => r !== undefined && onClose())}>
@@ -174,6 +181,7 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
             <span>Potential travellers a week, each way</span><span>about {num(marketTotal(m) * world.demand_scale * 7)}</span>
             <span>Of whom on business</span><span>{pct(m.n_biz / marketTotal(m))}</span>
             <span>Reference fare</span><span>{inr(m.ref_fare)}</span>
+            {ref.param.route_launch_inr > 0 && <><span>Launch: stations, sales and marketing</span><span>{inr(ref.param.route_launch_inr)}, once</span></>}
           </div>
           {ref.airport[dest].runway_class === 1 && <div className="card warn small">{ref.airport[dest].city} takes turboprops only: only an ATR 72 can fly this route.</div>}
           {flying.has(pairKey(base, dest)) && <div className="card warn small">You already fly this route.</div>}
@@ -206,7 +214,7 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
                 return rid;
               }, 'Route opened. Now put an aircraft on it: its flights go on sale this week.');
               if (id) { onClose(); nav(`/route/${id}?assign=1`); }
-            }}>Open route</Button>
+            }}>{ref.param.route_launch_inr > 0 ? `Open route · ${inr(ref.param.route_launch_inr)}` : 'Open route'}</Button>
           </div>
         </div>
       ) : (

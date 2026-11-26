@@ -82,7 +82,9 @@ export interface RouteWeek {
   noshow: number | null; denied: number | null; comp: number | null; flown_e: number | null; flown_b: number | null;
   rev_flown_e: number | null; rev_flown_b: number | null; strategy: StrategyKey | null;
 }
-export interface AirlineWeek { airline_id: string; week: number; sales_inr: number; refunds_inr: number; comp_inr: number; advance_inr: number }
+export interface AirlineWeek { airline_id: string; week: number; sales_inr: number; refunds_inr: number; comp_inr: number; advance_inr: number;
+  /** 0033: compensation for flights cut within the region's notice, and those flights */
+  cancel_comp_inr?: number; cut_flights?: number }
 export interface MarketWatch { route_id: string; airline_id: string; a: string; b: string; week: number; fare_e: number | null; fare_b: number | null; trips: number; seats: number }
 export interface MarketMove { id: number; a: string; b: string; week: number; airline_id: string; kind: 'enter' | 'leave' | 'fare_up' | 'fare_down' | 'more_flights' | 'fewer_flights'; old_value: number | null; new_value: number | null }
 
@@ -106,6 +108,8 @@ export interface AirlineDaily {
   fuel_kg: number; hedge_inr: number; groundings: number;
   /** 0026: dollar-linked costs in dollars and as booked, what dollar hedging saved, and the effect of the rupee against Rs 90 */
   usd_cost_usd: number; usd_cost_inr: number; usd_hedge_inr: number; fx_effect_inr: number;
+  /** 0033: hull insurance, interest earned on cash, tax (on a quarter's last day), compensation for cancellations (also in c_other) */
+  c_insurance?: number; i_cash?: number; c_tax?: number; c_comp?: number;
 }
 
 export interface Txn { id: number; airline_id: string; game_day: number; kind: string; amount_inr: number; pnl_inr: number; note: string }
@@ -173,7 +177,9 @@ export interface OpsPreview {
   day: number; aircraft: number; avg_age: number; plan: MaintPlan['key']; plan_next: MaintPlan['key'] | null; plan_next_day: number | null;
   locked_until: number; style: OpStyle['key']; hedge_share: number; fuel_price: number; fuel_normal: number;
   hedge_premium: number; hedge_lead_weeks: number; hedges: { week: number; share: number; price: number }[];
-  usd: { share: number; rate: number; ref: number; premium: number; step: number; max: number; week_usd: number;
+  /** 0033: the price expected in 13 weeks, and what a hedge bought now locks (premium included) */
+  fuel_expected?: number; fuel_lock?: number;
+  usd: { share: number; rate: number; ref: number; premium: number; step: number; max: number; week_usd: number; expected?: number; lock?: number;
          bought: { week: number; share: number; rate: number }[] };
   plans: { key: MaintPlan['key']; cost_week: number; fixed_week: number; groundings_qtr: number; days_qtr: number; otp_delta: number;
            lock_weeks: number; setup_inr: number; setup_weeks: number }[];
