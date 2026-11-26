@@ -29,7 +29,8 @@ export function Network() {
 
   const stats = useMemo(() => Object.fromEntries(routes.map((r) => [r.id, routeStat(rd.data ?? [], r.id, from7)])), [routes, rd.data, from7]);
   const mapRoutes = routes.map((r) => ({ key: r.id, a: r.origin, b: r.dest, tone: lfTone(stats[r.id]?.lf ?? null) }));
-  const visibleAirports = ref.airports.filter((a) => a.opens_day <= world.game_day + 91);
+  const region = world.rules?.region ?? 'india';   // a world shows only the airports seen in its region (0035)
+  const visibleAirports = ref.airports.filter((a) => a.opens_day <= world.game_day + 91 && (a.seen_in ?? ['india']).includes(region));
 
   return (
     <div className="stack-lg">

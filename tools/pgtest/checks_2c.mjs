@@ -64,7 +64,7 @@ export async function checks2c(t) {
       where al.is_ai and al.world_id = $1 and least(r.origin, r.dest) = m.a and greatest(r.origin, r.dest) = m.b
         and exists (select 1 from public.rotations ro where ro.route_id = r.id)) n
     from public.markets m join public.airports pa on pa.iata = m.a join public.airports pb on pb.iata = m.b
-    where not m.intl and pa.opens_day = 0 and pb.opens_day = 0 order by m.n_biz + m.n_lei + m.n_bud desc limit 8`, [W]);
+    where m.zone = 'india' and pa.opens_day = 0 and pb.opens_day = 0 order by m.n_biz + m.n_lei + m.n_bud desc limit 8`, [W]);
   ok('they fly every one of the eight busiest domestic routes from day 1', trunks.every((r) => r.n >= 1), trunks.map((r) => `${r.mkt} ${r.n}`).join(', '));
   const lone = await rd(RP, 1);
   ok('a player pricing Delhi-Mumbai at twice the reference fare no longer fills up', lone.flights === 6 && lone.pax_econ < 0.1 * lone.seats_econ,
