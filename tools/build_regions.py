@@ -1,8 +1,10 @@
 """Airports and traffic for the home regions outside India (spec 14.28).
 
-Usage: python3 -I tools/build_regions.py <ourairports airports.csv> <ourairports runways.csv> [out.sql]
+Usage: python3 -I tools/build_regions.py <ourairports airports.csv> <ourairports runways.csv> [out.sql [refresh]]
 
-Without out.sql it prints the calibration report only.
+Without out.sql it prints the calibration report only. With 'refresh' it writes a whole data migration that updates
+every airport outside India and rebuilds every market outside India (refused if a route flies one); without it, the
+airport part of 0035 (the first build).
 
 Inputs (supabase/seed): airports_world.csv (new airports, and figures for the foreign airports already in the
 game), regions_model.csv (road/rail cut-off, distance decay and coverage per home region; the 'intl' row is for
@@ -245,20 +247,56 @@ if len(sys.argv) <= 3:
     report()
     sys.exit(0)
 
+MARKETS_SQL = """
+insert into public.markets (a, b, km, intl, n_biz, n_lei, n_bud, ref_fare)
+select f.a, f.b, round(x.km)::int, p.country <> q.country,
+       round((f.n * x.sb)::numeric, 1), round((f.n * (1 - x.sb) * x.sl)::numeric, 1),
+       round((f.n * (1 - x.sb) * (1 - x.sl))::numeric, 1),
+       (round((game.param('ref_fare_fixed') + game.param('ref_fare_per_km') * x.km) / 10) * 10)::int
+  from region_flows f
+  join public.airports p on p.iata = f.a
+  join public.airports q on q.iata = f.b
+  cross join lateral (select game.haversine_km(p.lat::float8, p.lon::float8, q.lat::float8, q.lon::float8) as km,
+                             0.08 + 0.27 * (p.biz_idx + q.biz_idx)::float8 / 2 as sb,
+                             0.30 + 0.45 * greatest(p.tour_idx, q.tour_idx)::float8 as sl) x;
+drop table region_flows;
+
+update public.airports ap set seen_in = coalesce(s.regions, '{}')
+  from public.airports a0
+  left join (select x, array_agg(distinct r order by r) as regions
+               from (select iata as x, home as r from public.airports where home is not null
+                     union
+                     select e.x, o.home from (select a as x, b as y from public.markets union all select b, a from public.markets) e
+                       join public.airports o on o.iata = e.y where o.home is not null) z
+              group by x) s on s.x = a0.iata
+ where ap.iata = a0.iata;
+"""
 q = lambda s: "'" + str(s).replace("'", "''") + "'"
 nl = lambda s: q(s) if s not in (None, '') else 'null'
 out = open(sys.argv[3], 'w')
 w_ = out.write
 new = [x for x in A.values() if x['new']]
 old = [x for x in A.values() if not x['new']]
-w_("insert into public.airports (iata,city,country,region,is_india,lat,lon,pax_m,pax_src,intl_share,od_share,home,biz_idx,tour_idx,slot_cap,runway_class) values\n")
-w_(",\n".join(f"({q(x['iata'])},{q(x['city'])},{q(x['country'])},{q(x['zone'])},false,{x['lat']:.4f},{x['lon']:.4f},{x['pax']},{q(x['src'])},"
-              f"{x['intl']},{x['od']},{nl(x['home'])},{x['biz']},{x['tour']},{x['slot'] or 'null'},{x['rwy']})" for x in new) + ";\n\n")
-w_("update public.airports a set pax_m = v.pax_m, pax_src = v.pax_src, intl_share = v.intl_share, od_share = v.od_share, home = v.home,\n"
-   "  region = v.region\nfrom (values\n")
-w_(",\n".join(f"({q(x['iata'])},{x['pax']}::numeric,{q(x['src'])},{x['intl']}::numeric,{x['od']}::numeric,{nl(x['home'])},{q(x['zone'])})" for x in old))
-w_(") v (iata, pax_m, pax_src, intl_share, od_share, home, region)\nwhere a.iata = v.iata and not a.is_india;\n\n")
-w_("create temp table region_flows (a text, b text, n float8);\ninsert into region_flows (a, b, n) values\n")
-w_(",\n".join(f"({q(a)},{q(b)},{n:.2f})" for (a, b), n in sorted(markets.items())) + ";\n")
+REFRESH = len(sys.argv) > 4 and sys.argv[4] == 'refresh'
+if not REFRESH:   # the first build (0035): new airports, and figures for the older foreign ones
+    w_("insert into public.airports (iata,city,country,region,is_india,lat,lon,pax_m,pax_src,intl_share,od_share,home,biz_idx,tour_idx,slot_cap,runway_class) values\n")
+    w_(",\n".join(f"({q(x['iata'])},{q(x['city'])},{q(x['country'])},{q(x['zone'])},false,{x['lat']:.4f},{x['lon']:.4f},{x['pax']},{q(x['src'])},"
+                  f"{x['intl']},{x['od']},{nl(x['home'])},{x['biz']},{x['tour']},{x['slot'] or 'null'},{x['rwy']})" for x in new) + ";\n\n")
+    w_("update public.airports a set pax_m = v.pax_m, pax_src = v.pax_src, intl_share = v.intl_share, od_share = v.od_share, home = v.home,\n"
+       "  region = v.region\nfrom (values\n")
+    w_(",\n".join(f"({q(x['iata'])},{x['pax']}::numeric,{q(x['src'])},{x['intl']}::numeric,{x['od']}::numeric,{nl(x['home'])},{q(x['zone'])})" for x in old))
+    w_(") v (iata, pax_m, pax_src, intl_share, od_share, home, region)\nwhere a.iata = v.iata and not a.is_india;\n\n")
+    w_("create temp table region_flows (a text, b text, n float8);\ninsert into region_flows (a, b, n) values\n")
+    w_(",\n".join(f"({q(a)},{q(b)},{n:.2f})" for (a, b), n in sorted(markets.items())) + ";\n")
+else:             # a refresh: new figures for every airport outside India, and every market outside India rebuilt
+    w_("update public.airports a set pax_m = v.pax_m, pax_src = v.pax_src, intl_share = v.intl_share, od_share = v.od_share\nfrom (values\n")
+    w_(",\n".join(f"({q(x['iata'])},{x['pax']}::numeric,{q(x['src'])},{x['intl']}::numeric,{x['od']}::numeric)" for x in A.values()))
+    w_(") v (iata, pax_m, pax_src, intl_share, od_share)\nwhere a.iata = v.iata and not a.is_india;\n\n")
+    w_("do $$ begin\n  if exists (select 1 from public.routes r join public.airports o on o.iata = r.origin join public.airports d on d.iata = r.dest\n"
+       "             where not o.is_india and not d.is_india) then\n    raise exception 'A route flies a market outside India: rebuild it by hand';\n  end if;\nend $$;\n")
+    w_("delete from public.markets m where not exists (select 1 from public.airports x where x.iata in (m.a, m.b) and x.is_india);\n\n")
+    w_("create temp table region_flows (a text, b text, n float8);\ninsert into region_flows (a, b, n) values\n")
+    w_(",\n".join(f"({q(a)},{q(b)},{n:.2f})" for (a, b), n in sorted(markets.items())) + ";\n")
+    w_(MARKETS_SQL)
 out.close()
-print(f"wrote {len(new)} new airports, {len(old)} updated, {len(markets)} markets to {sys.argv[3]}")
+print(f"wrote {'a refresh of ' + str(len(A)) + ' airports' if REFRESH else str(len(new)) + ' new airports, ' + str(len(old)) + ' updated'}, {len(markets)} markets to {sys.argv[3]}")
