@@ -22,6 +22,16 @@ export function cabinRange(t: AircraftType, seats: number) {
   return Math.round(t.range_km * Math.min(1.1, 1 - (0.4 * (seats - t.ref_seats)) / t.ref_seats));
 }
 
+/** Why an aircraft cannot fly a route, checked as set_rotation checks it, or null: a runway too short at either end,
+ *  then the route beyond its range with this cabin. */
+export function cannotFly(t: AircraftType, seats: number, ends: ({ city: string; runway_class: number } | undefined)[], km: number) {
+  const short = ends.find((ap) => ap && ap.runway_class < t.runway_class);
+  if (short) return { badge: 'Runway', why: short.runway_class === 1 ? `${short.city} takes turboprops only` : `${short.city}'s runway is too short for it` };
+  const reach = cabinRange(t, seats);
+  if (km > reach) return { badge: 'Too far', why: `Beyond its range: ${reach.toLocaleString('en-IN')} km with this cabin` };
+  return null;
+}
+
 export function crewFor(seats: number) {
   return Math.ceil(seats / 50);
 }
