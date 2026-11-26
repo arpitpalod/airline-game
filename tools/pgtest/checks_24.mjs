@@ -13,6 +13,11 @@ export async function checks24(t) {
       biz_idx, tour_idx, slot_cap, runway_class, opens_day), ';' order by iata)) h from public.airports where is_india`))[0];
   ok("India's 93 airports are exactly as before", ia.n === 93 && ia.h === 'b9719ea10087af8afcaebc5a651924df', JSON.stringify(ia));
 
+  const src = (await q(`select count(*) filter (where pax_src = 'V')::int v, count(*) filter (where pax_src = 'G')::int g
+      from public.airports where not is_india`))[0];
+  ok('245 airports outside India carry published figures (0036), 95 stay estimates', src.v === 245 && src.g === 95, JSON.stringify(src));
+  const atl = await one(`select pax_m from public.airports where iata = 'ATL'`);
+  ok('Atlanta has its published figure (FAA 2025 boardings x 2)', Number(atl) === 102.9, atl);
   const fa = (await q(`select count(*)::int n, count(*) filter (where mass is null)::int new,
       count(*) filter (where pax_m is null or intl_share is null or od_share is null)::int gaps from public.airports where not is_india`))[0];
   ok('340 airports outside India, 271 of them new, every one with passengers and shares', fa.n === 340 && fa.new === 271 && fa.gaps === 0, JSON.stringify(fa));
@@ -29,7 +34,7 @@ export async function checks24(t) {
       count(*) filter (where zone is distinct from (select case when x.home = y.home then x.home end from public.airports x, public.airports y
                                                     where x.iata = m.a and y.iata = m.b))::int wrong_zone
       from public.markets m`))[0];
-  ok('25,690 new markets; zones set (India domestic 4,278)', mk.other === 25690 && mk.india_dom === 4278 && mk.wrong_zone === 0, JSON.stringify(mk));
+  ok('25,683 markets outside India (0036); zones set (India domestic 4,278)', mk.other === 25683 && mk.india_dom === 4278 && mk.wrong_zone === 0, JSON.stringify(mk));
   const pairs = await q(`select a || '-' || b p, round(n_biz + n_lei + n_bud) n from public.markets
      where (a, b) in (('JFK','LHR'), ('BCN','MAD'), ('JED','RUH'), ('PEK','SHA'), ('CPT','JNB'), ('BOG','MDE'), ('YUL','YYZ'), ('IST','SAW'))
      order by 1`);
@@ -66,6 +71,6 @@ export async function checks24(t) {
   const after = (await q(indiaMarkets))[0];
   const other = await one(`select count(*)::int from public.markets m where not exists (select 1 from public.airports x where x.iata in (m.a, m.b) and x.is_india)
      and n_biz + n_lei + n_bud > 0`);
-  ok("rebuilding India's markets gives the same markets and keeps the other regions'", after.h === im.h && other === 25690, `${after.h} ${other}`);
+  ok("rebuilding India's markets gives the same markets and keeps the other regions'", after.h === im.h && other === 25683, `${after.h} ${other}`);
   await q('rollback');
 }
