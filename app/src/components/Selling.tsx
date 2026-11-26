@@ -5,6 +5,7 @@ import { call } from '../lib/api';
 import { useGame, useMarketsFrom, useMarketWatch, usePosOptions, useRivals, useRoutePlans, useRoutes, useRouteWeeks, useSectorInsights, useSellWhere, useStrategies, useWorldAirlines } from '../lib/data';
 import { clock, pairKey } from '../lib/game';
 import { BAND_LABEL, bandOf, practice, practiceInput, routeIndex, SHAPE_LABEL, shapeOf, verdict } from '../lib/insights';
+import { demandWeek, seatsDwarf } from '../lib/derive';
 import { currentWeek, inr, num, pct, realTime, weekLabel } from '../lib/format';
 import type { MarketMove, PosKey, PosOption, Route, RouteWeek, StrategyKey } from '../lib/types';
 import { useAction } from './toast';
@@ -247,7 +248,10 @@ function SeatMap({ seats, filled }: { seats: number; filled: number }) {
 
 /** The last flown weeks in plain words: a typical flight of the latest week as a seat map with its story, then each week. */
 export function LastFlights({ route }: { route: Route }) {
+  const { world, ref } = useGame();
   const weeks = useRouteWeeks(route.id);
+  const mk = useMarketsFrom([route.origin]);
+  const want = demandWeek(mk.data?.[pairKey(route.origin, route.dest)], world.demand_scale);
   const flown = (weeks.data ?? []).filter((w) => w.flown_e != null).sort((a, b) => b.week - a.week).slice(0, 6);
   if (!flown.length) return null;
   const w0 = flown[0];
@@ -257,6 +261,8 @@ export function LastFlights({ route }: { route: Route }) {
   const empty = Math.max(0, pf.seats - pf.flown);
   const story = v0.kind === 'full'
     ? `Seats went cheap early, so about ${num(pf.turned)} travellers a flight found none left. Late travellers pay the most: higher fares earlier, such as Top fares, would have kept seats for them.`
+    : v0.kind === 'empty' && seatsDwarf(v0.seats, want)
+      ? `Only about ${num(want)} travellers a week each way want to fly ${ref.airport[route.origin]?.city ?? route.origin}–${ref.airport[route.dest]?.city ?? route.dest}, with every airline, and you offered ${num(v0.seats)} seats. No fare fills that: fly fewer flights, use a smaller aircraft, or move the aircraft to a busier route.`
     : v0.kind === 'empty'
       ? `Fares stayed high while the flights sold slowly, so about ${num(empty)} seats a flight flew empty. An empty seat earns nothing once the plane leaves: lower fares earlier, such as Fill every seat, would have filled some. So would fewer flights or a smaller aircraft.`
       : 'About right: few empty seats and few travellers turned away. A good flight sits between the two mistakes.';

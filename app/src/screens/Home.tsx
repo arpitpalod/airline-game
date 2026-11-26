@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { call, rows, supabase } from '../lib/api';
 import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useDemandEvents, useEvents, useFinance, useFleet, useGame, useMarketsFrom, useNews, usePilots, useRivals, useRouteDaily, useRoutePlans, useRoutes, useStrategies } from '../lib/data';
 import { effectText, touches, upcomingEvents } from '../lib/events';
-import { byWeek, routeStat, sumDaily } from '../lib/derive';
+import { byWeek, demandWeek, routeStat, seatsDwarf, sumDaily } from '../lib/derive';
 import { clock, pairKey } from '../lib/game';
 import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, realTime, weekLabel, weekOf, weeks } from '../lib/format';
 import type { Route } from '../lib/types';
@@ -34,7 +34,7 @@ export function Home() {
   const rots = net.data?.rotations ?? [];
   const endpoints = routes.flatMap((r) => [r.origin, r.dest]);
   const rivals = useRivals(endpoints);
-  useMarketsFrom(bases.data?.map((b) => b.iata) ?? []);
+  const mkts = useMarketsFrom(bases.data?.map((b) => b.iata) ?? []);
   const { run, busy } = useAction();
   const nav = useNavigate();
   const [menu, setMenu] = useState(false);
@@ -103,8 +103,11 @@ export function Home() {
         action: world.selling ? undefined : { label: `Raise fare 5% to ${inr(fare)}`, busy: busy === `f${r.id}`,
           run: () => run(`f${r.id}`, () => call('set_fares', { p_airline: airline.id, p_route: r.id, p_fare_econ: fare, p_fare_biz: r.fare_biz }), `Fare on ${name} is now ${inr(fare)} from this week`) } });
     } else if (s.lf != null && s.lf < 0.6 && s.days >= 3) {
+      const want = demandWeek(mkts.data?.[pairKey(r.origin, r.dest)], world.demand_scale);
       alerts.push({ key: `e${r.id}`, tone: 'warn', to: `/route/${r.id}`, title: `${name} is ${pct(s.lf)} full`,
-        body: `Empty seats cost almost as much as full ones. Try ${world.selling ? 'Fill every seat' : 'a lower fare'}, fewer flights, or a smaller aircraft.` });
+        body: seatsDwarf(s.seats / 2 * (7 / Math.max(1, s.days)), want)
+          ? `Only about ${num(want)} travellers a week each way want this route, with every airline, and you offer ${num(s.seats / 2 * (7 / Math.max(1, s.days)))} seats. No fare fills that: fly fewer flights, use a smaller aircraft, or move it to a busier route.`
+          : `Empty seats cost almost as much as full ones. Try ${world.selling ? 'Fill every seat' : 'a lower fare'}, fewer flights, or a smaller aircraft.` });
     }
     const theirs = (rivals.data?.[pairKey(r.origin, r.dest)] ?? []).filter((x) => x.route.airline_id !== airline.id && x.weekly > 0);
     const cheapest = theirs.sort((a, b) => a.route.fare_econ - b.route.fare_econ)[0];
@@ -210,7 +213,7 @@ export function Home() {
         <div className="stack-lg">
           <ComingUp />
           <div className="card">
-            <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest, last 12 weeks</span></div>
+            <div className="card-title"><h2>Profit by week</h2><span className="small muted">after interest and tax, last 12 weeks</span></div>
             {daily.isLoading ? <Loading /> : <ProfitBars points={wk.map((w) => ({ day: w.week, v: w.netProfit }))} />}
             {week.days > 0 && <p className="small muted" style={{ marginTop: 8 }}>Last week: {inr(week.revenue)} revenue, {inr(week.netProfit, { sign: true })} profit.</p>}
           </div>

@@ -32,6 +32,8 @@ export function Money() {
   const mktLakh = mkt ?? Math.round((row.marketing_inr_day * 7) / 1e5);   // set by the day in the database, shown by the week
   const mine = (q.data ?? []).filter((x) => x.airline_id === airline.id).slice(0, 4);
   const amt = Math.round(Number(amount) * 1e7);
+  const owed = Number(f?.debt_inr ?? 0), cashNow = Number(f?.cash_inr ?? 0);
+  const creditLeft = Math.max(0, Number(f?.credit_limit_inr ?? 0) - owed);
 
   return (
     <div className="stack-lg">
@@ -94,12 +96,13 @@ export function Money() {
             {f?.credit_cut_from == null && ref.param.credit_debt_limit > 0 && (
               <p className="tiny muted">The banks in this world watch debt: from your fifth quarter, owing more than {num(ref.param.credit_debt_limit)} times the last 4 quarters' operating profit (or any debt while they lose money) halves the credit line until you are back within it.</p>
             )}
-            <Field label="Amount (₹ crore)">
+            <Field label="Amount (₹ crore)" hint={`Borrow up to ${inr(creditLeft)}${owed > 0 ? `; repay up to ${inr(Math.min(owed, Math.max(0, cashNow)))}` : '; nothing to repay'}.`}>
               <input className="input num" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
+            {amt > creditLeft && amt > 0 && <div className="small bad-ink">That is more than the {inr(creditLeft)} your credit line has left.</div>}
             <div className="grid2">
-              <Button busy={busy === 'borrow'} disabled={!amt} onClick={() => run('borrow', () => call('borrow', { p_airline: airline.id, p_amount: amt }), `Borrowed ${inr(amt)}`)}>Borrow</Button>
-              <Button kind="secondary" busy={busy === 'repay'} disabled={!amt} onClick={() => run('repay', () => call('repay', { p_airline: airline.id, p_amount: amt }), `Repaid ${inr(amt)}`)}>Repay</Button>
+              <Button busy={busy === 'borrow'} disabled={!amt || amt > creditLeft} onClick={() => run('borrow', () => call('borrow', { p_airline: airline.id, p_amount: amt }), `Borrowed ${inr(amt)}`)}>Borrow</Button>
+              <Button kind="secondary" busy={busy === 'repay'} disabled={!amt || owed <= 0 || amt > owed || amt > cashNow} onClick={() => run('repay', () => call('repay', { p_airline: airline.id, p_amount: amt }), `Repaid ${inr(amt)}`)}>Repay</Button>
             </div>
           </div>
           <div className="card stack">

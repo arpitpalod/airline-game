@@ -34,7 +34,8 @@ export function usd(x: number | null | undefined) {
 
 export function pct(x: number | null | undefined, digits = 0) {
   if (x == null || !isFinite(x)) return '–';
-  return `${(x * 100).toFixed(digits)}%`;
+  const v = (x * 100).toFixed(digits);
+  return v.startsWith('-') && Number(v) !== 0 ? `−${v.slice(1)}%` : `${v.replace(/^-/, '')}%`;   // a true minus sign
 }
 
 export function signedPct(x: number | null | undefined, digits = 0) {
@@ -83,9 +84,12 @@ export function arrivalLabel(day: number, start?: string) {
   return `week ${w} (${dateLabel(weekStart(w), start)})`;
 }
 export function weeks(days: number) {
-  const w = days / 7;
-  return Number.isInteger(w) ? `${w} ${w === 1 ? 'week' : 'weeks'}` : `${Math.round(w * 10) / 10} weeks`;
+  const w = Math.max(0, Math.ceil(days / 7 - 1e-9));   // whole weeks: the game moves a week at a time
+  return `${w} ${w === 1 ? 'week' : 'weeks'}`;
 }
+
+/** "a" or "an" before a word, for aircraft names (an A320neo, an ATR 72). */
+export const an = (word: string) => (/^[AEIOU]/i.test(word) ? `an ${word}` : `a ${word}`);
 
 /** Game days as real time at the world's speed (game days per real day). */
 export function realSpan(gameDays: number, speed: number) {

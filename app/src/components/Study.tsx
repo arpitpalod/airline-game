@@ -4,6 +4,7 @@ import { inr, num, pct } from '../lib/format';
 import { pairKey } from '../lib/game';
 import { useAction } from './toast';
 import { Badge, Button } from './ui';
+import { ShortNote, useShort } from './Cash';
 
 const range = (lo: number | null, hi: number | null, f: (x: number) => string = (x) => num(x)) =>
   lo == null || hi == null ? '–' : lo === hi ? f(lo) : `${f(lo)} to ${f(hi)}`;
@@ -39,6 +40,7 @@ export function StudyCard({ a, b, flat }: { a: string; b: string; flat?: boolean
   const last = (studies.data ?? []).find((s) => pairKey(s.a, s.b) === key);
   const age = last ? world.game_day + 1 - last.game_day : null;
   const fresh = last && age! <= ref.param.study_valid_days;
+  const shortQ = useShort(ref.param.study_quick_inr), shortF = useShort(ref.param.study_full_inr);
   const commission = (depth: 'quick' | 'full') => run(depth, () => call('route_study', { p_airline: airline.id, p_a: a, p_b: b, p_depth: depth }),
     'Study done. The findings are below.');
   return (
@@ -50,9 +52,10 @@ export function StudyCard({ a, b, flat }: { a: string; b: string; flat?: boolean
       {last && fresh ? <Findings s={last} />
         : <p className="small muted">{last ? 'Your last study of this route is out of date. ' : ''}A study estimates what the market is doing: how many travellers fly it with every airline, how many are turned away and how full the flights are. Estimates come as a range and can be off.</p>}
       <div className="row wrap">
-        <Button size="sm" kind="secondary" busy={busy === 'quick'} onClick={() => commission('quick')}>Quick study · {inr(ref.param.study_quick_inr)}</Button>
-        <Button size="sm" kind="secondary" busy={busy === 'full'} onClick={() => commission('full')}>Full study · {inr(ref.param.study_full_inr)}</Button>
+        <Button size="sm" kind="secondary" busy={busy === 'quick'} disabled={shortQ > 0} onClick={() => commission('quick')}>Quick study · {inr(ref.param.study_quick_inr)}</Button>
+        <Button size="sm" kind="secondary" busy={busy === 'full'} disabled={shortF > 0} onClick={() => commission('full')}>Full study · {inr(ref.param.study_full_inr)}</Button>
       </div>
+      <ShortNote cost={shortQ > 0 ? ref.param.study_quick_inr : ref.param.study_full_inr} />
       <p className="tiny muted">Quick: within about ±{Math.round(ref.param.study_quick_width * 100)}%. Full: within about ±{Math.round(ref.param.study_full_width * 100)}%, plus the traveller mix and next quarter's demand.</p>
     </div>
   );

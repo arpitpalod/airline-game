@@ -13,7 +13,7 @@ const EVENT_TEXT: Record<string, string> = {
 };
 
 export function Ranks() {
-  const { airline, world } = useGame();
+  const { airline, world, ref } = useGame();
   const airlines = useWorldAirlines();
   const quarters = useQuarterlies();
   const news = useNews(40);
@@ -32,7 +32,7 @@ export function Ranks() {
 
   return (
     <div className="stack-lg">
-      <PageHeader title="Leaderboard" sub={`${players.length} players in ${world.name}`} />
+      <PageHeader title="Leaderboard" sub={`${players.length} ${players.length === 1 ? "player" : "players"} in ${world.name}`} />
       <div className="split">
         <div className="stack">
           <Seg value={board} onChange={setBoard} options={[
@@ -41,7 +41,7 @@ export function Ranks() {
           <div className="card flush">
             {quarters.isLoading || airlines.isLoading ? <div style={{ padding: 16 }}><Loading /></div> : latestQ === 0 ? (
               <>
-                <p className="small muted" style={{ padding: '14px 16px 4px' }}>Ranks are published at the end of each quarter, the first on day 91. Score is net worth plus 5 times the last four quarters' profit after interest.</p>
+                <p className="small muted" style={{ padding: '14px 16px 4px' }}>Ranks are published at the end of each quarter of flying, the first at the end of week {(world.prelaunch_weeks ?? 0) + 13}. Score is net worth plus {num(ref.param.score_profit_mult ?? 5)} times the last four quarters' profit after interest and tax{(ref.param.restart_score_mult ?? 0) > 0 ? `, less ${inr((ref.param.restart_score_mult ?? 1) * (ref.param.start_cash_inr ?? 0))} for each time the airline went into administration` : ''}.</p>
                 <div className="list">
                   {players.map((p) => (
                     <div key={p.id} className={`item ${p.id === airline.id ? 'me' : ''}`}>

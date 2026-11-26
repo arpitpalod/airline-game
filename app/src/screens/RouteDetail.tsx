@@ -2,8 +2,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useQuote, useRivals, useRouteDaily, useRoutes, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
-import { cancelRule, hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
+import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useQuote, useRivals, useRouteDaily, useRoutes, useSeatCap, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
+import { cancelRule, demandWeek, hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { cannotFly, maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
 import { inr, num, pct, plural, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
@@ -147,7 +147,7 @@ export function RouteDetail() {
               <div className="list">
                 {rots.map((ro) => {
                   const ac = fl.find((a) => a.id === ro.aircraft_id);
-                  return ac && m ? <RotationRow key={ro.aircraft_id} ac={ac} trips={ro.weekly_trips} km={m.km} used={(hours[ac.id] ?? 0)} routeId={route.id} /> : null;
+                  return ac && m ? <RotationRow key={ro.aircraft_id} ac={ac} trips={ro.weekly_trips} km={m.km} used={(hours[ac.id] ?? 0)} routeId={route.id} ends={[route.origin, route.dest]} /> : null;
                 })}
               </div>
             )}
@@ -159,7 +159,7 @@ export function RouteDetail() {
       </div>
 
       {assigning && m && (
-        <AssignSheet routeId={route.id} ends={[route.origin, route.dest]} km={m.km} fleet={fl} hours={hours}
+        <AssignSheet routeId={route.id} ends={[route.origin, route.dest]} km={m.km} want={demandWeek(m, world.demand_scale) ?? 0} mine={rots.reduce((s, ro) => s + ro.weekly_trips * ((fl.find((a) => a.id === ro.aircraft_id)?.seats_econ ?? 0) + (fl.find((a) => a.id === ro.aircraft_id)?.seats_biz ?? 0)), 0)} fleet={fl} hours={hours}
           already={new Set(rots.map((r) => r.aircraft_id))} onClose={() => setSp({})} />
       )}
       {closing && (
@@ -169,12 +169,18 @@ export function RouteDetail() {
             {world.selling && <CloseCost routeId={route.id} />}
             <Button kind="danger-solid" block busy={busy === 'close'} onClick={() => run('close', () => call('close_route', { p_airline: airline.id, p_route: route.id }), 'Route closed').then((r) => {
               if (r !== undefined) nav('/network');
-            })}>Close route</Button>
+            })}>Close route{world.selling ? <ClosePrice routeId={route.id} /> : null}</Button>
           </div>
         </Sheet>
       )}
     </div>
   );
+}
+
+/** The compensation closing pays now, for its button. */
+function ClosePrice({ routeId }: { routeId: string }) {
+  const x = useQuote<{ refund_inr: number; comp_inr: number }>('close_route', routeId).data;
+  return x && x.comp_inr > 0 ? <>{` · ${inr(x.comp_inr)} compensation`}</> : null;
 }
 
 // 0033: what closing costs now: tickets sold are refunded, and flights within the region's notice pay compensation
@@ -190,12 +196,14 @@ function CloseCost({ routeId }: { routeId: string }) {
   );
 }
 
-function RotationRow({ ac, trips, km, used, routeId }: { ac: FleetItem; trips: number; km: number; used: number; routeId: string }) {
+function RotationRow({ ac, trips, km, used, routeId, ends }: { ac: FleetItem; trips: number; km: number; used: number; routeId: string; ends: string[] }) {
   const { ref, airline } = useGame();
   const turnDelta = useTurnDelta();
+  const seatCap = useSeatCap(ends);
   const t = ref.type[ac.type_id];
   const trip = tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz, turnDelta));
-  const max = Math.min(84, Math.floor((weekHours(t) - (used - trips * trip) + 1e-9) / trip));
+  const byHours = Math.min(84, Math.floor((weekHours(t) - (used - trips * trip) + 1e-9) / trip));
+  const max = seatCap ? Math.min(byHours, seatCap.cap(ac.seats_econ + ac.seats_biz, trips)) : byHours;
   const [v, setV] = useState(trips);
   const { run, busy } = useAction();
   const nav = useNavigate();
@@ -203,7 +211,7 @@ function RotationRow({ ac, trips, km, used, routeId }: { ac: FleetItem; trips: n
     <div className="item" style={{ flexWrap: 'wrap' }}>
       <div className="grow" style={{ minWidth: 150, cursor: 'pointer' }} onClick={() => nav(`/aircraft/${ac.id}`)}>
         <div className="strong">{ac.reg} <span className="muted" style={{ fontWeight: 400 }}>· {t.name}</span></div>
-        <div className="tiny muted">{ac.seats_biz ? `${ac.seats_biz} business + ` : ''}{ac.seats_econ} economy · {STATUS_LABEL[ac.status]} · up to {max} a week</div>
+        <div className="tiny muted">{ac.seats_biz ? `${ac.seats_biz} business + ` : ''}{ac.seats_econ} economy · {STATUS_LABEL[ac.status]} · up to {max} a week{max < byHours ? ` (seats to ${seatCap!.name} are full)` : ''}</div>
       </div>
       <div className="row">
         <div style={{ width: 150 }}><Stepper label="round trips a week" value={v} min={0} max={max} onChange={setV} format={(x) => `${x}/wk`} /></div>
@@ -215,8 +223,8 @@ function RotationRow({ ac, trips, km, used, routeId }: { ac: FleetItem; trips: n
   );
 }
 
-function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
-  routeId: string; ends: string[]; km: number; fleet: FleetItem[]; hours: Record<string, number>; already: Set<string>; onClose: () => void;
+function AssignSheet({ routeId, ends, km, want, mine, fleet, hours, already, onClose }: {
+  routeId: string; ends: string[]; km: number; want: number; mine: number; fleet: FleetItem[]; hours: Record<string, number>; already: Set<string>; onClose: () => void;
 }) {
   const { ref, airline } = useGame();
   const turnDelta = useTurnDelta();
@@ -224,7 +232,10 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
   // each aircraft's room on this route: round trips a week that fit its free hours, or none where it cannot fly the route
   // (a runway too short at either end, or beyond its range), shown before it is chosen rather than refused after
   const blocked = (a: FleetItem) => cannotFly(ref.type[a.type_id], a.seats_econ + a.seats_biz, ends.map((x) => ref.airport[x]), km);
-  const roomOf = (a: FleetItem) => (blocked(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0, turnDelta));
+  const seatCap = useSeatCap(ends);
+  const byHours = (a: FleetItem) => (blocked(a) ? 0 : maxWeekly(ref.type[a.type_id], a, km, hours[a.id] ?? 0, turnDelta));
+  const roomOf = (a: FleetItem) => (seatCap ? Math.min(byHours(a), seatCap.cap(a.seats_econ + a.seats_biz)) : byHours(a));
+  const seatsShort = (a: FleetItem) => !blocked(a) && roomOf(a) < byHours(a);
   const candidates = fleet.filter((a) => !already.has(a.id) && a.base_iata && ends.includes(a.base_iata) && ['active', 'delivering', 'grounded', 'refit'].includes(a.status))
     .sort((x, y) => Number(roomOf(y) > 0) - Number(roomOf(x) > 0));
   const others = fleet.filter((a) => !already.has(a.id) && !(a.base_iata && ends.includes(a.base_iata)) && a.status !== 'returned');
@@ -235,7 +246,10 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
   const noFlyer = candidates.length > 0 && candidates.every((a) => blocked(a));
   const shortEnd = ends.map((x) => ref.airport[x]).find((ap) => ap?.runway_class === 1);
   const [trips, setTrips] = useState<number | null>(null);
-  const tv = trips ?? Math.min(max, 14);
+  // start from what the market can fill (QA: 14 round trips put 1,008 seats on a route about 30 travellers a week want)
+  const seatsAc = ac ? ac.seats_econ + ac.seats_biz : 1;
+  const fits = Math.max(1, Math.ceil(Math.max(0, want - mine) / (seatsAc * 0.85)));
+  const tv = trips ?? Math.min(max, 14, fits);
   return (
     <Sheet title="Put an aircraft on this route" onClose={onClose}>
       <div className="stack">
@@ -259,11 +273,14 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
                         <div className="strong">{a.reg} · {tt.name}</div>
                         <div className="tiny muted">{a.seats_econ + a.seats_biz} seats · {STATUS_LABEL[a.status]} · {num(free)} of {num(weekHours(tt))} hours a week free</div>
                         <div className={`small ${room > 0 ? '' : 'bad-ink'}`} style={{ marginTop: 2 }}>
-                          {no ? no.why : room > 0 ? `Room for ${plural(room, 'round trip')} a week here` : 'No room: not enough free hours for one round trip here'}
+                          {no ? no.why
+                            : room > 0 ? `Room for ${plural(room, 'round trip')} a week here${seatsShort(a) ? `: the seats left to ${seatCap!.name} (${num(seatCap!.free)} a week)` : ''}`
+                              : seatsShort(a) ? `No room: only ${num(seatCap!.free)} seats a week to ${seatCap!.name} are free in this world`
+                                : 'No room: not enough free hours for one round trip here'}
                         </div>
                       </div>
                       <div className="stack" style={{ gap: 4, alignItems: 'flex-end' }}>
-                        {room === 0 && <Badge tone="bad">{no ? no.badge : 'Full'}</Badge>}
+                        {room === 0 && <Badge tone="bad">{no ? no.badge : seatsShort(a) ? 'Seats' : 'Full'}</Badge>}
                         {a.terms?.holding === 'wet' && <Badge tone="warn">Wet lease</Badge>}
                       </div>
                     </div>
@@ -273,11 +290,12 @@ function AssignSheet({ routeId, ends, km, fleet, hours, already, onClose }: {
             </div>
             {noFlyer && <div className="card warn small">None of these aircraft can fly this route.{shortEnd ? ` ${shortEnd.city} takes turboprops only: lease or order an ATR 72 in Get aircraft.` : ''}</div>}
             {ac && t && (
-              max === 0 ? <div className="card warn small">{ac.reg} has no free hours left. Take it off another route first.</div>
+              max === 0 ? <div className="card warn small">{seatsShort(ac) ? `Seats to ${seatCap!.name} are full in this world.` : `${ac.reg} has no free hours left. Take it off another route first.`}</div>
                   : (
                     <div className="field">
                       <label>Round trips a week (up to {max})</label>
                       <Stepper label="round trips a week" value={tv} min={1} max={max} onChange={setTrips} format={(x) => `${x} a week · ${(x / 7).toFixed(1)} a day`} />
+                      <div className={`hint ${tv * seatsAc + mine > 2.5 * Math.max(1, want) ? 'bad-ink' : ''}`}>About {num(want)} travellers a week each way want this route, with every airline{mine ? `; you already fly ${num(mine)} seats` : ''}. {plural(tv, 'round trip')} is {num(tv * seatsAc)} seats each way.</div>
                       <div className="hint">One round trip takes {tripHours(t, km, minTurn(t, ac.seats_econ + ac.seats_biz, turnDelta)).toFixed(1)} hours including turnarounds. Flying an aircraft above 85% of its day costs punctuality.</div>
                     </div>
                   )

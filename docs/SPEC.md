@@ -839,6 +839,31 @@ Tax rates are headline corporate rates (India, China; Tax Foundation 2025 for th
 
 Sources: DGCA CAR Section 3 Series M Part IV (https://pib.gov.in/PressReleasePage.aspx?PRID=1885978); EU 261/2004 (https://eur-lex.europa.eu/EN/legal-content/summary/eu-air-passenger-rights-in-case-of-denied-boarding-a-delayed-flight-or-a-cancelled-flight.html, https://europa.eu/youreurope/citizens/travel/passenger-rights/air/index_ar.htm); US 14 CFR 250.5 (https://www.ecfr.gov/current/title-14/chapter-II/subchapter-A/part-250/section-250.5, https://www.transportation.gov/individuals/aviation-consumer-protection/bumping-oversales); Canada APPR (https://otc-cta.gc.ca/eng/additional-information-standing-senate-committee-transport-and-communications-may-16-2023); Saudi GACA (https://gls.gaca.gov.sa/-/media/Files/PDF/Content--Pages/Know-your-rights-En.pdf, https://gaca.gov.sa/web/en-gb/content/have-you-been-downgraded); China CAAC 2021 rules (https://xxgk.mot.gov.cn/2020/gz/202112/W020211227509040602421.docx); Nigeria NCAA Part 19 (https://ncaa.gov.ng/, https://www.mondaq.com/nigeria/aviation/1468534/compensationremedies-for-flight-delays-and-cancellations-in-nigeria); Brazil ANAC Resolution 400 (https://www.gov.br/anac/en/topics/passengers/flight-change-delay-and-cancellation, https://goias.gov.br/procon/wp-content/uploads/sites/19/2017/03/resolucao-400-anac.pdf); tax rates (https://taxfoundation.org/data/all/global/corporate-tax-rates-by-country-2025/, https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/countrytaxrates.html, https://taxsummaries.pwc.com/quick-charts/corporate-income-tax-cit-rates).
 
+### 14.27 In-game QA fixes (migration 0034)
+
+The owner asked for an in-game QA after a refusal that came only after the tap (an A320neo offered for Delhi–Kullu, then "a runway on this route is too short"). The app was played at phone size against the local stack to week 20: three routes (one turboprop-only, one to the UAE), leases, wet leases, an order, a second base, maintenance changes and borrowing. Rule: **the app offers only what the server accepts, and says why before the tap.**
+
+| Found | Fixed |
+|---|---|
+| Aircraft offered for routes they cannot fly | Both sheets that put an aircraft on a route check runways at both ends and range with the cabin (`cannotFly`); the reason shows, the row cannot be picked |
+| Room on a route abroad ignored the seats between countries (15 round trips offered, 2 allowed) | Room is capped by the free seats (`useSeatCap`), on the route's sheet, its stepper and the aircraft page, with the reason |
+| Paid buttons refused for short cash after the tap | Orders, leases, bases, the hangar, refits, launches and studies compare their cost with the cash in hand (`CashButton`, `ShortNote`): what is short, and Money to borrow it, or that the credit line cannot cover it |
+| Borrow above the credit line, Repay with nothing owed | Amounts shown and capped; Repay only with debt and cash |
+| Close this base offered while aircraft or routes use it | Off, saying what still uses the base |
+| Route search found nothing across the tabs | A search covers domestic and international (and countries) |
+| A launch paid for a turboprop-only route no aircraft of the airline can fly | Warned before opening |
+| New rotations defaulted to 14 round trips (Delhi–Kullu: 1,008 seats for about 30 travellers a week) | The default is what the market can fill, less the seats already flown; the sheet shows travellers against seats, in red past 2.5 times |
+| "Too empty" blamed fares where seats dwarf demand | Where seats exceed 2.5 times the travellers who want the route (with every airline), Home and Last flights say fewer flights, a smaller aircraft or a busier route |
+| Ranks: "the first on day 91"; score text without tax or administrations | The first ranks at the end of week 26 (pre-launch plus a quarter); the score text from the game values |
+| A locked maintenance contract read "Change any time" | It says until which week it runs |
+| Lease sheet without length or early-return cost | Both shown; the tab text too |
+| Wet-lease cards without the lessors free and the shortest lease | On each card |
+| A wet lease's terms without its minimum | "Runs at least until week N", or none for the starting aircraft |
+| Give-back and close buttons without their cost | "Return to the lessor · pay ₹4.75 cr", "Close route · ₹X compensation" |
+| Wording | "an A320neo", "1 aircraft is", "1 player", whole weeks everywhere, a true minus sign in percentages, toasts by week not day, "after interest and tax" on Home |
+
+Migration 0034 changes no rule: `game.inr_text` formats money as the app does, `game.book` refuses with "Not enough cash: this needs ₹23.9 cr and you have ₹5 cr in hand", and `set_rotation` (from 0033) groups the seat counts in its refusal. Tested: `checks_23` (2 checks), the 0028 seat check updated, the app test, and the QA flows replayed at phone size.
+
 ## 15. Screens
 
 Home (cash, yesterday's results, alerts) · Map and network · Route detail (fares, rivals, load factor) · Fleet · Configurator · Aircraft market · Finance · Leaderboard · News · Airline setup · Admin.
@@ -895,11 +920,7 @@ Home (cash, yesterday's results, alerts) · Map and network · Route detail (far
 
 27. Settled 21 Nov 2026 (14.23): worlds parts 2 and 3, the four new shocks and seats between countries. Engine deliveries (spare engines late, so engine events last longer) were left out: late aircraft carry the lesson.
 
-28. In-game QA (26 Nov 2026, the app played at phone size against the local stack to week 20): actions the app offers and the server then refuses, and advice that misleads. Fixed: aircraft that cannot fly a route (a runway too short at either end, or beyond range) show why and cannot be picked, on the route's Put an aircraft sheet and the aircraft's Add to a route sheet (`cannotFly` in `app/src/lib/game.ts`, the checks of `set_rotation`). Open, awaiting the owner:
-    - Refused after tapping: room on a route ignores the free seats between countries (offered 15 round trips, 2 allowed); orders, leases, bases, the hangar, launches and studies do not compare their cost with the cash in hand (refused with "Not enough cash"); Borrow takes more than the credit line, Repay works with nothing owed; Close this base shows when aircraft or routes still use it; route search finds nothing across the Domestic and International tabs ("Dubai" in Domestic); opening a route to a turboprop-only airport costs the launch with no aircraft able to fly it.
-    - Advice that misleads: a new rotation defaults to 14 round trips whatever the demand (Delhi–Kullu: about 30 travellers a week, 1,008 seats); "Too empty" blames fares where seats far outnumber travellers; Ranks says the first ranks come on day 91 (they come at week 26) and its score line leaves out administrations; a locked maintenance contract still reads "Change any time".
-    - Costs not shown before acting (principle 8): the lease sheet has no lease length or early-return cost; the wet-lease cards lack the 13-week minimum and the lessors free; a wet lease's terms lack its minimum end; give-back buttons do not carry their cost.
-    - Wording: "Wet-lease a A320neo", "1 aircraft are wet-leased", "1 players", "84.9 weeks" (weeks are whole), unformatted seat counts and "Rs 238.93 crore" in refusals, "-60%" with a hyphen, Home's "after interest" against Money's "after interest and tax".
+28. Settled 26 Nov 2026 (14.27): the in-game QA findings. The app was played at phone size against the local stack to week 20, and every action it offered that the server then refused, every piece of advice that misled and every cost not shown before acting was fixed.
 
 **Sources for (V) figures**
 
