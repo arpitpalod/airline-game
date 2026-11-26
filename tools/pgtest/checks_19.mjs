@@ -30,7 +30,7 @@ export async function checks19(t) {
   ok('a big airline pays it in full', big.n >= p.overhead_full_fleet ? big.oh >= p.overhead_fixed_inr_day : big.oh > p.overhead_fixed_inr_day * p.overhead_min_share, `${big.name}, ${big.n} aircraft`);
 
   // ---------- concentrate instead of thinning ----------
-  const top8 = (await q(`select a, b from public.markets where not intl order by n_biz + n_lei + n_bud desc limit 8`)).map((r) => `${r.a}-${r.b}`);
+  const top8 = (await q(`select a, b from public.markets where zone = 'india' order by n_biz + n_lei + n_bud desc limit 8`)).map((r) => `${r.a}-${r.b}`);
   const plan = await q(`select p.route_id, p.airline_id, p.trips, least(r.origin, r.dest) || '-' || greatest(r.origin, r.dest) mk
     from game.bot_plan p join public.routes r on r.id = p.route_id join public.airlines al on al.id = p.airline_id
     where al.world_id = $1 and r.status = 'open' order by al.code, p.trips desc`, [W]);

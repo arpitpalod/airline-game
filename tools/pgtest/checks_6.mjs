@@ -28,7 +28,7 @@ export async function checks6(t) {
   const day = 400;
   await q(`update public.worlds set game_day = $2 where id = $1`, [W, day]);
   const hrn = await q(`select r.id, r.origin, r.dest, (least(r.origin, r.dest), greatest(r.origin, r.dest)) in
-      (select m.a, m.b from public.markets m where not m.intl order by m.n_biz + m.n_lei + m.n_bud desc limit 8) as top8
+      (select m.a, m.b from public.markets m where m.zone = 'india' order by m.n_biz + m.n_lei + m.n_bud desc limit 8) as top8
       from public.routes r join public.airlines al on al.id = r.airline_id where al.world_id = $1 and al.code = 'HRN' and r.status = 'open'`, [W]);
   await q(`update public.routes r set opened_day = 1 from public.airlines al where al.id = r.airline_id and al.world_id = $1 and al.code in ('HRN', 'KOL')`, [W]);
   await q(`insert into public.route_daily (route_id, game_day, airline_id, flights, seats_econ, seats_biz, pax_econ, pax_biz, spill, revenue_inr, var_cost_inr)
@@ -53,7 +53,7 @@ export async function checks6(t) {
   const koel = await q(`select r.id from public.routes r join public.airlines al on al.id = r.airline_id
      where al.world_id = $1 and al.code = 'KOL' and r.status = 'open'
        and (least(r.origin, r.dest), greatest(r.origin, r.dest)) not in
-           (select m.a, m.b from public.markets m where not m.intl order by m.n_biz + m.n_lei + m.n_bud desc limit 8) limit 1`, [W]);
+           (select m.a, m.b from public.markets m where m.zone = 'india' order by m.n_biz + m.n_lei + m.n_bud desc limit 8) limit 1`, [W]);
   await q(`insert into public.route_daily (route_id, game_day, airline_id, flights, seats_econ, seats_biz, pax_econ, pax_biz, spill, revenue_inr, var_cost_inr)
            select r.id, d, r.airline_id, 4, 1000, 0, 900, 0, 0, 1000000, 2000000 from public.routes r, generate_series($2 - 27, $2) d
             where r.id = $1 on conflict do nothing`, [koel[0].id, day]);
@@ -62,5 +62,5 @@ export async function checks6(t) {
   ok('and never drops one of the eight busiest domestic routes, however thin it looks',
     (await one(`select count(*)::int from public.routes r join public.airlines al on al.id = r.airline_id
         where al.world_id = $1 and r.status = 'closed' and (least(r.origin, r.dest), greatest(r.origin, r.dest)) in
-        (select m.a, m.b from public.markets m where not m.intl order by m.n_biz + m.n_lei + m.n_bud desc limit 8)`, [W])) === 0);
+        (select m.a, m.b from public.markets m where m.zone = 'india' order by m.n_biz + m.n_lei + m.n_bud desc limit 8)`, [W])) === 0);
 }

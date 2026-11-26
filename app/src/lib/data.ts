@@ -20,7 +20,7 @@ export interface Ref {
 export async function loadRef(): Promise<Ref> {
   const [types, airports, params] = await Promise.all([
     rows<AircraftType>(supabase.from('aircraft_types').select('*').order('sort')),
-    rows<Airport>(supabase.from('airports').select('iata,city,country,region,is_india,lat,lon,pax_m,mass,biz_idx,tour_idx,runway_class,slot_cap,opens_day').order('iata')),
+    rows<Airport>(supabase.from('airports').select('iata,city,country,region,is_india,lat,lon,pax_m,mass,biz_idx,tour_idx,runway_class,slot_cap,opens_day,home,seen_in').order('iata')),
     rows<{ key: string; num: number }>(supabase.from('game_params').select('key,num')),
   ]);
   return {

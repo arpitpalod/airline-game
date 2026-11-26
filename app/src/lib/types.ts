@@ -129,6 +129,8 @@ export interface Airport {
   iata: string; city: string; country: string; region: string; is_india: boolean; lat: number; lon: number;
   pax_m: number | null; mass: number | null; biz_idx: number; tour_idx: number; runway_class: number;
   slot_cap: number | null; opens_day: number;
+  home: string | null;   // the region whose worlds found airlines and open bases here (migration 0035)
+  seen_in: string[];     // the regions whose worlds show this airport
 }
 
 export interface Market { a: string; b: string; km: number; intl: boolean; n_biz: number; n_lei: number; n_bud: number; ref_fare: number }
