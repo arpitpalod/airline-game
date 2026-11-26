@@ -7,7 +7,7 @@
 --    loan rates and pilot supply. Its price level (fares against India's) is worked out from the cost levels with
 --    India's cost mix (game values region_w_*, measured in an India season run), so running an airline costs about the
 --    same in every region and what differs is which costs dominate and how travellers behave; Africa and South America
---    add a fare premium for their thin markets (fare_premium).
+--    (thin markets) and Europe (well-paying travellers, short stages) add a fare premium (fare_premium).
 --  * The engine keeps counting in one internal unit (today's rupee numbers). A world shows money in its region's
 --    currency: internal x price level / rupees per unit. Dollar costs follow the world's own rate, 90 / price level
 --    rupees per dollar at the reference; a US world has no currency risk, the euro and the yuan swing less than the
@@ -85,8 +85,8 @@ insert into public.regions (key, name, currency, symbol, unit_inr, style, fuel_l
  'High-paying travellers and a huge domestic market; pay about four times India''s; slow growth; the dollar is home money, so no currency risk.', 'N'),
 ('canada', 'Canada', 'CAD', 'C$', 65, 'western', 0.85, 3.2, 1.6, 0.45, 0.9, 0.5, 0.5, 0, -5.5, 0.9,
  'Long thin domestic routes and the US border market; high airport and air-traffic fees; a currency that moves a little.', 'C-'),
-('europe', 'Europe', 'EUR', '€', 100, 'western', 0.85, 3.0, 2.0, 0.45, 1.1, 0.6, 0.5, 0, -6, 1,
- 'Well-paying long-haul and business travel, trains under 500 km, budget rivals keep leisure price-sensitive, the dearest charges.', 'EI-'),
+('europe', 'Europe', 'EUR', '€', 100, 'western', 0.85, 3.0, 2.0, 0.45, 0.85, 0.6, 0.5, 0, -6, 1,
+ 'Well-paying travellers, trains under 500 km, short stages and the dearest charges.', 'EI-'),
 ('middle_east', 'Middle East', 'AED', 'AED ', 24.5, 'western', 0.7, 2.0, 1.0, 0.9, 0.9, 0, 0, 0, -5, 0.8,
  'Connecting traffic (once connections are built); cheap fuel; a currency pegged to the dollar; small home market.', 'A6-'),
 ('china', 'China', 'CNY', 'CN¥', 12.5, 'western', 0.9, 1.6, 0.8, 0.85, 1.0, 0.4, 0.3, 0.01, -7, 0.85,
@@ -217,7 +217,9 @@ end $$;
 -- Festivals and events belong to a region (0037): India's calendar moves demand only in India worlds.
 alter table public.demand_events add column region text not null default 'india';
 
-update public.regions set fare_premium = v.p from (values ('africa', 1.3), ('south_america', 1.15)) v (k, p) where key = v.k;
+-- fare premiums (G), from one-year season runs per region: Africa and South America for thin markets with few rivals, Europe
+-- for its well-paying travellers (with the USA's price tolerance), whose short stages make crew, charges and head office dear
+update public.regions set fare_premium = v.p from (values ('africa', 1.3), ('south_america', 1.15), ('europe', 1.1)) v (k, p) where key = v.k;
 select game.refresh_regions();
 
 -- The world's own fuel and currency values (0037: a region's; India's are the game's).

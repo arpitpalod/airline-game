@@ -906,14 +906,14 @@ Step 2 of 3 for regions (open item 26). Owner's decisions (27 Nov 2026): one cur
 
 **One internal unit, shown in each world's money.** The engine keeps counting in today's rupee numbers. A world shows every amount in its region's currency: internal × price level ÷ rupees per unit (the game's reference rates: $1 = Rs 90, EUR 1 = Rs 100, CAD 1 = Rs 65, and close to late-2026 market rates for the others). Fares need no change anywhere: a region's price level is the level of its fares against India's.
 
-**Equal to run, different to win.** A region's price level is worked out from its cost levels with India's cost mix, measured in an India season run (`region_w_*`, G): dollar costs 43.6%, fuel 35%, pay 10.5%, charges 5.8%, everything else 5.1%. So an airline costs about the same to run in game terms everywhere. Africa and South America add a fare premium (`fare_premium`: ×1.3 and ×1.15) for thin markets with few rivals. What differs is which costs dominate and how travellers behave:
+**Equal to run, different to win.** A region's price level is worked out from its cost levels with India's cost mix, measured in an India season run (`region_w_*`, G): dollar costs 43.6%, fuel 35%, pay 10.5%, charges 5.8%, everything else 5.1%. So an airline costs about the same to run in game terms everywhere. Fare premiums (`fare_premium`) sit on top: Africa ×1.3 and South America ×1.15 for thin markets with few rivals, Europe ×1.1 for its well-paying travellers (with the USA's price tolerance), whose short stages make crew, charges and head office dear. What differs is which costs dominate and how travellers behave:
 
 | Region | Currency | Fuel | Pay | Charges | Price level | Growth | Price sensitivity | Currency swings | Loans | Pilots for hire | Demand factor |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | India | INR | 1 | 1 | 1 | 1 | ×1 | ×1 | ×1 | ±0 | ×1 | 1 |
 | USA | USD | 0.75 | 4.0 | 1.2 | 1.239 | ×0.4 | ×0.85 | none | −5 points | ×0.85 | 0.92 |
 | Canada | CAD | 0.85 | 3.2 | 1.6 | 1.213 | ×0.45 | ×0.9 | ×0.5 | −5.5 | ×0.9 | 2.71 |
-| Europe | EUR | 0.85 | 3.0 | 2.0 | 1.216 | ×0.45 | ×1.1 | ×0.6 | −6 | ×1 | 1.02 |
+| Europe | EUR | 0.85 | 3.0 | 2.0 | 1.337 (premium ×1.1) | ×0.45 | ×0.85 | ×0.6 | −6 | ×1 | 1.02 |
 | Middle East | AED | 0.7 | 2.0 | 1.0 | 1.000 | ×0.9 | ×0.9 | none (pegged) | −5 | ×0.8 | 1.63 |
 | China | CNY | 0.9 | 1.6 | 0.8 | 1.016 | ×0.85 | ×1 | ×0.4 | −7 | ×0.85 | 0.71 |
 | Africa | ZAR | 1.1 | 1.2 | 1.6 | 1.418 (premium ×1.3) | ×0.8 | ×1.1 | ×1.8, falls 4% a year | +2 | ×0.7 | 2.27 |
@@ -936,7 +936,20 @@ All levels are judgement against India (G, in `public.regions`), to be checked a
 
 **App.** Every amount goes through the money formatter, which follows the world's region (`setMoney`). India: ₹ with lakh and crore. Elsewhere: the region's symbol with K, M and B. Per seat-km and per-kg amounts, the currency card, dollar hedging and the borrowing field (₹ crore, or millions elsewhere) use the world's money and the world's own reference rate.
 
-**Season runs per region** (`node season.mjs ... --region usa --bots off --days 364`: World 1 re-homed, each simulated player's India base mapped to the region's airport of the same size rank, no computer-run airlines). Results are in the PR and below once the runs finish.
+**Season runs per region** (`node season.mjs ... --region usa --bots off --days 364`: World 1 re-homed, each simulated player's India base mapped to the region's airport of the same size rank, strategies that fly at home keep to the home region, no computer-run airlines; `--regionset '{...}'` tries region values before a migration). One year, 18 simulated players:
+
+| Region | Operating margin | Profitable | Load factor | Fleet |
+|---|---|---|---|---|
+| India | −10.4% | 5 | 0.73 | 142 |
+| USA | −7.5% | 6 | 0.74 | 119 |
+| Canada | +3.2% | 7 | 0.75 | 142 |
+| Europe | +2.5% | 7 | 0.73 | 170 |
+| Middle East (not opening until connections) | −12.7% | 3 | 0.71 | 106 |
+| China | −21.1% | 2 | 0.71 | 113 |
+| Africa | −9.7% | 2 | 0.68 | 100 |
+| South America | −10.5% | 7 | 0.75 | 122 |
+
+A first year at a loss is normal, as in India. Three findings shaped the values. First, India's real cost mix (pay 10.5%, not the 20% first assumed) brought the USA from +16% to about India's level. Second, the demand factor on the 150 busiest markets fixed Europe's starved worlds. Third, Europe needed its fare premium (−38% without). China trails: its strength (scale) and weakness (fast trains, state-backed rivals) are only half there until step 3 gives it its computer-run airlines, so it is re-checked then. A one-year run without rivals and with India-shaped strategies is a rough check, not a tuning.
 
 **Left for step 3:** each region's computer-run airlines and festival calendar; disruptions and airport closures by region (they pick Indian airports today); seat limits between countries (India's only); Found a world's money labels in the region's currency; opening the regions one by one.
 

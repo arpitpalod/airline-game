@@ -12,7 +12,7 @@ export async function checks25(t) {
   const pl = Object.fromEntries(rg.map((r) => [r.key, Number(r.price_level)]));
   const mix = (r) => 0.436 + 0.35 * r.fuel_level + 0.105 * r.pay_level + 0.058 * r.charge_level + 0.051;
   const full = Object.fromEntries((await q(`select * from public.regions`)).map((r) => [r.key, Object.fromEntries(Object.entries(r).map(([k, v]) => [k, isNaN(v) ? v : Number(v)]))]));
-  ok("eight regions, each with its currency; fares follow costs by India's measured mix, times Africa's and South America's premium",
+  ok("eight regions, each with its currency; fares follow costs by India's measured mix, times Africa's, South America's and Europe's premium",
     rg.length === 8 && pl.india === 1 && Object.values(full).every((r) => Math.abs(r.price_level - mix(r) * r.fare_premium) < 0.0001),
     rg.map((r) => `${r.key} ${r.currency} ${r.price_level}`).join(', '));
   const dm = Object.fromEntries((await q(`select key, demand_mult from public.regions`)).map((r) => [r.key, Number(r.demand_mult)]));

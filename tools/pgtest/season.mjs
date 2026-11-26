@@ -56,6 +56,9 @@ const REGION = arg('--region', 'india');
 if (arg('--bots', 'on') === 'off') await q(`update public.worlds set bot_scale = 0 where id = $1`, [W]);
 if (REGION !== 'india') {
   await q(`update public.worlds set rules = coalesce(rules, '{}'::jsonb) || jsonb_build_object('region', $2::text) where id = $1`, [W, REGION]);
+  // --regionset '{"fare_premium": 1.1}': try region values before a migration
+  for (const [k, v] of Object.entries(JSON.parse(arg('--regionset', '{}')))) await q(`update public.regions set ${k.replace(/[^a-z_]/g, '')} = $1 where key = $2`, [v, REGION]);
+  await q(`select game.refresh_regions()`);
   await q(`select game.apply_region($1)`, [W]);
   SCALE = Number(await one(`select demand_scale from public.worlds where id = $1`, [W]));   // the region's travellers per place
   const ind = (await q(`select iata from public.airports where home = 'india' order by pax_m desc`)).map((r) => r.iata);
