@@ -8,25 +8,28 @@ import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   FounderStatus, News, Profile, SeatRoom, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World, WorldOption,
-  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy,
+  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy, Region,
 } from './types';
 
 export interface Ref {
   types: AircraftType[]; type: Record<string, AircraftType>;
   airports: Airport[]; airport: Record<string, Airport>;
   param: Record<string, number>;
+  regions: Record<string, Region>;   // 0037: each region's currency and levels
 }
 
 export async function loadRef(): Promise<Ref> {
-  const [types, airports, params] = await Promise.all([
+  const [types, airports, params, regions] = await Promise.all([
     rows<AircraftType>(supabase.from('aircraft_types').select('*').order('sort')),
     rows<Airport>(supabase.from('airports').select('iata,city,country,region,is_india,lat,lon,pax_m,mass,biz_idx,tour_idx,runway_class,slot_cap,opens_day,home,seen_in').order('iata')),
     rows<{ key: string; num: number }>(supabase.from('game_params').select('key,num')),
+    rows<Region>(supabase.from('regions').select('key,name,currency,symbol,unit_inr,style,price_level,fx_vol_mult,fx_event_mult')),
   ]);
   return {
     types, type: Object.fromEntries(types.map((t) => [t.id, t])),
     airports, airport: Object.fromEntries(airports.map((a) => [a.iata, a])),
     param: Object.fromEntries(params.map((p) => [p.key, Number(p.num)])),
+    regions: Object.fromEntries(regions.map((r) => [r.key, r])),
   };
 }
 

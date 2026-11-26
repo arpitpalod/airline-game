@@ -1,9 +1,10 @@
 // Found an airline: name, code, first base and colour. Comes with a wet-leased aircraft that flies from day 1.
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { call, INVITE_KEY, supabase } from '../lib/api';
 import { useRefData, useWorldParams, useWorldRow } from '../lib/data';
 import { LIVERY_COLORS } from '../lib/game';
-import { inr, num } from '../lib/format';
+import { inr, num, setMoney } from '../lib/format';
 import { Badge, Button, Field, Icon, Logo } from '../components/ui';
 
 export function SetupScreen({ uid, email, worldId, onDone, onCancel }: {
@@ -29,9 +30,14 @@ export function SetupScreen({ uid, email, worldId, onDone, onCancel }: {
     || name.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
   const effCode = codeTouched ? code : autoCode.length >= 2 ? autoCode : (name.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase());
 
-  const bases = useMemo(() => ref.airports.filter((a) => a.is_india && a.opens_day <= 1)
+  // 0037: the world's home region (from the world, or from the invite code), its airports and its money
+  const inviteRegion = useQuery({ queryKey: ['invite-region', invite.trim()], enabled: !joining && !!invite.trim(),
+    queryFn: () => call<string | null>('invite_region', { p_invite: invite.trim() }) }).data;
+  const region = joining?.rules?.region ?? inviteRegion ?? 'india';
+  setMoney(ref.regions?.[region] ?? null);
+  const bases = useMemo(() => ref.airports.filter((a) => a.home === region && a.opens_day <= 1)
     .filter((a) => !q || `${a.city} ${a.iata}`.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (b.pax_m ?? 0) - (a.pax_m ?? 0)), [ref.airports, q]);
+    .sort((a, b) => (b.pax_m ?? 0) - (a.pax_m ?? 0)), [ref.airports, q, region]);
   const chosen = base ? ref.airport[base] : null;
   const p = { ...ref.param, ...(wp ?? {}) };
 

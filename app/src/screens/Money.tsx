@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { call } from '../lib/api';
 import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useFinance, useFleet, useGame, useQuarterlies, useTxns } from '../lib/data';
 import { byWeek, COST_LINES, sumDaily } from '../lib/derive';
-import { inr, num, pct, weekOf, weeks } from '../lib/format';
+import { inr, num, pct, typedUnit, unit, weekOf, weeks } from '../lib/format';
 import type { AirlineDaily, AirlineWeek, Txn } from '../lib/types';
 import { ProfitBars } from '../components/charts';
 import { useAction } from '../components/toast';
@@ -31,7 +31,7 @@ export function Money() {
   const line = (k: keyof AirlineDaily) => sel.reduce((a, d) => a + Number(d[k] ?? 0), 0);
   const mktLakh = mkt ?? Math.round((row.marketing_inr_day * 7) / 1e5);   // set by the day in the database, shown by the week
   const mine = (q.data ?? []).filter((x) => x.airline_id === airline.id).slice(0, 4);
-  const amt = Math.round(Number(amount) * 1e7);
+  const amt = Math.round(typedUnit().toInternal(Number(amount)));
   const owed = Number(f?.debt_inr ?? 0), cashNow = Number(f?.cash_inr ?? 0);
   const creditLeft = Math.max(0, Number(f?.credit_limit_inr ?? 0) - owed);
 
@@ -73,8 +73,8 @@ export function Money() {
             )}
             {s.ask > 0 && (
               <div className="grid3">
-                <div><div className="tiny muted">Revenue per seat-km</div><div className="num strong">₹{num(s.revenue / s.ask, 2)}</div></div>
-                <div><div className="tiny muted">Cost per seat-km</div><div className="num strong">₹{num(s.opCost / s.ask, 2)}</div></div>
+                <div><div className="tiny muted">Revenue per seat-km</div><div className="num strong">{unit(s.revenue / s.ask, 2)}</div></div>
+                <div><div className="tiny muted">Cost per seat-km</div><div className="num strong">{unit(s.opCost / s.ask, 2)}</div></div>
                 <div><div className="tiny muted">Passengers</div><div className="num strong">{num(s.pax)}</div></div>
               </div>
             )}
@@ -96,7 +96,7 @@ export function Money() {
             {f?.credit_cut_from == null && ref.param.credit_debt_limit > 0 && (
               <p className="tiny muted">The banks in this world watch debt: from your fifth quarter, owing more than {num(ref.param.credit_debt_limit)} times the last 4 quarters' operating profit (or any debt while they lose money) halves the credit line until you are back within it.</p>
             )}
-            <Field label="Amount (₹ crore)" hint={`Borrow up to ${inr(creditLeft)}${owed > 0 ? `; repay up to ${inr(Math.min(owed, Math.max(0, cashNow)))}` : '; nothing to repay'}.`}>
+            <Field label={`Amount (${typedUnit().label})`} hint={`Borrow up to ${inr(creditLeft)}${owed > 0 ? `; repay up to ${inr(Math.min(owed, Math.max(0, cashNow)))}` : '; nothing to repay'}.`}>
               <input className="input num" type="number" inputMode="decimal" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
             </Field>
             {amt > creditLeft && amt > 0 && <div className="small bad-ink">That is more than the {inr(creditLeft)} your credit line has left.</div>}
@@ -107,7 +107,7 @@ export function Money() {
           </div>
           <div className="card stack">
             <h2>Marketing</h2>
-            <p className="small muted">Marketing lifts your brand, and brand brings passengers. It works best measured against how many passengers you carry: about ₹100 for every passenger you carry buys most of the effect.</p>
+            <p className="small muted">Marketing lifts your brand, and brand brings passengers. It works best measured against how many passengers you carry: about {unit(100, 0)} for every passenger you carry buys most of the effect.</p>
             <Stepper label="marketing a week" value={mktLakh} step={1} min={0} max={Math.floor((ref.param.marketing_max_inr_day * 7) / 1e5)} onChange={setMkt}
               format={(v) => (v ? `${inr(v * 1e5)} a week` : 'None')} />
             <Button kind="secondary" disabled={mkt == null || mkt === Math.round((row.marketing_inr_day * 7) / 1e5)} busy={busy === 'mkt'}

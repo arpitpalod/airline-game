@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { useBases, useFleet, useGame, useMarketsFrom, useRouteDaily, useRoutes, useStrategies } from '../lib/data';
 import { lfTone, routeStat } from '../lib/derive';
 import { marketTotal, pairKey } from '../lib/game';
-import { currentWeek, inr, num, pct, weekOf } from '../lib/format';
+import { currentWeek, homeAirport, inr, money, num, pct, weekOf } from '../lib/format';
 import type { Market, StrategyKey } from '../lib/types';
 import { WorldMap } from '../components/WorldMap';
 import { useAction } from '../components/toast';
@@ -80,7 +80,7 @@ export function Network() {
             <div className="row wrap">
               {baseIatas.map((b) => <Badge key={b} tone="accent">{ref.airport[b]?.city} ({b})</Badge>)}
             </div>
-            <p className="small muted" style={{ marginTop: 10 }}>Aircraft live at a base and every route starts at one. Another base costs {inr(ref.param.base_open_inr)} to open plus {inr(ref.param.base_fixed_inr_day * 7)} a week. Tap an Indian airport on the map to open one, or a base to close it.</p>
+            <p className="small muted" style={{ marginTop: 10 }}>Aircraft live at a base and every route starts at one. Another base costs {inr(ref.param.base_open_inr)} to open plus {inr(ref.param.base_fixed_inr_day * 7)} a week. Tap {homeAirport()} on the map to open one, or a base to close it.</p>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
           {opensLater && <Badge tone="info">Opens in week {weekOf(a.opens_day)}</Badge>}
         </div>
         <div className="kv">
-          {a.is_india ? <><span>Passengers a year</span><span>{num(a.pax_m, 1)} million</span></>
+          {a.pax_m != null ? <><span>Passengers a year</span><span>{num(a.pax_m, 1)} million</span></>
             : <><span>Traffic with India</span><span>{a.mass! >= 6 ? 'Very large' : a.mass! >= 2 ? 'Large' : a.mass! >= 0.8 ? 'Medium' : 'Small'}</span></>}
           <span>Business travel</span><span>{level(a.biz_idx)}</span>
           <span>Tourism</span><span>{level(a.tour_idx)}</span>
@@ -139,14 +139,14 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
           </Button>
         )}
         {isBase && bases.length > 1 && <p className={`tiny ${inUse ? 'bad-ink' : 'muted'}`}>{inUse ? `It cannot close yet: ${inUse}. Move or return them first.` : 'Nothing is based here or starts here. The opening cost is not refunded.'}</p>}
-        {!isBase && a.is_india && !opensLater && (
+        {!isBase && a.home === money.region && !opensLater && (
           <CashButton cost={ref.param.base_open_inr} block kind="secondary" busy={busy === 'base'}
             onClick={() => run('base', () => call('open_base', { p_airline: airline.id, p_iata: iata }), `${a.city} is now a base`).then((r) => r !== undefined && onClose())}>
             Open a base here · {inr(ref.param.base_open_inr)}
           </CashButton>
         )}
-        {!a.is_india && fromBases.length === 0 && !bases.some((b) => flying.has(pairKey(b, iata))) && (
-          <p className="small muted">No market links this airport with your bases. Foreign airports can only be reached from an Indian base.</p>
+        {a.home !== money.region && fromBases.length === 0 && !bases.some((b) => flying.has(pairKey(b, iata))) && (
+          <p className="small muted">No market links this airport with your bases. Airports outside {money.regionName} can only be reached from a base in it.</p>
         )}
       </div>
     </Sheet>

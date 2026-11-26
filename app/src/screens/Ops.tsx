@@ -5,7 +5,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAirlineDaily, useAirlineOps, useCostBenchmarks, useFleet, useGame, useMaintPlans, useOpStyles, useOpsPreview, useRoutes } from '../lib/data';
-import { gameDate, inr, num, pct, plural, usd, weekOf } from '../lib/format';
+import { Cap, fxRefOf, gameDate, inr, money, num, pct, perDollar, perKg, plural, unit, usd, weekOf } from '../lib/format';
 import type { AirlineDaily, OpsPreview } from '../lib/types';
 import { CrewCard } from '../components/PilotsCard';
 import { useAction } from '../components/toast';
@@ -54,7 +54,7 @@ export function useOpsDecisions(): Decision[] {
     const b = (h: number, s: number) => inr(hedgeBill(cur.fuel_week, h, s, fuelLock(p)));
     out.push({ key: 'fuel', tone: 'warn', tag: 'Fuel', title: `Fuel is ${pct(shock)} above normal`,
       body: <>
-        <p className="small">You hedge {pct(p.hedge_share)}. Hedging more now locks ₹{(p.fuel_lock ?? p.fuel_price).toFixed(0)} a kg for fuel 13 weeks ahead: the price expected then, as shocks fade, plus the premium. It pays if the shock lasts and costs if it ends sooner.</p>
+        <p className="small">You hedge {pct(p.hedge_share)}. Hedging more now locks {perKg(p.fuel_lock ?? p.fuel_price)} a kg for fuel 13 weeks ahead: the price expected then, as shocks fade, plus the premium. It pays if the shock lasts and costs if it ends sooner.</p>
         <div className="kv small" style={{ marginTop: 6 }}>
           <span>13 weeks of fuel, if prices stay</span><span>{b(p.hedge_share, 0)} at {pct(p.hedge_share)} · {b(next, 0)} at {pct(next)}</span>
           <span>if they rise 20% more</span><span>{b(p.hedge_share, 0.2)} · {b(next, 0.2)}</span>
@@ -73,11 +73,11 @@ export function useOpsDecisions(): Decision[] {
   if (p.usd && weak >= 0.05 && p.usd.share < p.usd.max - 1e-9 && usdWeek > 0) {
     const next = Math.min(p.usd.max, p.usd.share + p.usd.step);
     const b = (h: number, s: number) => inr(hedgeBill(usdWeek, h, s, usdLock(p)));
-    out.push({ key: 'usd', tone: 'warn', tag: 'Currency', title: `The rupee is ${pct(weak)} weaker than ₹${fxRef}`,
+    out.push({ key: 'usd', tone: 'warn', tag: 'Currency', title: `${Cap(money.word)} is ${pct(weak)} weaker than ${perDollar(fxRef, money.indian ? 0 : 2)} a dollar`,
       body: <>
-        <p className="small">Your dollar costs (aircraft, maintenance, dollar loans) are about {inr(usdWeek)} a week, and you hedge {pct(p.usd.share)}. Hedging more locks today's rate for 13 weeks, starting in 13 weeks: it pays if the rupee weakens further and costs if it recovers.</p>
+        <p className="small">Your dollar costs (aircraft, maintenance, dollar loans) are about {inr(usdWeek)} a week, and you hedge {pct(p.usd.share)}. Hedging more locks today's rate for 13 weeks, starting in 13 weeks: it pays if {money.word} weakens further and costs if it recovers.</p>
         <div className="kv small" style={{ marginTop: 6 }}>
-          <span>13 weeks of dollars, if the rupee stays</span><span>{b(p.usd.share, 0)} at {pct(p.usd.share)} · {b(next, 0)} at {pct(next)}</span>
+          <span>13 weeks of dollars, if {money.word} stays</span><span>{b(p.usd.share, 0)} at {pct(p.usd.share)} · {b(next, 0)} at {pct(next)}</span>
           <span>if it weakens 5% more</span><span>{b(p.usd.share, 0.05)} · {b(next, 0.05)}</span>
         </div>
       </>,
@@ -175,8 +175,8 @@ export function Ops() {
             ) : (
               <>
                 <div className="row" style={{ gap: 20, alignItems: 'baseline' }}>
-                  <div><div className="tiny muted">You</div><div className="kpi-s" style={{ fontSize: 24 }}>₹{total.toFixed(2)}</div></div>
-                  {indTotal != null && <div><div className="tiny muted">Industry median</div><div className="kpi-s muted" style={{ fontSize: 24 }}>₹{indTotal.toFixed(2)}</div></div>}
+                  <div><div className="tiny muted">You</div><div className="kpi-s" style={{ fontSize: 24 }}>{unit(total, 2)}</div></div>
+                  {indTotal != null && <div><div className="tiny muted">Industry median</div><div className="kpi-s muted" style={{ fontSize: 24 }}>{unit(indTotal, 2)}</div></div>}
                   {indTotal != null && <span className={`small strong ${total > indTotal ? 'bad-ink' : 'good'}`}>{pct(Math.abs(total / indTotal - 1))} {total > indTotal ? 'above' : 'below'}</span>}
                 </div>
                 <div className="cost-bars" aria-label="Cost per seat-km by line, you against the industry">
@@ -195,7 +195,7 @@ export function Ops() {
                       <>
                         <span className="swatch" style={{ background: l.color }} />
                         <span className="grow"><span className="strong small">{l.name}</span>{l.usd && <span className="usd-tag" title="Paid in dollars">$</span>}<span className="tiny muted" style={{ display: 'block' }}>{l.lever}</span></span>
-                        <span className="small num">₹{v.toFixed(2)}</span>
+                        <span className="small num">{unit(v, 2)}</span>
                         <span className={`tiny strong num ${d == null ? 'muted' : d > 0.005 ? 'bad-ink' : 'good'}`} style={{ minWidth: 44, textAlign: 'right' }}>
                           {d == null ? '' : `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d).toFixed(2)}`}</span>
                       </>
@@ -203,19 +203,19 @@ export function Ops() {
                     return l.to ? <Link key={l.key} to={l.to} className="item link cost-line">{row}</Link> : <div key={l.key} className="item cost-line">{row}</div>;
                   })}
                 </div>
-                {usdCost > 0 && (
+                {usdCost > 0 && !money.pegged && (
                   <Link to="/ops/dollars" className="fx-strip" aria-label="Currency: open dollar hedging">
                     <div className="fx-head"><span className="small strong">Currency</span><span className="small strong" style={{ color: 'var(--accent)' }}>Hedge ›</span></div>
-                    <div><div className="tiny muted">Rupee</div><div className="strong num">₹{world.fx_inr_usd.toFixed(2)}</div><div className="tiny muted">a dollar</div></div>
+                    <div><div className="tiny muted">{Cap(money.word.replace(/^the /, ''))}</div><div className="strong num">{perDollar(world.fx_inr_usd)}</div><div className="tiny muted">a dollar</div></div>
                     <div><div className="tiny muted">In dollars</div><div className="strong num">{pct(usdCost / (allCost || 1))}</div><div className="tiny muted">of your costs</div></div>
-                    <div><div className="tiny muted">Against ₹{Number(ref.param.fx_ref_inr_usd ?? 90)}</div>
-                      <div className={`strong num ${fxEffect > 0.5 ? 'bad-ink' : fxEffect < -0.5 ? 'good' : ''}`}>{Math.abs(fxEffect) < 1 ? '±₹0' : `${fxEffect > 0 ? '+' : '−'}${inr(Math.abs(fxEffect))}`}</div>
+                    <div><div className="tiny muted">Against {perDollar(fxRefOf(Number(ref.param.fx_ref_inr_usd ?? 90)), money.indian ? 0 : 2)}</div>
+                      <div className={`strong num ${fxEffect > 0.5 ? 'bad-ink' : fxEffect < -0.5 ? 'good' : ''}`}>{Math.abs(fxEffect) < 1 ? `±${money.symbol}0` : `${fxEffect > 0 ? '+' : '−'}${inr(Math.abs(fxEffect))}`}</div>
                       <div className="tiny muted">{fxEffect >= 0 ? 'added' : 'saved'} in 4 weeks</div></div>
-                    <div className="fx-foot tiny muted">Lines marked $ are paid in dollars; fares are in rupees. {o && o.usd_hedge_share > 0 ? `You hedge ${pct(o.usd_hedge_share)} of each week's dollars.` : 'No dollar hedge.'}</div>
+                    <div className="fx-foot tiny muted">Lines marked $ are paid in dollars; fares are in {money.plural}. {o && o.usd_hedge_share > 0 ? `You hedge ${pct(o.usd_hedge_share)} of each week's dollars.` : 'No dollar hedge.'}</div>
                   </Link>
                 )}
                 {wet > 0 && <p className="tiny" style={{ margin: 0 }}>{wet === fl.length ? (wet === 1 ? 'Your aircraft is' : 'All your aircraft are') : `${plural(wet, 'aircraft', 'aircraft')} ${wet === 1 ? 'is' : 'are'}`} wet-leased: {wet === 1 ? 'its crew and maintenance are in the rent, so it counts' : 'their crew and maintenance are in the rent, so they count'} under Aircraft.</p>}
-                <p className="tiny muted">Rupees per seat-km flown. {nAirlines ? `Industry: the median of ${nAirlines} airlines, refreshed weekly.` : 'The industry median shows at the end of a week once three airlines fly.'}</p>
+                <p className="tiny muted">{Cap(money.plural)} per seat-km flown. {nAirlines ? `Industry: the median of ${nAirlines} airlines, refreshed weekly.` : 'The industry median shows at the end of a week once three airlines fly.'}</p>
               </>
             )}
           </div>
@@ -292,7 +292,7 @@ function Expect({ title, items, note }: { title: ReactNode; items: { label: stri
   );
 }
 
-const signed = (x: number) => (Math.abs(x) < 1 ? '±₹0' : `${x > 0 ? '+' : '−'}${inr(Math.abs(x))}`);
+const signed = (x: number) => (Math.abs(x) < 1 ? `±${money.symbol}0` : `${x > 0 ? '+' : '−'}${inr(Math.abs(x))}`);
 
 export function OpsFuel() {
   const { world, airline, ref } = useGame();
@@ -325,14 +325,14 @@ export function OpsFuel() {
         <div className="stack-lg">
           <div className="card stack" style={{ gap: 8 }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <div><div className="tiny muted">Fuel this week</div><div className="kpi-s" style={{ fontSize: 22 }}>₹{world.fuel_inr_kg.toFixed(0)} a kg</div></div>
+              <div><div className="tiny muted">Fuel this week</div><div className="kpi-s" style={{ fontSize: 22 }}>{perKg(world.fuel_inr_kg)} a kg</div></div>
               <Badge tone={shock >= 0.1 ? 'warn' : shock <= -0.1 ? 'good' : 'neutral'}>{Math.abs(shock) < 0.02 ? 'normal' : `${pct(Math.abs(shock))} ${shock > 0 ? 'above' : 'below'} normal`}</Badge>
             </div>
             <div className="kv small">
               <span>Fuel charge in fares</span><span>{Math.abs((world.fare_index ?? 1) - 1) < 0.001 ? 'none' : `${(world.fare_index ?? 1) > 1 ? '+' : '−'}${pct(Math.abs((world.fare_index ?? 1) - 1), 1)} on every fare`}</span>
-              {p.fuel_lock != null && <><span>A hedge bought now locks</span><span>₹{p.fuel_lock.toFixed(0)} a kg (expected ₹{(p.fuel_expected ?? 0).toFixed(0)}, plus {pct(p.hedge_premium)})</span></>}
+              {p.fuel_lock != null && <><span>A hedge bought now locks</span><span>{perKg(p.fuel_lock)} a kg (expected {perKg(p.fuel_expected ?? 0)}, plus {pct(p.hedge_premium)})</span></>}
               <span>Already bought</span><span>{booked.length ? `weeks ${booked[0].week} to ${booked[booked.length - 1].week}` : 'nothing yet'}</span>
-              {booked.length > 0 && <><span>at an average of</span><span>₹{(booked.reduce((s, h) => s + h.price, 0) / booked.length).toFixed(0)} a kg</span></>}
+              {booked.length > 0 && <><span>at an average of</span><span>{perKg(booked.reduce((s, h) => s + h.price, 0) / booked.length)} a kg</span></>}
               <span>Hedge result last week</span><span className={sum(week, (d) => d.hedge_inr) >= 0 ? 'good' : 'bad-ink'}>{signed(sum(week, (d) => d.hedge_inr))}</span>
               <span>This quarter</span><span className={sum(days.filter((d) => d.game_day > qStart), (d) => d.hedge_inr) >= 0 ? 'good' : 'bad-ink'}>{signed(sum(days.filter((d) => d.game_day > qStart), (d) => d.hedge_inr))}</span>
             </div>
@@ -385,24 +385,24 @@ export function OpsDollar() {
   const rows = [[-0.05, 'gains 5%', '#4FA59A'], [0, 'stays', 'var(--accent)'], [0.05, 'loses 5%', '#F0A04B'], [0.1, 'loses 10%', '#D9644A']] as const;
   const bills = rows.map(([s]) => hedgeBill(usdWeek, share, s, usdLock(p)));
   const top = Math.max(hedgeBill(usdWeek, 0, 0.1, usdLock(p)), hedgeBill(usdWeek, share, 0.1, usdLock(p))) || 1;
-  const blurb = (h: number) => (h === 0 ? 'Buy dollars at the going rate every week. Cheapest when the rupee strengthens; a fall hits in full.'
+  const blurb = (h: number) => (h === 0 ? `Buy dollars at the going rate every week. Cheapest when ${money.word} strengthens; a fall hits in full.`
     : h <= 0.25 ? 'Takes the edge off a fall.' : h <= 0.5 ? "Half of each week's dollars bought ahead: steadier costs." : 'Most of the dollar bill fixed 13 weeks ahead. Costly if the rupee recovers.');
   const res = (xs: typeof days) => sum(xs, (d) => d.usd_hedge_inr ?? 0);
   return (
     <div className="stack-lg">
-      <PageHeader title="Dollar hedging" back="/ops" sub={`Aircraft rent, maintenance and dollar loans are paid in dollars; your fares are in rupees. Buy part of each week's dollars ${p.hedge_lead_weeks} weeks ahead, at the rate expected then plus ${pct(u.premium)}.`} />
+      <PageHeader title="Dollar hedging" back="/ops" sub={`Aircraft rent, maintenance and dollar loans are paid in dollars; your fares are in ${money.plural}. Buy part of each week's dollars ${p.hedge_lead_weeks} weeks ahead, at the rate expected then plus ${pct(u.premium)}.`} />
       <div className="split">
         <div className="stack-lg">
           <div className="card stack" style={{ gap: 8 }}>
             <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <div><div className="tiny muted">The rupee this week</div><div className="kpi-s" style={{ fontSize: 22 }}>₹{fx.toFixed(2)} a dollar</div></div>
-              <Badge tone={weak >= 0.05 ? 'warn' : weak <= -0.05 ? 'good' : 'neutral'}>{Math.abs(weak) < 0.01 ? `about ₹${u.ref}` : `${pct(Math.abs(weak))} ${weak > 0 ? 'weaker' : 'stronger'} than ₹${u.ref}`}</Badge>
+              <div><div className="tiny muted">{Cap(money.word)} this week</div><div className="kpi-s" style={{ fontSize: 22 }}>{perDollar(fx)} a dollar</div></div>
+              <Badge tone={weak >= 0.05 ? 'warn' : weak <= -0.05 ? 'good' : 'neutral'}>{Math.abs(weak) < 0.01 ? `about ${perDollar(Number(u.ref), money.indian ? 0 : 2)}` : `${pct(Math.abs(weak))} ${weak > 0 ? 'weaker' : 'stronger'} than ${perDollar(Number(u.ref), money.indian ? 0 : 2)}`}</Badge>
             </div>
             <div className="kv small">
               <span>Your dollar costs</span><span>{u.week_usd > 0 ? `${usd(u.week_usd)} a week (${inr(usdWeek)})` : 'none yet'}</span>
-              {u.lock != null && <><span>A hedge bought now locks</span><span>₹{u.lock.toFixed(2)} a dollar (expected ₹{(u.expected ?? 0).toFixed(2)}, plus {pct(u.premium)})</span></>}
+              {u.lock != null && <><span>A hedge bought now locks</span><span>{perDollar(u.lock)} a dollar (expected {perDollar(u.expected ?? 0)}, plus {pct(u.premium)})</span></>}
               <span>Already bought</span><span>{booked.length ? `weeks ${booked[0].week} to ${booked[booked.length - 1].week}` : 'nothing yet'}</span>
-              {booked.length > 0 && <><span>at an average of</span><span>₹{(booked.reduce((s0, h) => s0 + h.rate, 0) / booked.length).toFixed(2)} a dollar</span></>}
+              {booked.length > 0 && <><span>at an average of</span><span>{perDollar(booked.reduce((s0, h) => s0 + h.rate, 0) / booked.length)} a dollar</span></>}
               <span>Hedge result last week</span><span className={res(week) >= 0 ? 'good' : 'bad-ink'}>{signed(res(week))}</span>
               <span>This quarter</span><span className={res(quarter) >= 0 ? 'good' : 'bad-ink'}>{signed(res(quarter))}</span>
             </div>
@@ -413,7 +413,7 @@ export function OpsDollar() {
         </div>
         <div className="stack-lg">
           <div className="card stack" style={{ gap: 10 }}>
-            <div className="small muted">Dollar costs for weeks {wNow + p.hedge_lead_weeks} to {wNow + p.hedge_lead_weeks + 12} (the weeks this choice buys), in rupees, with <strong style={{ color: 'var(--ink)' }}>{share === 0 ? 'no hedge' : `${pct(share)} hedged`}</strong>, if the rupee then…</div>
+            <div className="small muted">Dollar costs for weeks {wNow + p.hedge_lead_weeks} to {wNow + p.hedge_lead_weeks + 12} (the weeks this choice buys), in {money.plural}, with <strong style={{ color: 'var(--ink)' }}>{share === 0 ? 'no hedge' : `${pct(share)} hedged`}</strong>, if {money.word} then…</div>
             {usdWeek === 0 ? <p className="small muted">No dollar costs yet: they start with your first aircraft.</p> : rows.map(([s, label, c], i) => (
               <div key={s} className="hedge-row">
                 <span className="small">{label}</span>
@@ -541,9 +541,9 @@ export function OpsStyle() {
         <div className="stack-lg">
           <Expect title={<>Expect for your fleet with <strong style={{ color: 'var(--ink)' }}>{meta.name}</strong>, at today's fuel price</>} note={caveat}
             items={[
-              { label: 'Fuel a week', v: inr(sel.fuel_week), note: key === 'standard' ? `at ₹${p.fuel_price.toFixed(0)} a kg` : `${signed(sel.fuel_week - std.fuel_week)} against Standard`, tone: sel.fuel_week < std.fuel_week ? 'good' : sel.fuel_week > std.fuel_week ? 'bad' : undefined },
+              { label: 'Fuel a week', v: inr(sel.fuel_week), note: key === 'standard' ? `at ${perKg(p.fuel_price)} a kg` : `${signed(sel.fuel_week - std.fuel_week)} against Standard`, tone: sel.fuel_week < std.fuel_week ? 'good' : sel.fuel_week > std.fuel_week ? 'bad' : undefined },
               { label: 'Round trips that fit', v: num(sel.trips_fit), note: `you fly ${num(sel.trips_week)} a week${sel.trips_fit !== std.trips_fit ? ` · ${sel.trips_fit > std.trips_fit ? '+' : '−'}${num(Math.abs(sel.trips_fit - std.trips_fit))} against Standard` : ''}` },
-              { label: 'Other costs a week', v: sel.other_week ? signed(sel.other_week) : '±₹0', note: key === 'quick' ? 'crew allowance per quick turn' : key === 'saver' ? 'flying pay and maintenance by the hour' : 'nothing extra', tone: sel.other_week > 0 ? 'bad' : undefined },
+              { label: 'Other costs a week', v: sel.other_week ? signed(sel.other_week) : `±${money.symbol}0`, note: key === 'quick' ? 'crew allowance per quick turn' : key === 'saver' ? 'flying pay and maintenance by the hour' : 'nothing extra', tone: sel.other_week > 0 ? 'bad' : undefined },
               { label: 'On time', v: pct(sel.otp), note: sel.brand_delta ? `brand ${sel.brand_delta > 0 ? 'rises' : 'dips'}` : 'your punctuality' },
             ]} />
           <Button block disabled={key === p.style} busy={busy === 'style'}
