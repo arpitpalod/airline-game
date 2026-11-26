@@ -862,6 +862,8 @@ The owner asked for an in-game QA after a refusal that came only after the tap (
 | Give-back and close buttons without their cost | "Return to the lessor · pay ₹4.75 cr", "Close route · ₹X compensation" |
 | Wording | "an A320neo", "1 aircraft is", "1 player", whole weeks everywhere, a true minus sign in percentages, toasts by week not day, "after interest and tax" on Home |
 
+Owner's decisions after the QA (26 Nov 2026): routes too thin to pay stay open to players, who find out with a quick or full study; the Open a route list leaves out the routes the airline already flies from the chosen base (a search that finds only those says so).
+
 Migration 0034 changes no rule: `game.inr_text` formats money as the app does, `game.book` refuses with "Not enough cash: this needs ₹23.9 cr and you have ₹5 cr in hand", and `set_rotation` (from 0033) groups the seat counts in its refusal. Tested: `checks_23` (2 checks), the 0028 seat check updated, the app test, and the QA flows replayed at phone size.
 
 ## 15. Screens
