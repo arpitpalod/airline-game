@@ -4,10 +4,11 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAircraftMarket, useBases, useFleet, useGame, useLayout } from '../lib/data';
 import { crewFor, layoutRows } from '../lib/game';
-import { arrivalLabel, arrivalWeek, inr, num, pct, usd, weeks } from '../lib/format';
+import { an, arrivalLabel, arrivalWeek, inr, num, pct, usd, weeks } from '../lib/format';
 import { SeatMap } from '../components/SeatMap';
 import { useAction } from '../components/toast';
-import { Button, Empty, Field, Loading, PageHeader, Seg, Stepper } from '../components/ui';
+import { Empty, Field, Loading, PageHeader, Seg, Stepper } from '../components/ui';
+import { CashButton } from '../components/Cash';
 
 export const DEFAULT_CABIN: Record<string, [number, number | null, number]> = {
   AT76: [0, null, 29], A20N: [0, null, 29], A21N: [0, null, 30], A21X: [3, 38, 30], A359: [9, 44, 31],
@@ -95,11 +96,11 @@ export function Configurator() {
                 <span>Cost</span><span>{inr(refitCost)}</span>
                 <span>Time on the ground</span><span>{weeks(Math.max(7, Math.ceil(ref.param.refit_days / 7) * 7))}, back in week {arrivalWeek(world.game_day + 1 + ref.param.refit_days)}</span>
               </div>
-              <Button block disabled={!!same || !L?.valid} busy={busy === 'refit'} onClick={() => run('refit', () => call<{ cost_inr: number; back_day: number }>('refit_aircraft', {
+              <CashButton cost={same ? 0 : refitCost} block disabled={!!same || !L?.valid} busy={busy === 'refit'} onClick={() => run('refit', () => call<{ cost_inr: number; back_day: number }>('refit_aircraft', {
                 p_airline: airline.id, p_aircraft: ac.id, p_biz_rows: br, p_biz_pitch: br ? bp : null, p_econ_pitch: ep,
               }), (r) => `Refit booked for ${inr(r.cost_inr)}. Back in week ${arrivalWeek(r.back_day)}.`).then((r) => r && nav(`/aircraft/${ac.id}`))}>
                 {same ? 'This is the current cabin' : `Refit for ${inr(refitCost)}`}
-              </Button>
+              </CashButton>
             </div>
           ) : (
             <OrderBox typeId={t.id} br={br} bp={br ? bp : null} ep={ep} valid={!!L?.valid} />
@@ -151,19 +152,19 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
         {pay === 'cash' && 'Pay the full balance from cash on delivery. You own the aircraft and pay no interest. If cash is short that day, it becomes a sale and leaseback.'}
         {pay === 'slb' && `A lessor buys it on delivery and leases it back to you at ${pct(ref.param.slb_rent_mult)} of the usual rent. No big payment, but you never own it.`}
       </p>
-      {okBases.length === 0 ? <div className="card warn small">None of your bases can take a {t.name}.</div> : (
+      {okBases.length === 0 ? <div className="card warn small">None of your bases can take {an(t.name)}.</div> : (
         <Field label="Base it at">
           <select className="input" value={b} onChange={(e) => setBase(e.target.value)}>
             {okBases.map((x) => <option key={x.iata} value={x.iata}>{ref.airport[x.iata]?.city} ({x.iata})</option>)}
           </select>
         </Field>
       )}
-      <Button block disabled={!valid || !b} busy={busy === 'order'} onClick={() => run('order', () => call<{ reg: string; arrives_day: number }[]>('order_aircraft_bulk', {
+      <CashButton cost={dep * count} block disabled={!valid || !b} busy={busy === 'order'} onClick={() => run('order', () => call<{ reg: string; arrives_day: number }[]>('order_aircraft_bulk', {
         p_airline: airline.id, p_type: typeId, p_base: b, p_count: count, p_biz_rows: br, p_biz_pitch: bp, p_econ_pitch: ep, p_pay: pay,
-      }), (r) => r.length === 1 ? `${r[0].reg} ordered. It arrives on day ${r[0].arrives_day}.`
-        : `${r.length} aircraft ordered. They arrive from day ${r[0].arrives_day} to day ${r[r.length - 1].arrives_day}.`).then((r) => r && nav('/fleet'))}>
+      }), (r) => r.length === 1 ? `${r[0].reg} ordered. It arrives in week ${arrivalWeek(r[0].arrives_day)}.`
+        : `${r.length} aircraft ordered. They arrive from week ${arrivalWeek(r[0].arrives_day)} to week ${arrivalWeek(r[r.length - 1].arrives_day)}.`).then((r) => r && nav('/fleet'))}>
         {count > 1 ? `Order ${count} for ${inr(dep * count)} deposit` : `Order for ${inr(dep)} deposit`}
-      </Button>
+      </CashButton>
       <p className="tiny muted">Every order joins one queue for this type, so a rush of orders lengthens everyone's wait.</p>
     </div>
   );

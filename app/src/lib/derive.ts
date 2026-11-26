@@ -78,6 +78,13 @@ export const COST_LINES: { key: string; label: string; of: (d: AirlineDaily) => 
   { key: 'c_other', label: 'Launches, ferry flights and other', of: (d) => d.c_other - Number(d.c_comp ?? 0) },
 ];
 
+/** Travellers a week each way who want a route (every airline together), and whether the seats offered dwarf them:
+ *  then no fare fills the flights, and the advice is fewer flights or a smaller aircraft (QA, 26 Nov 2026). */
+export function demandWeek(m: Market | undefined, demandScale: number) {
+  return m ? (m.n_biz + m.n_lei + m.n_bud) * demandScale * 7 : null;
+}
+export const seatsDwarf = (seatsEachWayWeek: number, demand: number | null) => demand != null && seatsEachWayWeek > 2.5 * Math.max(1, demand);
+
 /** What a traveller gets in this world when the airline cancels a flight they bought within the region's notice (0033):
  *  by distance band, capped at a multiple of the fare, plus a share of the fare. */
 export function cancelComp(p: Record<string, number>, km: number, fare: number) {

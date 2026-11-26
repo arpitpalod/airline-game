@@ -96,6 +96,22 @@ export function useSeatRoom() {
     queryFn: () => call<SeatRoom[]>('seat_room', { p_world: world.id, p_airline: airline.id }) });
 }
 
+/** The seats between India and the country at a route's far end still free in this world (0028), or null where no limit
+ *  applies. cap(seats, current) is the most round trips an aircraft of that many seats may fly there, as set_rotation
+ *  allows: what it flies now, or what the free seats take on top. */
+export function useSeatCap(ends: string[]) {
+  const { ref } = useGame();
+  const room = useSeatRoom();
+  return seatCapOf(ref, room.data, ends);
+}
+export function seatCapOf(ref: Ref, room: SeatRoom[] | undefined, ends: string[]) {
+  const far = ends.map((x) => ref.airport[x]).find((x) => x && !x.is_india);
+  const r = far && ends.some((x) => ref.airport[x]?.is_india) ? room?.find((x) => x.country === far.country) : undefined;
+  if (!r) return null;
+  const free = Math.max(0, r.limit - r.used);
+  return { name: r.name.replace(/^the /, ''), free, cap: (seats: number, current = 0) => Math.max(current, Math.floor((free + current * seats) / Math.max(1, seats))) };
+}
+
 export const useFounderStatus = () =>
   useQuery({ queryKey: ['founder_status'], queryFn: () => call<FounderStatus>('founder_status', {}) });
 

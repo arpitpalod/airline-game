@@ -29,7 +29,7 @@ export async function checks18(t) {
   await q(`insert into public.world_params (world_id, key, num, public) values ($1, 'seat_limit_mult', $2, true)`, [W, (used0 + 1.5 * seatsA) / (135000 * 0.36)]);
   const RA = await one(`select public.open_route($1, 'DEL', 'DXB')`, [A]);
   await q(`select public.set_rotation($1, $2, $3, 1)`, [A, acA, RA]);
-  await fails('more round trips than the free seats are refused', `select public.set_rotation('${A}', '${acA}', '${RA}', 2)`, /Seats between India and the UAE are full/);
+  await fails('more round trips than the free seats are refused', `select public.set_rotation('${A}', '${acA}', '${RA}', 2)`, /Seats between India and the UAE are full in this world: [0-9,]+ of [0-9,]+ a week/);
   const room = (await one(`select public.seat_room($1, $2)`, [W, A])).find((x) => x.country === 'AE');
   ok('the app sees the seats, those taken and its own', room && room.used === used0 + seatsA && room.mine === seatsA && Math.abs(room.limit - (used0 + 1.5 * seatsA)) <= 1, JSON.stringify(room));
   const RB = await one(`select public.open_route($1, 'BOM', 'DXB')`, [B]);

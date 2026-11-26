@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { call } from '../lib/api';
-import { useBases, useGame, useMarketsFrom, useRouteDaily, useRoutes, useStrategies } from '../lib/data';
+import { useBases, useFleet, useGame, useMarketsFrom, useRouteDaily, useRoutes, useStrategies } from '../lib/data';
 import { lfTone, routeStat } from '../lib/derive';
 import { marketTotal, pairKey } from '../lib/game';
 import { currentWeek, inr, num, pct, weekOf } from '../lib/format';
@@ -11,6 +11,7 @@ import { WorldMap } from '../components/WorldMap';
 import { useAction } from '../components/toast';
 import { Badge, Bar, Button, Empty, Field, Icon, Loading, PageHeader, Seg, Sheet } from '../components/ui';
 import { StudyCard } from '../components/Study';
+import { CashButton, ShortNote, useShort } from '../components/Cash';
 
 export function Network() {
   const { ref, world, airline } = useGame();
@@ -100,6 +101,13 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
   const { run, busy } = useAction();
   const isBase = bases.includes(iata);
   const fromBases = bases.filter((b) => b !== iata && markets?.[pairKey(b, iata)] && !flying.has(pairKey(b, iata)));
+  // what still uses this base: close_base refuses while aircraft are based here or routes start here
+  const fleet = useFleet();
+  const net = useRoutes();
+  const basedHere = (fleet.data ?? []).filter((x) => x.base_iata === iata && x.status !== 'returned').length;
+  const routesHere = (net.data?.routes ?? []).filter((r) => r.origin === iata && r.status === 'open').length;
+  const inUse = [basedHere ? `${basedHere} ${basedHere === 1 ? 'aircraft is' : 'aircraft are'} based here` : '',
+    routesHere ? `${routesHere} ${routesHere === 1 ? 'route starts' : 'routes start'} here` : ''].filter(Boolean).join(' and ');
   const opensLater = a.opens_day > world.game_day + 1;
   return (
     <Sheet title={`${a.city} (${a.iata})`} onClose={onClose}>
@@ -124,17 +132,17 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
           );
         })}
         {isBase && bases.length > 1 && (
-          <Button block kind="danger" busy={busy === 'close-base'}
+          <Button block kind="danger" busy={busy === 'close-base'} disabled={!!inUse}
             onClick={() => run('close-base', () => call('close_base', { p_airline: airline.id, p_iata: iata }), `The base at ${a.city} is closed`).then((r) => r !== undefined && onClose())}>
             Close this base · saves {inr(ref.param.base_fixed_inr_day * 7)} a week
           </Button>
         )}
-        {isBase && bases.length > 1 && <p className="tiny muted">Move or return the aircraft based here, and close the routes that start here, first. The opening cost is not refunded.</p>}
+        {isBase && bases.length > 1 && <p className={`tiny ${inUse ? 'bad-ink' : 'muted'}`}>{inUse ? `It cannot close yet: ${inUse}. Move or return them first.` : 'Nothing is based here or starts here. The opening cost is not refunded.'}</p>}
         {!isBase && a.is_india && !opensLater && (
-          <Button block kind="secondary" busy={busy === 'base'}
+          <CashButton cost={ref.param.base_open_inr} block kind="secondary" busy={busy === 'base'}
             onClick={() => run('base', () => call('open_base', { p_airline: airline.id, p_iata: iata }), `${a.city} is now a base`).then((r) => r !== undefined && onClose())}>
             Open a base here · {inr(ref.param.base_open_inr)}
-          </Button>
+          </CashButton>
         )}
         {!a.is_india && fromBases.length === 0 && !bases.some((b) => flying.has(pairKey(b, iata))) && (
           <p className="small muted">No market links this airport with your bases. Foreign airports can only be reached from an Indian base.</p>
@@ -158,14 +166,20 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
   const [scope, setScope] = useState<'india' | 'intl'>('india');
   const { run, busy } = useAction();
   const nav = useNavigate();
+  const launchShort = useShort(ref.param.route_launch_inr ?? 0);
+  const fleet = useFleet();
 
+  // a search looks in both tabs: a destination typed is found wherever it is, domestic or international
   const options = useMemo(() => Object.values(markets ?? {})
     .filter((m) => m.a === base || m.b === base)
     .map((m) => ({ m, other: m.a === base ? m.b : m.a }))
     .filter(({ other }) => ref.airport[other] && ref.airport[other].opens_day <= world.game_day + 1)
-    .filter(({ m }) => (scope === 'intl') === m.intl)
-    .filter(({ other }) => !q || `${ref.airport[other].city} ${other}`.toLowerCase().includes(q.toLowerCase()))
+    .filter(({ m }) => !!q || (scope === 'intl') === m.intl)
+    .filter(({ other }) => !q || `${ref.airport[other].city} ${other} ${ref.airport[other].country}`.toLowerCase().includes(q.toLowerCase()))
     .sort((x, y) => marketTotal(y.m) - marketTotal(x.m)), [markets, base, q, scope, ref.airport, world.game_day]);
+  // no aircraft of the airline's (in hand or on order) can use a turboprop-only airport: say so before the launch is paid
+  const turboOnly = dest ? [base, dest].map((x) => ref.airport[x]).find((ap) => ap?.runway_class === 1) : undefined;
+  const canLand = (fleet.data ?? []).some((x) => x.status !== 'returned' && ref.type[x.type_id]?.runway_class === 1);
 
   const m = dest ? markets?.[pairKey(base, dest)] : undefined;
   const [fare, setFare] = useState<number | null>(null);
@@ -183,7 +197,7 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
             <span>Reference fare</span><span>{inr(m.ref_fare)}</span>
             {ref.param.route_launch_inr > 0 && <><span>Launch: stations, sales and marketing</span><span>{inr(ref.param.route_launch_inr)}, once</span></>}
           </div>
-          {ref.airport[dest].runway_class === 1 && <div className="card warn small">{ref.airport[dest].city} takes turboprops only: only an ATR 72 can fly this route.</div>}
+          {turboOnly && <div className="card warn small">{turboOnly.city} takes turboprops only: only an ATR 72 can fly this route.{canLand ? '' : ' You have none yet: lease, order or wet-lease one before its first flight, or the launch is paid for a route nothing flies.'}</div>}
           {flying.has(pairKey(base, dest)) && <div className="card warn small">You already fly this route.</div>}
           <StudyCard a={base} b={dest} />
           {world.selling ? (
@@ -204,10 +218,11 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
               </div>
             </Field>
           )}
+          <ShortNote cost={ref.param.route_launch_inr ?? 0} />
           <div className="row">
             <Button kind="secondary" onClick={() => setDest(null)}>Back</Button>
             <div className="grow" />
-            <Button busy={busy === 'open'} onClick={async () => {
+            <Button busy={busy === 'open'} disabled={launchShort > 0} onClick={async () => {
               const id = await run('open', async () => {
                 const rid = await call<string>('open_route', { p_airline: airlineId, p_origin: base, p_dest: dest, p_fare_econ: Math.round(fareVal), p_fare_biz: null });
                 if (world.selling && strat !== 'balanced') await call('set_strategy', { p_airline: airlineId, p_route: rid, p_strategy: strat });
@@ -237,14 +252,14 @@ function OpenRouteSheet({ initial, bases, markets, onClose, flying, airlineId }:
                 <div key={other} className="item link" onClick={() => { setDest(other); setFare(null); }}>
                   <div className="num strong" style={{ width: 40 }}>{other}</div>
                   <div className="grow">
-                    <div>{ref.airport[other].city}{flying.has(pairKey(base, other)) && <span className="tiny muted"> · flying</span>}</div>
+                    <div>{ref.airport[other].city}{q && mk.intl && <span className="tiny muted"> · international</span>}{flying.has(pairKey(base, other)) && <span className="tiny muted"> · flying</span>}</div>
                     <div className="tiny muted">{num(mk.km)} km · about {num(marketTotal(mk) * world.demand_scale * 7)} a week · {inr(mk.ref_fare)}</div>
                   </div>
                   {ref.airport[other].runway_class === 1 && <Badge tone="warn">ATR only</Badge>}
                   <Icon name="right" />
                 </div>
               ))}
-              {options.length === 0 && <div className="item small muted">No destinations match.</div>}
+              {options.length === 0 && <div className="item small muted">{q ? `No market links ${ref.airport[base]?.city} with "${q}".` : 'No destinations match.'}</div>}
             </div>
           </div>
         </div>

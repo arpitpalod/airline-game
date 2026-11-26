@@ -54,6 +54,8 @@ export interface Terms {
   finance_loan: boolean; loan_usd: number | null; loan_pay_usd_day: number | null;
   /** 0026: an order's loan currency, and a rupee loan's balance */
   loan_ccy: 'usd' | 'inr'; loan_inr: number; loan_pay_inr_day: number | null;
+  /** 0033: a wet lease's minimum term (null: none, as for the starting aircraft) */
+  wet_min_until?: number | null; starter?: boolean;
   /** 0028: weeks the maker put a new aircraft back (0: on time; null: not yet told) */
   delay_weeks: number | null;
 }

@@ -4,10 +4,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAircraftMarket, useBases, useGame, usePool, useQuote, useTxns } from '../lib/data';
 import { ageYears, poolRentUsd } from '../lib/game';
-import { arrivalLabel, inr, num, usd, weeks } from '../lib/format';
+import { an, arrivalLabel, inr, num, usd, weeks } from '../lib/format';
 import type { Aircraft } from '../lib/types';
 import { useAction } from '../components/toast';
 import { Badge, Button, Empty, Field, Loading, PageHeader, Seg, Sheet, Stepper } from '../components/ui';
+import { CashButton } from '../components/Cash';
 
 type Tab = 'lease' | 'order' | 'wet';
 
@@ -51,7 +52,7 @@ export function Market() {
         { value: 'lease', label: 'Lease' }, { value: 'order', label: 'Order new' }, { value: 'wet', label: 'Wet lease' },
       ]} />
       <div className="card info small">
-        {tab === 'lease' && <>An operating lease from the lessor pool arrives in {weeks(42)} to {weeks(91)} and runs {num(ref.param.lease_term_days / 364, 0)} game years. Rent rises as the pool empties. You pay {ref.param.lease_deposit_months} months' rent as a deposit. You can take {left} more from the pool right now: lessors place at most {ref.param.pool_lease_max_qtr} with one airline in any 13 weeks.</>}
+        {tab === 'lease' && <>An operating lease from the lessor pool arrives in {weeks(42)} to {weeks(91)} and runs {num(ref.param.lease_term_days / 364, 0)} game years. Rent rises as the pool empties. You pay {ref.param.lease_deposit_months} months' rent as a deposit; giving one back early costs the rent left, up to {ref.param.lease_break_months ?? 6} months. You can take {left} more from the pool right now: lessors place at most {ref.param.pool_lease_max_qtr} with one airline in any 13 weeks.</>}
         {tab === 'order' && <>A new aircraft is the cheapest to run but takes at least {weeks(Math.ceil(ref.param.order_lead_min_days / 7) * 7)} to arrive. You pay 15% now and the rest on delivery: cash, an aircraft loan, or a sale and leaseback. You choose its cabin.</>}
         {tab === 'wet' && <>A wet lease comes with crew and maintenance and arrives in {weeks(ref.param.wet_lead_days ?? 28)}, so order it ahead. It is the fastest way to add capacity and the most expensive: about twice an operating lease, billed for at least {ref.param.wet_min_hours_day} hours a day.</>}
       </div>
@@ -115,6 +116,7 @@ export function Market() {
                 <div className="kv">
                   <span>Rate</span><span>{usd(q.wet_usd_bh)} a block hour</span>
                   <span>Minimum a week</span><span>{inr(q.wet_usd_bh * ref.param.wet_min_hours_day * 7 * world.fx_inr_usd)}</span>
+                  <WetRoom typeId={t.id} />
                   <span>Arrives</span><span>{arrivalLabel(world.game_day + 1 + q.wet_lead_days, world.start_date)}</span>
                 </div>
                 <Button kind="secondary" onClick={() => setWet(t.id)}>Wet-lease one</Button>
@@ -156,7 +158,7 @@ function BasePicker({ typeId, value, onChange }: { typeId: string; value: string
   const bases = useBases();
   const t = ref.type[typeId];
   const ok = (bases.data ?? []).filter((b) => (ref.airport[b.iata]?.runway_class ?? 0) >= t.runway_class);
-  if (!ok.length) return <div className="card warn small">None of your bases can take a {t.name}.</div>;
+  if (!ok.length) return <div className="card warn small">None of your bases can take {an(t.name)}.</div>;
   return (
     <Field label="Base it at">
       <select className="input" value={value || ok[0].iata} onChange={(e) => onChange(e.target.value)}>
@@ -206,16 +208,28 @@ function LeaseSheet({ group, onClose, left }: { group: PoolGroup; onClose: () =>
         <div className="kv">
           <span>Rent, about</span><span>{usd(rent)} a month{n > 1 ? ` for ${n}` : ''}</span>
           <span>Deposit now, about</span><span>{inr(rent * ref.param.lease_deposit_months * world.fx_inr_usd)}</span>
+          <span>Runs</span><span>{num(ref.param.lease_term_days / 364, 0)} game years from arrival, then renews at the market rent</span>
+          <span>Giving it back early</span><span>the rent left, up to {ref.param.lease_break_months ?? 6} months: about {inr(rent * (ref.param.lease_break_months ?? 6) * world.fx_inr_usd)}</span>
         </div>
         <BasePicker typeId={ac.type_id} value={base || def} onChange={setBase} />
-        <Button block disabled={most === 0} busy={busy === 'lease'} onClick={() => run('lease', () => call<{ reg: string; arrives_day: number }[]>('lease_aircraft_bulk', {
+        <CashButton cost={most === 0 ? 0 : rent * ref.param.lease_deposit_months * world.fx_inr_usd} block disabled={most === 0} busy={busy === 'lease'} onClick={() => run('lease', () => call<{ reg: string; arrives_day: number }[]>('lease_aircraft_bulk', {
           p_airline: airline.id, p_aircraft: chosen.map((a) => a.id), p_base: base || def,
         }), (r) => `${r.map((x) => x.reg).join(', ')} leased. ${r.length > 1 ? 'They arrive' : 'It arrives'} in ${arrivalLabel(r[0].arrives_day, world.start_date)}; you can plan routes now.`).then((r) => r && nav('/fleet'))}>
           {n > 1 ? `Lease ${n} aircraft` : 'Lease it'}
-        </Button>
+        </CashButton>
       </div>
     </Sheet>
   );
+}
+
+/** 0033: the wet lessors' free aircraft of a type and the shortest lease, on its card */
+function WetRoom({ typeId }: { typeId: string }) {
+  const room = useQuote<{ free: number; max: number; min_weeks: number }>('wet', null, typeId).data;
+  if (!room) return null;
+  return <>
+    <span>Free in this world</span><span className={room.free === 0 ? 'bad-ink' : ''}>{room.free} of {room.max}</span>
+    <span>Shortest lease</span><span>{room.min_weeks} weeks from arrival</span>
+  </>;
 }
 
 function WetSheet({ typeId, onClose }: { typeId: string; onClose: () => void }) {
@@ -226,7 +240,7 @@ function WetSheet({ typeId, onClose }: { typeId: string; onClose: () => void }) 
   const [base, setBase] = useState('');
   const room = useQuote<{ free: number; max: number; min_weeks: number }>('wet', null, typeId).data;   // 0033: few wet lessors
   return (
-    <Sheet title={`Wet-lease a ${ref.type[typeId].name}`} onClose={onClose}>
+    <Sheet title={`Wet-lease ${an(ref.type[typeId].name)}`} onClose={onClose}>
       <div className="stack">
         <p className="small">Use a wet lease to fill a gap while a leased or new aircraft is on its way, then end it. It cannot be refitted.</p>
         {room && <div className="kv small">

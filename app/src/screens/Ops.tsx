@@ -10,6 +10,7 @@ import type { AirlineDaily, OpsPreview } from '../lib/types';
 import { CrewCard } from '../components/PilotsCard';
 import { useAction } from '../components/toast';
 import { Badge, Button, Loading, PageHeader } from '../components/ui';
+import { CashButton } from '../components/Cash';
 
 // ---------- cost lines ----------
 const LINES: { key: string; name: string; color: string; lever: string; to?: string; usd?: boolean; of: (d: AirlineDaily) => number }[] = [
@@ -213,7 +214,7 @@ export function Ops() {
                     <div className="fx-foot tiny muted">Lines marked $ are paid in dollars; fares are in rupees. {o && o.usd_hedge_share > 0 ? `You hedge ${pct(o.usd_hedge_share)} of each week's dollars.` : 'No dollar hedge.'}</div>
                   </Link>
                 )}
-                {wet > 0 && <p className="tiny" style={{ margin: 0 }}>{wet === fl.length ? 'All your aircraft are' : `${plural(wet, 'aircraft', 'aircraft')} are`} wet-leased: their crew and maintenance are in the rent, so they count under Aircraft.</p>}
+                {wet > 0 && <p className="tiny" style={{ margin: 0 }}>{wet === fl.length ? (wet === 1 ? 'Your aircraft is' : 'All your aircraft are') : `${plural(wet, 'aircraft', 'aircraft')} ${wet === 1 ? 'is' : 'are'}`} wet-leased: {wet === 1 ? 'its crew and maintenance are in the rent, so it counts' : 'their crew and maintenance are in the rent, so they count'} under Aircraft.</p>}
                 <p className="tiny muted">Rupees per seat-km flown. {nAirlines ? `Industry: the median of ${nAirlines} airlines, refreshed weekly.` : 'The industry median shows at the end of a week once three airlines fly.'}</p>
               </>
             )}
@@ -476,7 +477,8 @@ export function OpsMaint() {
   const meta = plans.data.find((x) => x.key === key)!;
   const locked = p.day < p.locked_until && key !== p.plan;
   const pending = p.plan_next === key;
-  const commit = sel.lock_weeks > 0 ? `Runs ${sel.lock_weeks} weeks once it takes effect.` : sel.setup_inr > 0 ? `${inr(sel.setup_inr)} to set up, paid now; opens ${sel.setup_weeks} weeks later.` : 'Change any time; it takes effect from next week.';
+  const commit = locked ? `Your ${(plans.data.find((x) => x.key === p.plan)?.name ?? "strategy").toLowerCase()} runs until week ${weekOf(p.locked_until)}: you can change from then.`
+    : sel.lock_weeks > 0 ? `Runs ${sel.lock_weeks} weeks once it takes effect.` : sel.setup_inr > 0 ? `${inr(sel.setup_inr)} to set up, paid now; opens ${sel.setup_weeks} weeks later.` : 'Change any time; it takes effect from next week.';
   return (
     <div className="stack-lg">
       <PageHeader title="Maintenance strategy" back="/ops" sub={p.aircraft === 0
@@ -502,12 +504,12 @@ export function OpsMaint() {
             <div className="legend"><span><i style={{ background: '#1E5AA8' }} />Flight-hour contract</span><span><i style={{ background: '#9AA3B2' }} />Pay as you go</span><span><i style={{ background: 'var(--accent)' }} />Own hangar</span></div>
             <div className="tiny muted">Costs only, at today's flying and ages; groundings come on top. Spare aircraft at the same base cover a grounding.</div>
           </div>}
-          <Button block disabled={(key === p.plan && !p.plan_next) || pending || locked} busy={busy === 'maint'}
+          <CashButton cost={key === p.plan || pending || locked ? 0 : sel.setup_inr} block disabled={(key === p.plan && !p.plan_next) || pending || locked} busy={busy === 'maint'}
             onClick={() => run('maint', () => call<{ from_day: number | null }>('set_maint_plan', { p_airline: airline.id, p_plan: key }),
               (r) => r.from_day == null ? `Staying with ${meta.name.toLowerCase()}.` : `${meta.name} from week ${weekOf(r.from_day)}.`).then(() => setPick(null))}>
             {key === p.plan ? (p.plan_next ? `Stay with ${meta.name.toLowerCase()}` : 'Your strategy now') : pending ? 'On its way' : locked ? `Locked until week ${weekOf(p.locked_until)}`
               : sel.setup_inr > 0 ? `Set up ${meta.name.toLowerCase()} · ${inr(sel.setup_inr)}` : `Switch to ${meta.name.toLowerCase()}`}
-          </Button>
+          </CashButton>
         </div>
       </div>
     </div>
