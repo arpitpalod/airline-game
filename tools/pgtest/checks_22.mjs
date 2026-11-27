@@ -354,7 +354,7 @@ export async function checks22(t) {
   // ---------- the region values of a world ----------
   const keys = await q(`select option, string_agg(k, ',' order by k) ks from public.world_options o, jsonb_object_keys(o.vals) k
     where setting = 'region' group by option`);
-  ok('every region sets the same rules', keys.length === 8 && new Set(keys.map((r) => r.ks)).size === 1 && !keys[0].ks.split(',').includes('interest_year'),
+  ok('every region sets the same rules', keys.length === 9 && new Set(keys.map((r) => r.ks)).size === 1 && !keys[0].ks.split(',').includes('interest_year'),
     keys[0]?.ks);
   const nw = await one(`select public.create_world('Regions 22', '{"bots": "none", "min_players": 1}')`);
   const wp = Object.fromEntries((await q(`select key, num::float from public.world_params where world_id = $1`, [nw.world_id])).map((r) => [r.key, r.num]));

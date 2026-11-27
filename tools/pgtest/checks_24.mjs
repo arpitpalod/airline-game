@@ -15,15 +15,15 @@ export async function checks24(t) {
 
   const src = (await q(`select count(*) filter (where pax_src = 'V')::int v, count(*) filter (where pax_src = 'G')::int g
       from public.airports where not is_india`))[0];
-  ok('245 airports outside India carry published figures (0036), 95 stay estimates', src.v === 245 && src.g === 95, JSON.stringify(src));
+  ok('290 airports outside India carry published figures (0036, 0038), 109 stay estimates', src.v === 290 && src.g === 109, JSON.stringify(src));
   const atl = await one(`select pax_m from public.airports where iata = 'ATL'`);
   ok('Atlanta has its published figure (FAA 2025 boardings x 2)', Number(atl) === 102.9, atl);
   const fa = (await q(`select count(*)::int n, count(*) filter (where mass is null)::int new,
       count(*) filter (where pax_m is null or intl_share is null or od_share is null)::int gaps from public.airports where not is_india`))[0];
-  ok('340 airports outside India, 271 of them new, every one with passengers and shares', fa.n === 340 && fa.new === 271 && fa.gaps === 0, JSON.stringify(fa));
+  ok('399 airports outside India, 330 of them new (0035, 0038), every one with passengers and shares', fa.n === 399 && fa.new === 330 && fa.gaps === 0, JSON.stringify(fa));
   const homes = await q(`select home, count(*)::int n from public.airports where home is not null group by home order by home`);
-  const want = { africa: 36, canada: 15, china: 46, europe: 75, india: 93, middle_east: 24, south_america: 39, usa: 53 };
-  ok('home airports per region', homes.every((r) => want[r.home] === r.n) && homes.length === 8, homes.map((r) => `${r.home} ${r.n}`).join(', '));
+  const want = { africa: 36, canada: 15, china: 46, europe: 75, india: 93, middle_east: 24, south_america: 39, southeast_asia: 70, usa: 53 };
+  ok('home airports per region', homes.every((r) => want[r.home] === r.n) && homes.length === 9, homes.map((r) => `${r.home} ${r.n}`).join(', '));
 
   const seen = (await q(`select count(*) filter (where home is not null and not home = any(seen_in))::int missing,
       count(*) filter (where 'india' = any(seen_in))::int india from public.airports`))[0];
@@ -34,7 +34,7 @@ export async function checks24(t) {
       count(*) filter (where zone is distinct from (select case when x.home = y.home then x.home end from public.airports x, public.airports y
                                                     where x.iata = m.a and y.iata = m.b))::int wrong_zone
       from public.markets m`))[0];
-  ok('25,683 markets outside India (0036); zones set (India domestic 4,278)', mk.other === 25683 && mk.india_dom === 4278 && mk.wrong_zone === 0, JSON.stringify(mk));
+  ok('29,624 markets outside India (0038); zones set (India domestic 4,278)', mk.other === 29624 && mk.india_dom === 4278 && mk.wrong_zone === 0, JSON.stringify(mk));
   const pairs = await q(`select a || '-' || b p, round(n_biz + n_lei + n_bud) n from public.markets
      where (a, b) in (('JFK','LHR'), ('BCN','MAD'), ('JED','RUH'), ('PEK','SHA'), ('CPT','JNB'), ('BOG','MDE'), ('YUL','YYZ'), ('IST','SAW'))
      order by 1`);
@@ -71,6 +71,6 @@ export async function checks24(t) {
   const after = (await q(indiaMarkets))[0];
   const other = await one(`select count(*)::int from public.markets m where not exists (select 1 from public.airports x where x.iata in (m.a, m.b) and x.is_india)
      and n_biz + n_lei + n_bud > 0`);
-  ok("rebuilding India's markets gives the same markets and keeps the other regions'", after.h === im.h && other === 25683, `${after.h} ${other}`);
+  ok("rebuilding India's markets gives the same markets and keeps the other regions'", after.h === im.h && other === 29624, `${after.h} ${other}`);
   await q('rollback');
 }

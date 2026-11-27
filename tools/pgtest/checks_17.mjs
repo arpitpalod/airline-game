@@ -11,7 +11,7 @@ export async function checks17(t) {
 
   // ---------- the rules ----------
   ok('the choices a founder makes are game data', Number(await one(`select count(*) from public.world_options where available`)) >= 25
-    && Number(await one(`select count(*) from public.world_options where setting = 'region' and not available`)) === 7);
+    && Number(await one(`select count(*) from public.world_options where setting = 'region' and not available`)) === 8);   // Southeast Asia waits too (0038)
   await as(ADMIN);
   const made = await one(`select public.create_world('Rules 17', $1)`, [JSON.stringify({ pace: '1h', turn: 'ready', places: '12', money: '250', banks: 'tight',
     growth: 'boom', shocks: 'rough', bots: 'none', min_players: 2 })]);
