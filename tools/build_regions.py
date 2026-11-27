@@ -3,7 +3,8 @@
 Usage: python3 -I tools/build_regions.py <ourairports airports.csv> <ourairports runways.csv> [out.sql [refresh]]
 
 Without out.sql it prints the calibration report only. With 'refresh' it writes a whole data migration that updates
-every airport outside India and rebuilds every market outside India (refused if a route flies one); without it, the
+every airport outside India (adding airports new since, and their homes) and rebuilds every market outside India
+(refused if a route flies one); without it, the
 airport part of 0035 (the first build).
 
 Inputs (supabase/seed): airports_world.csv (new airports, and figures for the foreign airports already in the
@@ -288,10 +289,17 @@ if not REFRESH:   # the first build (0035): new airports, and figures for the ol
     w_(") v (iata, pax_m, pax_src, intl_share, od_share, home, region)\nwhere a.iata = v.iata and not a.is_india;\n\n")
     w_("create temp table region_flows (a text, b text, n float8);\ninsert into region_flows (a, b, n) values\n")
     w_(",\n".join(f"({q(a)},{q(b)},{n:.2f})" for (a, b), n in sorted(markets.items())) + ";\n")
-else:             # a refresh: new figures for every airport outside India, and every market outside India rebuilt
-    w_("update public.airports a set pax_m = v.pax_m, pax_src = v.pax_src, intl_share = v.intl_share, od_share = v.od_share\nfrom (values\n")
-    w_(",\n".join(f"({q(x['iata'])},{x['pax']}::numeric,{q(x['src'])},{x['intl']}::numeric,{x['od']}::numeric)" for x in A.values()))
-    w_(") v (iata, pax_m, pax_src, intl_share, od_share)\nwhere a.iata = v.iata and not a.is_india;\n\n")
+else:             # a refresh: airports added since (on conflict nothing), new figures and homes for every airport outside
+                  # India, and every market outside India rebuilt
+    w_("insert into public.airports (iata,city,country,region,is_india,lat,lon,pax_m,pax_src,intl_share,od_share,home,biz_idx,tour_idx,slot_cap,runway_class) values\n")
+    w_(",\n".join(f"({q(x['iata'])},{q(x['city'])},{q(x['country'])},{q(x['zone'])},false,{x['lat']:.4f},{x['lon']:.4f},{x['pax']},{q(x['src'])},"
+                  f"{x['intl']},{x['od']},{nl(x['home'])},{x['biz']},{x['tour']},{x['slot'] or 'null'},{x['rwy']})" for x in new))
+    w_("\non conflict (iata) do nothing;\n\n")
+    w_("update public.airports a set pax_m = v.pax_m, pax_src = v.pax_src, intl_share = v.intl_share, od_share = v.od_share, home = v.home,\n"
+       "  region = v.region\nfrom (values\n")
+    w_(",\n".join(f"({q(x['iata'])},{x['pax']}::numeric,{q(x['src'])},{x['intl']}::numeric,{x['od']}::numeric,{nl(x['home'])},{q(x['zone'])})"
+                  for x in A.values()))
+    w_(") v (iata, pax_m, pax_src, intl_share, od_share, home, region)\nwhere a.iata = v.iata and not a.is_india;\n\n")
     w_("do $$ begin\n  if exists (select 1 from public.routes r join public.airports o on o.iata = r.origin join public.airports d on d.iata = r.dest\n"
        "             where not o.is_india and not d.is_india) then\n    raise exception 'A route flies a market outside India: rebuild it by hand';\n  end if;\nend $$;\n")
     w_("delete from public.markets m where not exists (select 1 from public.airports x where x.iata in (m.a, m.b) and x.is_india);\n\n")

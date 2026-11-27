@@ -12,12 +12,12 @@ export async function checks25(t) {
   const pl = Object.fromEntries(rg.map((r) => [r.key, Number(r.price_level)]));
   const mix = (r) => 0.436 + 0.35 * r.fuel_level + 0.105 * r.pay_level + 0.058 * r.charge_level + 0.051;
   const full = Object.fromEntries((await q(`select * from public.regions`)).map((r) => [r.key, Object.fromEntries(Object.entries(r).map(([k, v]) => [k, isNaN(v) ? v : Number(v)]))]));
-  ok("eight regions, each with its currency; fares follow costs by India's measured mix, times Africa's, South America's and Europe's premium",
-    rg.length === 8 && pl.india === 1 && Object.values(full).every((r) => Math.abs(r.price_level - mix(r) * r.fare_premium) < 0.0001),
+  ok("nine regions (Southeast Asia from 0038), each with its currency; fares follow costs by India's measured mix, times Africa's, South America's and Europe's premium",
+    rg.length === 9 && pl.india === 1 && Object.values(full).every((r) => Math.abs(r.price_level - mix(r) * r.fare_premium) < 0.0001),
     rg.map((r) => `${r.key} ${r.currency} ${r.price_level}`).join(', '));
   const dm = Object.fromEntries((await q(`select key, demand_mult from public.regions`)).map((r) => [r.key, Number(r.demand_mult)]));
-  ok("demand factors match each region's 150 busiest markets to India's (India 1, Europe 1.02, Canada 2.71)",
-    dm.india === 1 && Math.abs(dm.europe - 1.02) < 0.01 && Math.abs(dm.canada - 2.71) < 0.01, JSON.stringify(dm));
+  ok("demand factors match each region's 150 busiest markets to India's (India 1, Europe 1.03, Canada 2.73 after 0038)",
+    dm.india === 1 && Math.abs(dm.europe - 1.03) < 0.01 && Math.abs(dm.canada - 2.73) < 0.01, JSON.stringify(dm));
   ok("Heathrow, JFK, Amsterdam, Hong Kong, Singapore and Dubai have full slot caps beside India's share",
     Number(await one(`select count(*) from public.airports where slot_cap_full is not null and slot_cap_full > slot_cap`)) === 6);
   const w1 = await one(`select id from public.worlds where name = 'World 1'`);
