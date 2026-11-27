@@ -1,5 +1,6 @@
 // Vector map drawn on the device (no tile service): countries from world-atlas, airports and routes on top.
 // Drag to pan, wheel or pinch to zoom; India and World buttons reset the view.
+import { money } from '../lib/format';
 import { geoMercator, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import { useMemo, useRef, useState, type PointerEvent as RPE } from 'react';
@@ -94,7 +95,9 @@ export function WorldMap({ airports, bases, routes, selected, onSelect, height =
   }
   const pick = (iata: string) => { if (moved.current < 8) onSelect?.(iata); };
 
-  const size = (a: Airport) => (a.is_india ? 1.6 + Math.sqrt(a.pax_m ?? 0) * 0.55 : 1.6 + Math.sqrt(a.mass ?? 0) * 0.35);
+  // the world's home airports by passengers, the others by their pull (0037: a region's own airports are its home)
+  const size = (a: Airport) => (a.home === money.region ? 1.6 + Math.sqrt(a.pax_m ?? 0) * 0.55
+    : 1.6 + Math.sqrt(a.mass ?? (a.pax_m ?? 0) / 4) * 0.35);
   const toneColor = { good: 'var(--accent)', warn: '#E8891C', low: '#C2410C', none: '#667085' };
 
   return (

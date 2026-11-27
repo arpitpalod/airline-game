@@ -1,7 +1,7 @@
 // Full-season simulation: the computer-run airlines plus simulated players with different strategies.
 // Used to tune Stage 2c. Usage: node season.mjs ../../supabase/migrations [--days 2366] [--scale auto] [--seed snapshot.tgz]
 // Players act once a game week through the public action functions, like a person checking the app.
-// --params '{"key": value}' sets game values; --wparams the world's own. --selling off runs the daily fares of section 4 instead of selling 26 weeks ahead. --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
+// --region usa runs the season in a region (0037); --bots off without computer-run airlines. --params '{"key": value}' sets game values; --wparams the world's own. --selling off runs the daily fares of section 4 instead of selling 26 weeks ahead. --pilots off runs without pilots (the flat pilot cost per aircraft); --places N overrides places (default: one per player).
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'fs';
 
@@ -23,7 +23,7 @@ const STRATS = {
   wet_only:   { type: 'A20N', lay: [0, null, 29], src: 'wet',  lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['IDR', 'NAG'] , rm: 'fill' },
 };
 const players = Object.entries(STRATS).flatMap(([k, s]) => s.bases.map((b, i) => ({ strat: k, s, base: b, name: `${k} ${i + 1}` })));
-const SCALE = arg('--scale', 'auto') === 'auto' ? players.length / 50 : +arg('--scale');
+let SCALE = arg('--scale', 'auto') === 'auto' ? players.length / 50 : +arg('--scale');
 
 let db;
 if (SNAP) db = new PGlite({ loadDataDir: new Blob([fs.readFileSync(SNAP)]) });
@@ -50,6 +50,22 @@ await q(`update public.worlds set demand_scale = $1, max_airlines = $3, pilots =
 await q(`update public.airlines set first_flight_day = 1 where world_id = $1`, [W]);
 // --wparams '{"key": value}': the world's own values (world_params), e.g. to switch off the banks' debt limit
 for (const [k, v] of Object.entries(JSON.parse(arg('--wparams', '{}')))) await q(`insert into public.world_params (world_id, key, num) values ($1, $2, $3) on conflict (world_id, key) do update set num = excluded.num`, [W, k, v]);
+// --region usa (0037): World 1 is re-homed to the region and takes its values; each player's India base becomes the region's
+// airport of the same size rank. --bots off runs without computer-run airlines (they are India's until step 3).
+const REGION = arg('--region', 'india');
+if (arg('--bots', 'on') === 'off') await q(`update public.worlds set bot_scale = 0 where id = $1`, [W]);
+if (REGION !== 'india') {
+  await q(`update public.worlds set rules = coalesce(rules, '{}'::jsonb) || jsonb_build_object('region', $2::text) where id = $1`, [W, REGION]);
+  // --regionset '{"fare_premium": 1.1}': try region values before a migration
+  for (const [k, v] of Object.entries(JSON.parse(arg('--regionset', '{}')))) await q(`update public.regions set ${k.replace(/[^a-z_]/g, '')} = $1 where key = $2`, [v, REGION]);
+  await q(`select game.refresh_regions()`);
+  await q(`select game.apply_region($1)`, [W]);
+  SCALE = Number(await one(`select demand_scale from public.worlds where id = $1`, [W]));   // the region's travellers per place
+  const ind = (await q(`select iata from public.airports where home = 'india' order by pax_m desc`)).map((r) => r.iata);
+  const reg = (await q(`select iata from public.airports where home = $1 and runway_class >= 2 order by pax_m desc`, [REGION])).map((r) => r.iata);
+  for (const p of players) p.base = reg[Math.min(ind.indexOf(p.base), reg.length - 1)];
+  console.log(`region ${REGION}: demand_scale ${await one(`select demand_scale from public.worlds where id = $1`, [W])}, bases ${[...new Set(players.map((p) => p.base))].join(' ')}`);
+}
 for (const p of players) p.id = await one(`select public.found_airline($1, $2, $3, $4)`, [code, p.name, 'P' + players.indexOf(p), p.base]);
 await q(`update public.game_params set num = 0 where key = 'start_first_week'`);   // the season loop plays every week itself
 await q(`select public.admin_start_world($1)`, [W]);
@@ -87,12 +103,12 @@ async function fill(p, ac, day) {
       from public.markets m
       join public.airports pa on pa.iata = m.a join public.airports pb on pb.iata = m.b
       left join sup on sup.a = m.a and sup.b = m.b
-     where (m.a = $3 or m.b = $3) and m.intl = $5 and m.km between $6 and $7
+     where (m.a = $3 or m.b = $3) and (case when $11 = 'india' then m.intl else m.zone is distinct from $11 end) = $5 and m.km between $6 and $7   -- 0037: abroad = outside the home region
        and least(pa.runway_class, pb.runway_class) >= (select runway_class from public.aircraft_types where id = $8)
        and pa.opens_day <= $9 and pb.opens_day <= $9
      order by case when $10 = 'trunk' then (m.n_biz + m.n_lei + m.n_bud) * $4 * 0.15 - coalesce(sup.mine, 0) * 0.85
                    else (m.n_biz + m.n_lei + m.n_bud) * $4 * 0.55 - coalesce(sup.seats, 0) * 0.85 end desc
-     limit 15`, [p.id, W, p.base, SCALE, s.pick === 'intl', s.minkm ?? 150, Math.min(s.maxkm ?? 20000, a.range_km), s.type, day, s.pick]);
+     limit 15`, [p.id, W, p.base, SCALE, s.pick === 'intl', s.minkm ?? 150, Math.min(s.maxkm ?? 20000, a.range_km), s.type, day, s.pick, REGION]);
   for (const r of rows) {
     const rot = 2 * (r.km / a.cr + a.off + a.turn / 60);
     const max = Math.min(84, Math.floor(free / rot));

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useRoutes, useTurnDelta, type FleetItem } from '../lib/data';
 import { aircraftStats, hoursByAircraft, windowShare } from '../lib/derive';
 import { holdingLabel, STATUS_LABEL } from '../lib/game';
-import { arrivalWeek, currentWeek, inr, pct, usd } from '../lib/format';
+import { arrivalWeek, currentWeek, homeLoan, inr, pct, usd } from '../lib/format';
 import { Badge, Bar, Button, Empty, Icon, Loading, PageHeader } from '../components/ui';
 
 type Filter = 'all' | 'flying' | 'attention' | 'arriving';
@@ -12,7 +12,7 @@ type Filter = 'all' | 'flying' | 'attention' | 'arriving';
 export function costLabel(a: FleetItem) {
   const t = a.terms;
   if (!t) return '–';
-  if (a.status === 'delivering' && t.ordered_day != null) return `New order · ${t.finance_loan ? (t.loan_ccy === 'inr' ? 'rupee loan' : 'dollar loan') : t.pay_plan === 'slb' ? 'leaseback' : 'cash'}`;
+  if (a.status === 'delivering' && t.ordered_day != null) return `New order · ${t.finance_loan ? (t.loan_ccy === 'inr' ? homeLoan() : 'dollar loan') : t.pay_plan === 'slb' ? 'leaseback' : 'cash'}`;
   if (t.holding === 'wet') return `${usd(t.wet_usd_bh)} a block hour`;
   if (t.holding === 'lease') return `${usd(t.lease_usd_month)} a month`;
   return t.loan_usd ? `Owned · ${usd(t.loan_usd)} loan` : t.loan_inr ? `Owned · ${inr(t.loan_inr)} loan` : 'Owned';

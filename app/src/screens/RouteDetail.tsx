@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { useBases, useEvents, useFleet, useGame, useMarketsFrom, useQuote, useRivals, useRouteDaily, useRoutes, useSeatCap, useSeatRoom, useTurnDelta, type FleetItem } from '../lib/data';
 import { cancelRule, demandWeek, hoursByAircraft, routeStat, unitEcon } from '../lib/derive';
 import { cannotFly, maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHours } from '../lib/game';
-import { inr, num, pct, plural, weekOf } from '../lib/format';
+import { inr, num, pct, plural, unit, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
 import { LastFlights, MarketMoves, RouteAudit, SeatsOnSale, StrategyCard } from '../components/Selling';
@@ -71,8 +71,8 @@ export function RouteDetail() {
         const be = u.beLf;
         return (
           <div className="grid4-d">
-            <Kpi label="RASK" value={`₹${u.rask.toFixed(2)}`} note="Revenue per seat-km, fares and extras" />
-            <Kpi label="CASK" value={`₹${u.cask.toFixed(2)}`} tone={u.cask <= u.rask ? 'good' : 'bad'} note="Flying costs and aircraft rent per seat-km" />
+            <Kpi label="RASK" value={unit(u.rask, 2)} note="Revenue per seat-km, fares and extras" />
+            <Kpi label="CASK" value={unit(u.cask, 2)} tone={u.cask <= u.rask ? 'good' : 'bad'} note="Flying costs and aircraft rent per seat-km" />
             <Kpi label="Break-even load" value={be != null ? pct(be) : '–'} tone={be != null && s7.lf! >= be ? 'good' : 'bad'}
               note={be == null ? '' : be > 1 ? 'Even full, today\'s fares don\'t cover the costs' : `Needed to cover costs at today's fares. You fly ${pct(s7.lf!)}.`} />
           </div>

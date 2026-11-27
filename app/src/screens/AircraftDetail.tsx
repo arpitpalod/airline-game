@@ -5,7 +5,7 @@ import { call } from '../lib/api';
 import { seatCapOf, useAircraftDaily, useBases, useFleet, useGame, useMarketsFrom, useQuote, useRoutes, useSeatRoom, useTurnDelta } from '../lib/data';
 import { aircraftStats, demandWeek, hoursByAircraft } from '../lib/derive';
 import { ageYears, cabinRange, cannotFly, holdingLabel, maxWeekly, pairKey, STATUS_LABEL, weekHours } from '../lib/game';
-import { arrivalWeek, inr, num, pct, plural, usd, weekOf } from '../lib/format';
+import { arrivalWeek, Cap, homeLoan, inr, num, pct, plural, usd, weekOf } from '../lib/format';
 import { useAction } from '../components/toast';
 import { Badge, Bar, Button, Empty, Field, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -101,8 +101,8 @@ export function AircraftDetail() {
               {terms?.holding === 'owned' && <>
                 <span>Bought for</span><span>{usd(terms.price_usd)}</span>
                 {terms.loan_usd ? <><span>Loan left</span><span>{usd(terms.loan_usd)}</span><span>Repaid a week</span><span>{usd((terms.loan_pay_usd_day ?? 0) * 7)}</span></> : null}
-                {terms.loan_inr ? <><span>Rupee loan left</span><span>{inr(terms.loan_inr)}</span><span>Repaid a week</span><span>{inr((terms.loan_pay_inr_day ?? 0) * 7)}</span></> : null}
-                {ac.status === 'delivering' && <><span>Paying with</span><span>{terms.finance_loan ? (terms.loan_ccy === 'inr' ? 'a rupee loan' : 'a dollar loan') : terms.pay_plan === 'slb' ? 'sale and leaseback' : 'cash'}</span></>}
+                {terms.loan_inr ? <><span>{Cap(homeLoan())} left</span><span>{inr(terms.loan_inr)}</span><span>Repaid a week</span><span>{inr((terms.loan_pay_inr_day ?? 0) * 7)}</span></> : null}
+                {ac.status === 'delivering' && <><span>Paying with</span><span>{terms.finance_loan ? (terms.loan_ccy === 'inr' ? `a ${homeLoan()}` : 'a dollar loan') : terms.pay_plan === 'slb' ? 'sale and leaseback' : 'cash'}</span></>}
               </>}
             </div>
           </div>

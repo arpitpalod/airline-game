@@ -6,6 +6,7 @@ import { INVITE_KEY, supabase } from './lib/api';
 import { GameContext, useMyAirlines, useProfile, useRefData, useWorldParams, useWorldRow, type Game } from './lib/data';
 import { Shell } from './components/Shell';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { setMoney } from './lib/format';
 import { Button, ErrorBox } from './components/ui';
 import { AuthScreen } from './screens/Auth';
 import { SetupScreen } from './screens/Setup';
@@ -118,6 +119,8 @@ function GameProvider({ game }: { game: Game }) {
     }
   }, [game.world.game_day, qc]);
   const value = useMemo(() => game, [game]);
+  // 0037: every amount on screen in this world's money (set before the screens render)
+  setMoney(game.ref.regions?.[game.world.rules?.region ?? 'india'] ?? null);
   return (
     <GameContext.Provider value={value}>
       <Shell>

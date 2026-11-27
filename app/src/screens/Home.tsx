@@ -7,7 +7,7 @@ import { useAirlineDaily, useAirlineRow, useAirlineWeeks, useBases, useDemandEve
 import { effectText, touches, upcomingEvents } from '../lib/events';
 import { byWeek, demandWeek, routeStat, seatsDwarf, sumDaily } from '../lib/derive';
 import { clock, pairKey } from '../lib/game';
-import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, realTime, weekLabel, weekOf, weeks } from '../lib/format';
+import { arrivalWeek, calDate, currentWeek, dateLabel, inr, num, pct, plural, realTime, weekLabel, weekOf, weeks, money } from '../lib/format';
 import type { Route } from '../lib/types';
 import { useOpsDecisions } from './Ops';
 import { ProfitBars } from '../components/charts';
@@ -132,7 +132,7 @@ export function Home() {
       alerts.push({ key: `ac${e.id}`, tone: 'bad', to: `/route/${hit[0].id}`, title: `${cityOf(ap)} airport is closed until week ${weekOf(e.ends_day ?? now)}`,
         body: `Your ${plural(hit.length, 'route')} there ${hit.length === 1 ? 'is' : 'are'} cancelled and travellers refunded. Aircraft costs run on; nothing to do but wait.` });
     }
-    const dom = hit.filter((r) => !(ref.airport[r.origin]?.is_india === false || ref.airport[r.dest]?.is_india === false));
+    const dom = hit.filter((r) => ref.airport[r.origin]?.country === ref.airport[r.dest]?.country);
     if (e.kind === 'fare_cap' && ap && dom.length) {
       alerts.push({ key: `fc${e.id}`, tone: 'info', to: `/route/${dom[0].id}`, title: `Economy fares to and from ${cityOf(ap)} are capped until week ${weekOf(e.ends_day ?? now)}`,
         body: `At ${num(Number(e.payload?.mult ?? 1.5), 1)} times the reference fare on ${plural(dom.length, 'route')}. Top fares sells at the cap, so seats go faster and earn less: Balanced or Fill every seat may earn more there for now.` });
@@ -155,7 +155,7 @@ export function Home() {
 
   if (opsDecisions.length) {
     alerts.push({ key: 'ops', tone: 'info', to: '/ops', title: opsDecisions.length === 1 ? opsDecisions[0].title : `${opsDecisions.length} decisions in Ops`,
-      body: opsDecisions.length === 1 ? 'A decision on how you run the airline. Open Ops to see what it changes in rupees.' : opsDecisions.map((d) => d.title).join(' · ') });
+      body: opsDecisions.length === 1 ? `A decision on how you run the airline. Open Ops to see what it changes in ${money.plural}.` : opsDecisions.map((d) => d.title).join(' · ') });
   }
 
   const started = routes.length > 0 && rots.length > 0 && days.some((d) => d.pax > 0);
@@ -346,7 +346,9 @@ function ComingUp() {
   const net = useRoutes();
   if (!ev.data?.length) return null;
   const day = world.game_day + 1;
-  const list = upcomingEvents(ev.data, day, 13 * 7).slice(0, 5);
+  // 0037: only the world's region's calendar
+  const list = upcomingEvents(ev.data.filter((e) => (e.region ?? 'india') === money.region), day, 13 * 7).slice(0, 5);
+  if (!list.length) return null;
   const routes = net.data?.routes ?? [];
   return (
     <div className="card flush">

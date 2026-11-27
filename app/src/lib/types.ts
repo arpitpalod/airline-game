@@ -159,6 +159,7 @@ export interface Profile { user_id: string; display_name: string; is_admin: bool
 export interface DemandEvent {
   id: number; name: string; start_doy: number; days: number; domestic: boolean | null;
   airports: string[] | null; regions: string[] | null; biz: number; lei: number; bud: number; note: string;
+  region?: string;   // 0037: the home region whose calendar it belongs to
 }
 
 /** Ops (migration 0023): the three fleet-wide strategies, as game values (G), and the airline's choices. */
@@ -189,4 +190,10 @@ export interface OpsPreview {
            lock_weeks: number; setup_inr: number; setup_weeks: number }[];
   styles: { key: OpStyle['key']; fuel_kg_week: number; fuel_week: number; other_week: number; trips_week: number; trips_fit: number;
             over: number; otp: number; brand_delta: number }[];
+}
+
+/** 0037: a home region's currency and the levels the app needs to show money */
+export interface Region {
+  key: string; name: string; currency: string; symbol: string; unit_inr: number; style: string;
+  price_level: number; fx_vol_mult: number; fx_event_mult: number;
 }

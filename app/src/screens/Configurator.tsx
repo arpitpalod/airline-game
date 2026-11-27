@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useAircraftMarket, useBases, useFleet, useGame, useLayout } from '../lib/data';
 import { crewFor, layoutRows } from '../lib/game';
-import { an, arrivalLabel, arrivalWeek, inr, num, pct, usd, weeks } from '../lib/format';
+import { an, arrivalLabel, arrivalWeek, homeLoan, inr, money, num, pct, usd, weeks } from '../lib/format';
 import { SeatMap } from '../components/SeatMap';
 import { useAction } from '../components/toast';
 import { Empty, Field, Loading, PageHeader, Seg, Stepper } from '../components/ui';
@@ -144,11 +144,11 @@ function OrderBox({ typeId, br, bp, ep, valid }: { typeId: string; br: number; b
       </div>
       {count > 1 && <p className="tiny muted">Each aircraft takes the next free delivery slot, so the later ones may arrive a little later. All are ordered or none is.</p>}
       <Field label="Pay the balance on delivery with">
-        <Seg block value={pay} onChange={setPay} options={[{ value: 'loan', label: '$ loan' }, { value: 'loan_inr', label: '₹ loan' }, { value: 'cash', label: 'Cash' }, { value: 'slb', label: 'Leaseback' }]} />
+        <Seg block value={pay} onChange={setPay} options={[{ value: 'loan', label: '$ loan' }, { value: 'loan_inr', label: money.currency === 'USD' ? 'Bank loan' : `${money.symbol.trim()} loan` }, { value: 'cash', label: 'Cash' }, { value: 'slb', label: 'Leaseback' }]} />
       </Field>
       <p className="tiny muted">
-        {pay === 'loan' && `A dollar loan at ${pct(ref.param.loan_rate_year)} a year, repaid daily over ${ref.param.loan_years} years: about ${inr(intUsd)} interest in the first year at today's rate. Cheaper, but what you owe grows in rupees when the rupee weakens: 10% weaker adds ${inr(borrowed * 0.1)}. You own the aircraft.`}
-        {pay === 'loan_inr' && `A rupee loan at ${pct(ref.param.loan_rate_inr_year ?? 0.105)} a year, repaid daily over ${ref.param.loan_years} years: about ${inr(intInr)} interest in the first year, ${inr(intInr - intUsd)} more than the dollar loan, but no currency risk. You own the aircraft.`}
+        {pay === 'loan' && `A dollar loan at ${pct(ref.param.loan_rate_year)} a year, repaid daily over ${ref.param.loan_years} years: about ${inr(intUsd)} interest in the first year at today's rate. Cheaper, but what you owe grows in ${money.plural} when ${money.word} weakens: 10% weaker adds ${inr(borrowed * 0.1)}. You own the aircraft.`}
+        {pay === 'loan_inr' && `A ${homeLoan()} at ${pct(ref.param.loan_rate_inr_year ?? 0.105)} a year, repaid daily over ${ref.param.loan_years} years: about ${inr(intInr)} interest in the first year, ${inr(intInr - intUsd)} more than the dollar loan, but no currency risk. You own the aircraft.`}
         {pay === 'cash' && 'Pay the full balance from cash on delivery. You own the aircraft and pay no interest. If cash is short that day, it becomes a sale and leaseback.'}
         {pay === 'slb' && `A lessor buys it on delivery and leases it back to you at ${pct(ref.param.slb_rent_mult)} of the usual rent. No big payment, but you never own it.`}
       </p>

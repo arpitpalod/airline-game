@@ -6,7 +6,7 @@ import { useGame, useMarketsFrom, useMarketWatch, usePosOptions, useRivals, useR
 import { clock, pairKey } from '../lib/game';
 import { BAND_LABEL, bandOf, practice, practiceInput, routeIndex, SHAPE_LABEL, shapeOf, verdict } from '../lib/insights';
 import { demandWeek, seatsDwarf } from '../lib/derive';
-import { currentWeek, inr, num, pct, realTime, weekLabel } from '../lib/format';
+import { currentWeek, inr, money, num, pct, perDollar, realTime, weekLabel } from '../lib/format';
 import type { MarketMove, PosKey, PosOption, Route, RouteWeek, StrategyKey } from '../lib/types';
 import { useAction } from './toast';
 import { Badge, Button, Loading, Seg } from './ui';
@@ -125,8 +125,8 @@ export function StrategyCard({ route }: { route: Route }) {
               ))}
             </tbody>
           </table>
-          <p className="tiny muted" style={{ margin: 0 }}>For one flight week each way, selling {chosenName.toLowerCase()}, with the rupee at ₹{world.fx_inr_usd.toFixed(2)} a dollar.
-            {' '}{pct(Number(whereRow.o.usd_share))} of these tickets are priced in dollars: if the rupee weakens 10%, they bring {inr(whereRow.weak)} more a week; if it strengthens, as much less.</p>
+          <p className="tiny muted" style={{ margin: 0 }}>For one flight week each way, selling {chosenName.toLowerCase()}{money.pegged ? '' : `, with ${money.word} at ${perDollar(world.fx_inr_usd)} a dollar`}.
+            {!money.pegged && <>{' '}{pct(Number(whereRow.o.usd_share))} of these tickets are priced in dollars: if {money.word} weakens 10%, they bring {inr(whereRow.weak)} more a week; if it strengthens, as much less.</>}</p>
           <Button block kind="secondary" disabled={whereSel === whereNow} busy={busy === 'pos'} onClick={() => run('pos', () => call('set_sell_where', {
             p_airline: airline.id, p_route: route.id, p_where: whereSel,
           }), `Saved. Tickets sell ${lc(whereRow.o.name)} from next week's selling${soon}; the sales team's cost follows the takings.`).then(() => setWhere(null))}>
