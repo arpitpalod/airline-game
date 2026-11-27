@@ -223,7 +223,7 @@ export function Home() {
               {(news.data ?? []).slice(0, 8).map((n) => (
                 <div key={n.id} className="item small" style={{ alignItems: 'flex-start' }}>
                   <span className="faint num" style={{ width: 58, flexShrink: 0 }}>Wk {weekOf(Math.max(n.game_day, 1))}</span>
-                  <span className="grow">{n.body}</span>
+                  <span className="grow">{n.kind === 'gem' && <><Badge tone="info">Rumour</Badge>{' '}</>}{n.body}</span>
                 </div>
               ))}
               {news.data?.length === 0 && <div className="item small muted">No news yet.</div>}

@@ -33,6 +33,15 @@ function Findings({ s }: { s: HubStudy }) {
         </tbody>
       </table>
       {r.spokes.length > 12 && <Button size="sm" kind="secondary" onClick={() => setAll(!all)}>{all ? 'Show the best 12' : `Show all ${r.spokes.length}`}</Button>}
+      {(r.gems ?? []).length > 0 && (
+        <div className="stack" style={{ gap: 4 }}>
+          <h3>Unusual demand ahead</h3>
+          {r.gems!.map((g, i) => (
+            <p key={i} className="small" style={{ margin: 0 }}><Badge tone="accent">{g.kind}</Badge>{' '}
+              {g.at.includes('-') ? g.at.split('-').map(name).join(' – ') : name(g.at)}, weeks {g.from_week}{g.to_week > g.from_week ? ` to ${g.to_week}` : ''}</p>
+          ))}
+        </div>
+      )}
       <h3>Top connecting markets through {name(r.hub)}</h3>
       <table className="table">
         <thead><tr><th>Market</th><th className="r">A week</th><th className="r">Detour</th><th className="r">Nonstops</th></tr></thead>

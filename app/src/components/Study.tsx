@@ -16,6 +16,7 @@ function Findings({ s }: { s: RouteStudy }) {
     <div className="stack">
       {s.flying_lo == null && <p className="small">Nobody flies it now. With one airline flying it twice a day at the reference fare,
         about <strong>{range(wk(s.untapped_lo), wk(s.untapped_hi))}</strong> travellers a week would fly each way.</p>}
+      {s.gem_note && <p className="small"><Badge tone="accent">Unusual demand</Badge> {s.gem_note}</p>}
       <div className="kv">
         {s.flying_lo != null && <>
           <span>Airlines flying it</span><span>{s.carriers}</span>
