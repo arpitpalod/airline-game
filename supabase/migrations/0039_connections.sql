@@ -40,6 +40,7 @@ insert into public.game_params (key, num, note) values
   ('conn_detour_bud', 0.3, 'each 100% of extra distance, for budget travellers (0039)'),
   ('conn_calc_detour', 2.5, 'the engine leaves out connections longer than this many times the direct distance: they sell next to nothing (0039; players are not limited)'),
   ('conn_recapture', 1, 'travellers turned away by a full nonstop choose again among the connections: 1 on, 0 off (0039)'),
+  ('conn_min_leg_km', 150, 'each of a connection''s two routes is at least this long: a hop to another airport of the same city connects nobody (0039)'),
   ('conn_pct_min', 0.5, 'the lowest share of its own fare a route can take from a connection (0039)'),
   ('conn_pct_max', 1.0, 'the highest share (0039)'),
   ('outside_on', 1, 'airlines outside the world on markets with neither end in the world''s home region: 1 on, 0 off (0039)'),
@@ -144,7 +145,7 @@ begin
     cancel_notice_days float8, denied_fare_mult float8,   -- 0033
     conn_stop_biz float8, conn_stop_lei float8, conn_stop_bud float8, conn_detour_biz float8, conn_detour_lei float8,
     conn_detour_bud float8, conn_calc_detour float8, outside_on float8, outside_freq float8, outside_fare float8,
-    outside_comfort float8, outside_brand float8, outside_nonstop_km float8, conn_recapture float8);   -- 0039
+    outside_comfort float8, outside_brand float8, outside_nonstop_km float8, conn_recapture float8, conn_min_leg_km float8);   -- 0039
   perform game.bot_network(p_world, v_w);   -- 0039: computer-run airlines' network selling, before the fares
 
   -- booking curves: the share of each traveller type deciding n weeks before the flight week (arr), and the share who have
@@ -357,7 +358,8 @@ begin
   -- share (conn_pct) of that route's own fare that week, cabin by cabin, and each route keeps its part. Travellers
   -- weigh it like a nonstop less a stop and a detour (conn_stop_*, conn_detour_*: shares of the market's reference
   -- fare, G); its frequency is the lower of the two. Connections take at most conn_share of a route's seats. The engine
-  -- leaves out detours beyond conn_calc_detour times the direct distance: they sell next to nothing.
+  -- leaves out detours beyond conn_calc_detour times the direct distance: they sell next to nothing. Each of the two
+  -- routes is at least conn_min_leg_km long.
   drop table if exists pg_temp._cn;
   create temp table _cn on commit drop as
   with legs as (
@@ -367,7 +369,7 @@ begin
            s.sb > 0 and s.room_b > 0.5 as ok_b,
            h.hub, case when s.a = h.hub then s.b else s.a end as far
       from pg_temp._sell s cross join lateral (values (s.a), (s.b)) h(hub)
-     where s.nw)
+     where s.nw and s.km >= g.conn_min_leg_km)   -- a hop to the next airport in the same city connects nobody
   select l1.airline_id, l1.week, l1.n, l1.route_id as r1, l2.route_id as r2, l1.hub,
          m.a, m.b, m.intl, m.km::float8 as km, m.ref_fare::float8 as ref,
          m.n_biz::float8 as nb, m.n_lei::float8 as nl, m.n_bud::float8 as nu,
