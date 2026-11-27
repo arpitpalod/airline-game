@@ -359,6 +359,25 @@ export function useStudies() {
   });
 }
 
+/** Hub and route studies the airline paid for (0040), newest first. */
+export interface HubStudy {
+  id: number; airline_id: string; hub: string; game_day: number; cost_inr: number;
+  result: {
+    hub: string; width: number;
+    spokes: { x: string; km: number; intl: boolean; own_wk: number; conn_wk: number; carriers: number; yours: boolean; network: boolean; suggested: boolean }[];
+    markets: { a: string; b: string; conn_wk: number; detour: number; nonstops: number; outside: boolean }[];
+    now: { spokes: number; conn_wk: number }; suggested: { spokes: string[]; conn_wk: number };
+    rivals: { flying: number; connecting: number };
+  };
+}
+export function useHubStudies() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'hub_studies'],
+    queryFn: () => rows<HubStudy>(supabase.from('hub_studies').select('*').eq('airline_id', airline.id).order('id', { ascending: false })),
+  });
+}
+
 export interface PilotFamily { id: string; name: string; sort: number; pay_c_inr_day: number; pay_f_inr_day: number; pool_c: number; pool_f: number }
 export interface AirlinePilots { airline_id: string; family: string; captains: number; fos: number; expats: number; need: number }
 export interface PilotMarket { world_id: string; family: string; captains: number; fos: number; pay_index: number }
