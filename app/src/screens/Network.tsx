@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { call } from '../lib/api';
 import { useBases, useFleet, useGame, useMarketsFrom, useRouteDaily, useRoutes, useStrategies } from '../lib/data';
+import { HubStudyCard } from '../components/HubStudy';
 import { lfTone, routeStat } from '../lib/derive';
 import { marketTotal, pairKey } from '../lib/game';
 import { currentWeek, homeAirport, inr, money, num, pct, weekOf } from '../lib/format';
@@ -148,6 +149,7 @@ function AirportSheet({ iata, onClose, bases, markets, flying, onRoute }: {
         {a.home !== money.region && fromBases.length === 0 && !bases.some((b) => flying.has(pairKey(b, iata))) && (
           <p className="small muted">No market links this airport with your bases. Airports outside {money.regionName} can only be reached from a base in it.</p>
         )}
+        <HubStudyCard iata={iata} flat />
       </div>
     </Sheet>
   );

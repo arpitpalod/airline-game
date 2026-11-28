@@ -309,6 +309,14 @@ with sync_playwright() as p:
     page.locator('svg text', has_text='BOM').first.click()
     page.get_by_role('button', name='Open a base here').click()
     toast_ok(page, 'is now a base')
+    print('hub and route study (0040) of Mumbai')
+    go(page, '/network'); page.wait_for_timeout(500)
+    page.locator('svg text', has_text='BOM').first.click()
+    page.get_by_role('button', name=re.compile('Study this hub')).click()
+    toast_ok(page, 'Study done')
+    expect(page.get_by_text('Top connecting markets through Mumbai')).to_be_visible()
+    shot(page, 'p11d-hub-study')
+    go(page, '/network'); page.wait_for_timeout(500)
 
     print('fly 7 more weeks so the leased aircraft arrive')
     for _ in range(49):
