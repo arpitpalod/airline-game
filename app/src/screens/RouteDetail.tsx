@@ -8,7 +8,7 @@ import { cannotFly, maxWeekly, minTurn, pairKey, STATUS_LABEL, tripHours, weekHo
 import { inr, num, pct, plural, unit, weekOf } from '../lib/format';
 import { LoadChart } from '../components/charts';
 import { StudyCard } from '../components/Study';
-import { LastFlights, MarketMoves, RouteAudit, SeatsOnSale, StrategyCard } from '../components/Selling';
+import { LastFlights, MarketMoves, NetworkCard, RouteAudit, SeatsOnSale, StrategyCard } from '../components/Selling';
 import { useAction } from '../components/toast';
 import { Badge, Button, Empty, Kpi, Loading, PageHeader, Sheet, Stepper } from '../components/ui';
 
@@ -113,6 +113,7 @@ export function RouteDetail() {
 
         <div className="stack-lg">
           {world.selling && m && <RouteAudit route={route} km={m.km} intl={m.intl} refFare={m.ref_fare} airlines={comp.filter((x) => x.weekly > 0).length} />}
+          {world.selling && <NetworkCard route={route} />}
           {world.selling ? <StrategyCard route={route} /> : (
           <div className="card stack">
             <div className="card-title" style={{ marginBottom: 0 }}><h2>Fares</h2></div>

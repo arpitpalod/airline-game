@@ -196,6 +196,16 @@ with sync_playwright() as p:
     expect(page.locator('.card', has_text='Seats on sale')).to_contain_text('Seats left')
     expect(page.locator('.card', has_text='Competition')).to_contain_text('Recent moves')
     shot(page, 'p07b-selling')
+    print('connections (0039): the route sells network-based, at 70% of its fare')
+    net = page.locator('.card', has_text='Network selling')
+    net.get_by_role('tab', name='Also connections').click()
+    net.get_by_role('tab', name='70%').click()
+    expect(net).to_contain_text('Seats open to connections')
+    shot(page, 'p07d-network')
+    net.get_by_role('button', name='Save network selling').click()
+    toast_ok(page, 'Connections go on sale')
+    rid0 = page.url.split('/route/')[1].split('?')[0]
+    assert sql(f"select network::text || ' ' || conn_pct::text from route_plans where route_id = '{rid0}'") == 'true 0.70'
     print('currency: an international route sells mostly abroad')
     dom_url = page.url
     far = sql("select case when m.a = 'DEL' then m.b else m.a end from markets m where m.intl and 'DEL' in (m.a, m.b) and m.km < 2500 order by m.n_biz + m.n_lei + m.n_bud desc limit 1")

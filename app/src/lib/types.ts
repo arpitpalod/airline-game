@@ -73,6 +73,8 @@ export interface Strategy {
   follow_gap: number; overbook: number;
 }
 export interface RoutePlan { route_id: string; airline_id: string; strategy: StrategyKey; sell_where: PosKey }
+/** Network selling per route (0039) */
+export interface NetPlan { route_id: string; network: boolean; conn_pct: number; conn_share: number }
 /** Where an international route sells its tickets (0026, G). */
 export type PosKey = 'india' | 'both' | 'abroad';
 export interface PosOption { key: PosKey; sort: number; name: string; blurb: string; usd_share: number; sales_cost_share: number; util_bonus: number }
@@ -83,6 +85,8 @@ export interface RouteWeek {
   rev_e: number; rev_b: number; sold_wk: number; spill: number;
   noshow: number | null; denied: number | null; comp: number | null; flown_e: number | null; flown_b: number | null;
   rev_flown_e: number | null; rev_flown_b: number | null; strategy: StrategyKey | null;
+  /** 0039: connecting passengers booked (economy, business), their part of the fares, own travellers displaced */
+  bk_cx?: number; bk_cxb?: number; rev_cx?: number; disp?: number;
 }
 export interface AirlineWeek { airline_id: string; week: number; sales_inr: number; refunds_inr: number; comp_inr: number; advance_inr: number;
   /** 0033: compensation for flights cut within the region's notice, and those flights */

@@ -8,7 +8,7 @@ import type { SectorInsight } from './insights';
 import type {
   Aircraft, AircraftDaily, AircraftType, Airline, AirlineDaily, Airport, Base, Finance, GameEvent, Layout, Market, MarketQuote,
   FounderStatus, News, Profile, SeatRoom, Quarterly, Rotation, Route, RouteDaily, Terms, Txn, World, WorldOption,
-  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy, Region,
+  AirlineOps, AirlineWeek, CostBenchmark, DemandEvent, MaintPlan, MarketMove, MarketWatch, NetPlan, OpStyle, OpsPreview, PosKey, PosOption, RoutePlan, RouteWeek, Strategy, Region,
 } from './types';
 
 export interface Ref {
@@ -444,6 +444,17 @@ export function useRoutePlans() {
     queryKey: ['a', airline.id, 'route_plans'],
     queryFn: async () => Object.fromEntries((await rows<RoutePlan>(supabase.from('route_plans').select('*').eq('airline_id', airline.id)))
       .map((p) => [p.route_id, p.strategy])) as Record<string, RoutePlan['strategy']>,
+  });
+}
+
+/** Network selling per route (0039): on or off, the share of its fare a connection pays, the seats open to connections. */
+export function useNetPlans() {
+  const { airline } = useGame();
+  return useQuery({
+    queryKey: ['a', airline.id, 'route_plans', 'network'],
+    queryFn: async () => Object.fromEntries((await rows<NetPlan>(supabase.from('route_plans')
+      .select('route_id,network,conn_pct,conn_share').eq('airline_id', airline.id)))
+      .map((p) => [p.route_id, { ...p, conn_pct: Number(p.conn_pct), conn_share: Number(p.conn_share) }])) as Record<string, NetPlan>,
   });
 }
 

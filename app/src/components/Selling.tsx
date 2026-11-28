@@ -2,7 +2,7 @@
 // rivals did on its market. The engine sets every fare from the strategy; players choose the strategy only.
 import { useMemo, useState } from 'react';
 import { call } from '../lib/api';
-import { useGame, useMarketsFrom, useMarketWatch, usePosOptions, useRivals, useRoutePlans, useRoutes, useRouteWeeks, useSectorInsights, useSellWhere, useStrategies, useWorldAirlines } from '../lib/data';
+import { useGame, useMarketsFrom, useMarketWatch, useNetPlans, usePosOptions, useRivals, useRoutePlans, useRoutes, useRouteWeeks, useSectorInsights, useSellWhere, useStrategies, useWorldAirlines } from '../lib/data';
 import { clock, pairKey } from '../lib/game';
 import { BAND_LABEL, bandOf, practice, practiceInput, routeIndex, SHAPE_LABEL, shapeOf, verdict } from '../lib/insights';
 import { demandWeek, seatsDwarf } from '../lib/derive';
@@ -343,6 +343,69 @@ export function RouteAudit({ route, km, intl, refFare, airlines }: { route: Rout
         <p className="small">Routes like this earned {pct(best.rev_index / mine.rev_index - 1)} more per seat with {name(best.strategy)}. Worth a try.</p>
       )}
       <div className="row"><a className="small" href="#/insights">What works where</a><span className="faint">·</span><a className="small" href={`#/practice?route=${route.id}`}>Practise this route week by week</a></div>
+    </div>
+  );
+}
+
+/** Network selling (0039): whether the route also sells connections through its two airports, the share of its own
+ * fare a connection pays it, and how many of its seats connections may take. */
+export function NetworkCard({ route }: { route: Route }) {
+  const { airline } = useGame();
+  const net = useRoutes();
+  const plans = useNetPlans();
+  const weeks = useRouteWeeks(route.id);
+  const { run, busy } = useAction();
+  const [onSel, setOn] = useState<boolean | null>(null);
+  const [pctSel, setPct] = useState<number | null>(null);
+  const [shareSel, setShare] = useState<number | null>(null);
+  const now = plans.data?.[route.id];
+  if (!now) return null;
+  const isOn = onSel ?? now.network, p = pctSel ?? now.conn_pct, s = shareSel ?? now.conn_share;
+  const changed = isOn !== now.network || p !== now.conn_pct || s !== now.conn_share;
+  const ends = [route.origin, route.dest];
+  const partners = (net.data?.routes ?? []).filter((r) => r.id !== route.id && (ends.includes(r.origin) || ends.includes(r.dest)));
+  const partnersOn = partners.filter((r) => plans.data?.[r.id]?.network);
+  const flown = (weeks.data ?? []).filter((w) => w.flown_e != null).slice(-13);
+  const add = (f: (w: RouteWeek) => number) => flown.reduce((x, w) => x + f(w), 0);
+  const cx = add((w) => Number(w.bk_cx ?? 0) + Number(w.bk_cxb ?? 0)), rev = add((w) => Number(w.rev_cx ?? 0));
+  const disp = add((w) => Number(w.disp ?? 0)), pax = add(sold);
+  const econ = add((w) => w.bk_be + w.bk_l + w.bk_u), fare = econ > 0 ? add((w) => Number(w.rev_e)) / econ : 0;
+  const reset = () => { setOn(null); setPct(null); setShare(null); };
+  return (
+    <div className="card stack">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Network selling</h2><span className="small muted">connections through {ends.join(' or ')}</span></div>
+      <Seg block value={isOn ? 'on' : 'off'} onChange={(v) => setOn(v === 'on')}
+        options={[{ value: 'off', label: 'Nonstop only' }, { value: 'on', label: 'Also connections' }]} />
+      {isOn && (
+        <>
+          <div className="field">
+            <label>A connection pays this route</label>
+            <Seg block value={String(p)} onChange={(v) => setPct(Number(v))}
+              options={[0.6, 0.7, 0.8, 0.9, 1].map((x) => ({ value: String(x), label: pct(x) }))} />
+          </div>
+          <p className="tiny muted" style={{ margin: 0 }}>of this route's own fare that week, cabin by cabin; the connection's fare adds the other route's share of its fare. Lower sells more connections and earns less from each.</p>
+          <div className="field">
+            <label>Seats open to connections</label>
+            <Seg block value={String(s)} onChange={(v) => setShare(Number(v))}
+              options={[0, 0.1, 0.3, 0.5, 1].map((x) => ({ value: String(x), label: x === 0 ? 'None' : x === 1 ? 'All' : pct(x) }))} />
+          </div>
+          <p className="tiny muted" style={{ margin: 0 }}>More seats for connections fill emptier flights; on full flights connections take seats your own travellers would have paid for.</p>
+        </>
+      )}
+      <p className="small" style={{ margin: 0 }}>{partners.length === 0
+        ? `None of your other routes touches ${ends.join(' or ')}: a connection needs two of your routes through one airport.`
+        : `${partnersOn.length} of your ${partners.length} other routes through ${ends.join(' or ')} sell network-based. Each pair makes a connection when both do, and travellers between their far ends can book it.`}</p>
+      {flown.length > 0 && cx + disp > 0 && (
+        <div className="kv small">
+          <span>Connecting passengers, last {flown.length} weeks</span><span>{num(Math.round(2 * cx))} ({pct(pax > 0 ? cx / pax : 0)})</span>
+          <span>This route's part of their fares</span><span>{inr(2 * rev)}</span>
+          <span>Own travellers turned away while connections had seats</span><span>{num(Math.round(2 * disp))}{disp * fare >= 1 ? `, about ${inr(2 * disp * fare)}` : ''}</span>
+        </div>
+      )}
+      <Button block disabled={!changed} busy={busy === 'net'} onClick={() => run('net', () => call('set_network', {
+        p_airline: airline.id, p_route: route.id, p_on: isOn, p_pct: p, p_share: s,
+      }), isOn ? 'Saved. Connections go on sale from next week\'s selling.' : 'Saved. No new connections from next week\'s selling; tickets already sold still fly.').then(reset)}>
+        {changed ? 'Save network selling' : isOn ? 'Selling connections now' : 'Selling nonstop only now'}</Button>
     </div>
   );
 }

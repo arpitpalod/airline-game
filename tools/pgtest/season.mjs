@@ -12,12 +12,12 @@ const SNAP = arg('--seed', null);   // optional snapshot of migrations 0001-0006
 
 // strategy: aircraft type and cabin, how aircraft are acquired, fare band, which routes
 const STRATS = {
-  lcc_trunk:  { type: 'A20N', lay: [0, null, 28], src: 'pool', lo: 0.90, hi: 1.20, start: 0.95, pick: 'trunk', bases: ['DEL', 'BLR'] , rm: 'fill' },
+  lcc_trunk:  { type: 'A20N', lay: [0, null, 28], src: 'pool', lo: 0.90, hi: 1.20, start: 0.95, pick: 'trunk', bases: ['DEL', 'BLR'] , rm: 'fill' , net: true },
   niche:      { type: 'A20N', lay: [0, null, 29], src: 'pool', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['PNQ', 'JAI'] , rm: 'balanced' },
-  full_svc:   { type: 'A20N', lay: [3, 38, 30],   src: 'pool', lo: 1.00, hi: 1.50, start: 1.10, pick: 'trunk', bases: ['BOM', 'HYD'], mkt: 40 , rm: 'top' },
+  full_svc:   { type: 'A20N', lay: [3, 38, 30],   src: 'pool', lo: 1.00, hi: 1.50, start: 1.10, pick: 'trunk', bases: ['BOM', 'HYD'], mkt: 40 , rm: 'top' , net: true },
   regional:   { type: 'AT76', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', maxkm: 700, bases: ['HYD', 'CCU'] , rm: 'balanced' },
-  gulf:       { type: 'A21N', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.50, start: 1.00, pick: 'intl', maxkm: 3500, bases: ['COK', 'HYD'] , rm: 'follow' },
-  long_haul:  { type: 'A359', lay: [9, null, 31], src: 'pool', lo: 1.00, hi: 1.60, start: 1.10, pick: 'intl', minkm: 3500, bases: ['DEL', 'BOM'] , rm: 'balanced' },
+  gulf:       { type: 'A21N', lay: [0, null, 28], src: 'pool', lo: 0.95, hi: 1.50, start: 1.00, pick: 'intl', maxkm: 3500, bases: ['COK', 'HYD'] , rm: 'follow' , net: true },
+  long_haul:  { type: 'A359', lay: [9, null, 31], src: 'pool', lo: 1.00, hi: 1.60, start: 1.10, pick: 'intl', minkm: 3500, bases: ['DEL', 'BOM'] , rm: 'balanced' , net: true },
   order_loan: { type: 'A20N', lay: [0, null, 29], src: 'loan', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['AMD', 'CCU'] , rm: 'balanced' },
   order_cash: { type: 'A20N', lay: [0, null, 29], src: 'cash', lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['MAA', 'GOI'] , rm: 'balanced' },
   wet_only:   { type: 'A20N', lay: [0, null, 29], src: 'wet',  lo: 0.95, hi: 1.80, start: 1.10, pick: 'niche', bases: ['IDR', 'NAG'] , rm: 'fill' },
@@ -53,6 +53,7 @@ for (const [k, v] of Object.entries(JSON.parse(arg('--wparams', '{}')))) await q
 // --region usa (0037): World 1 is re-homed to the region and takes its values; each player's India base becomes the region's
 // airport of the same size rank. --bots off runs without computer-run airlines (they are India's until step 3).
 const REGION = arg('--region', 'india');
+const NET = arg('--net', 'on') !== 'off';   // 0039: hub players sell network-based
 if (arg('--bots', 'on') === 'off') await q(`update public.worlds set bot_scale = 0 where id = $1`, [W]);
 if (REGION !== 'india') {
   await q(`update public.worlds set rules = coalesce(rules, '{}'::jsonb) || jsonb_build_object('region', $2::text) where id = $1`, [W, REGION]);
@@ -157,6 +158,10 @@ async function act(p, day) {
   for (const r of await q(`select r.id from public.routes r join public.route_plans pl on pl.route_id = r.id
       where r.airline_id = $1 and r.status = 'open' and pl.strategy <> $2`, [p.id, s.rm]))
     await tryq(`select public.set_strategy('${p.id}', '${r.id}', '${s.rm}')`);
+  // 0039: hub players sell their routes network-based (--net off: nobody does)
+  if (s.net && NET) for (const r of await q(`select r.id from public.routes r join public.route_plans pl on pl.route_id = r.id
+      where r.airline_id = $1 and r.status = 'open' and not pl.network`, [p.id]))
+    await tryq(`select public.set_network('${p.id}', '${r.id}', true)`);
   // 2. once an own aircraft is flying, the wet-leased ones go back; their routes are filled again in step 3
   if (s.src !== 'wet' && await one(`select count(*)::int from public.aircraft a join public.aircraft_terms t on t.aircraft_id = a.id
       where a.airline_id = $1 and a.status = 'active' and t.holding <> 'wet'`, [p.id]) > 0)
