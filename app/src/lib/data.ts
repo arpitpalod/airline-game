@@ -350,6 +350,8 @@ export interface RouteStudy {
   flying_lo: number | null; flying_hi: number | null; turned_lo: number | null; turned_hi: number | null;
   lf_lo: number | null; lf_hi: number | null; untapped_lo: number | null; untapped_hi: number | null;
   biz_share: number | null; lei_share: number | null; bud_share: number | null; next_qtr: number | null;
+  /** 0041: unusual demand ahead on the market (a gem) */
+  gem_note?: string | null;
 }
 export function useStudies() {
   const { airline } = useGame();
@@ -368,6 +370,8 @@ export interface HubStudy {
     markets: { a: string; b: string; conn_wk: number; detour: number; nonstops: number; outside: boolean }[];
     now: { spokes: number; conn_wk: number }; suggested: { spokes: string[]; conn_wk: number };
     rivals: { flying: number; connecting: number };
+    /** 0041: gems at the hub and on its routes in the next 26 weeks */
+    gems?: { kind: string; at: string; from_week: number; to_week: number }[];
   };
 }
 export function useHubStudies() {

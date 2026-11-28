@@ -32,6 +32,7 @@ import { checks25 } from './checks_25.mjs';
 import { checks26 } from './checks_26.mjs';
 import { checks27 } from './checks_27.mjs';
 import { checks28 } from './checks_28.mjs';
+import { checks29 } from './checks_29.mjs';
 
 const dir = process.argv[2];
 const db = new PGlite();
@@ -91,6 +92,9 @@ await db.exec(`update public.game_params set num = case key when 'ground_prob_da
     when 'event_engine_prob_day' then 0.002 when 'bot_drop_min_days' then 364 else 0 end
   where key in ('ground_prob_day', 'event_fuel_prob_day', 'event_engine_prob_day', 'bot_drop_min_days', 'bot_plan',
                 'bot_sell_floor_lf', 'bot_fight_follow', 'fuel_pass');`);
+
+// The checks written before migration 0041 run without gems (hidden demand); checks_29 switches them on.
+await db.exec(`update public.game_params set num = 0 where key = 'gems_on'`);
 
 // The checks written before migration 0028 run without the newer shocks (airport and airspace closures, late deliveries)
 // and without seat limits between countries; checks_18 puts the 0028 values back.
@@ -160,5 +164,6 @@ await checks25(t);
 await checks26(t);
 await checks27(t);
 await checks28(t);
+await checks29(t);
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nall checks passed');
 process.exit(failed ? 1 : 0);
